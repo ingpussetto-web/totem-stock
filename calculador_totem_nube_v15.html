@@ -5941,11 +5941,8 @@ async function crearOP(proyId){
     return;
   }
 
-  // Pedir color de gabinete
-  const color = prompt(
-    'Proyecto: ' + p.cliente + ' — ' + p.orden + '\n\nDefiní el color del gabinete para esta OP:\n(Negro / Blanco / Gris Claro / Gris Plomo / A definir)',
-    'A definir'
-  );
+  // Pedir color de gabinete via modal
+  const color = await seleccionarColor(p.cliente, p.orden);
   if(color === null) return; // cancelado
 
   // Generar número de OP
@@ -6039,5 +6036,21 @@ async function crearOP(proyId){
 }
 
 </script>
+
+<!-- MODAL COLOR GABINETE -->
+<div id="modal-color-op" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;align-items:center;justify-content:center;">
+  <div style="background:#1e1e22;border:1px solid rgba(255,255,255,0.13);border-radius:12px;padding:24px;width:360px;max-width:95vw;">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Color del gabinete</div>
+    <div id="modal-color-sub" style="font-size:12px;color:#888;margin-bottom:18px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;" id="color-options">
+      <button onclick="resolveColor('Negro')" style="padding:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:#252529;color:#f0f0f0;font-size:14px;cursor:pointer;text-align:left;transition:all 0.12s;" onmouseover="this.style.borderColor='#00c896'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">⬛ Negro</button>
+      <button onclick="resolveColor('Blanco')" style="padding:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:#252529;color:#f0f0f0;font-size:14px;cursor:pointer;text-align:left;transition:all 0.12s;" onmouseover="this.style.borderColor='#00c896'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">⬜ Blanco</button>
+      <button onclick="resolveColor('Gris Claro')" style="padding:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:#252529;color:#f0f0f0;font-size:14px;cursor:pointer;text-align:left;transition:all 0.12s;" onmouseover="this.style.borderColor='#00c896'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">🔲 Gris Claro</button>
+      <button onclick="resolveColor('Gris Plomo')" style="padding:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:#252529;color:#f0f0f0;font-size:14px;cursor:pointer;text-align:left;transition:all 0.12s;" onmouseover="this.style.borderColor='#00c896'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">🔳 Gris Plomo</button>
+      <button onclick="resolveColor('A definir')" style="padding:11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:#252529;color:#888;font-size:14px;cursor:pointer;text-align:left;transition:all 0.12s;" onmouseover="this.style.borderColor='#f5a623'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">⏳ A definir</button>
+    </div>
+    <button onclick="resolveColor(null)" style="width:100%;margin-top:12px;padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
+  </div>
+</div>
 </body>
 </html>
