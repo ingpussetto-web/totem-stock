@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Stock v1</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.09);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* Layout */
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.main{padding:28px 32px;overflow-y:auto;min-height:100vh;}
+
+/* Sidebar */
+.logo{padding:20px;border-bottom:1px solid var(--border);}
+.logo-name{font-size:14px;font-weight:600;letter-spacing:-0.02em;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px;}
+.nav{padding:12px 0;flex:1;}
+.nav-section{padding:10px 16px 4px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;font-size:12.5px;color:var(--text2);transition:all 0.12s;border-left:2px solid transparent;}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.025);}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim);}
+.nav-item .icon{width:15px;text-align:center;font-size:13px;}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+.conn-dot.ok{background:var(--green);}
+.conn-dot.err{background:var(--red);}
+
+/* Pages */
+.page{display:none;}
+.page.active{display:block;}
+.page-header{margin-bottom:24px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:12px;}
+.card-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:14px;}
+
+/* Metrics */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px;}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+.metric.green{background:var(--green-dim);border-color:var(--green-border);}
+.metric.amber{background:var(--amber-dim);border-color:var(--amber-border);}
+.metric.red{background:var(--red-dim);border-color:var(--red-border);}
+.metric-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;margin-bottom:5px;}
+.metric-value{font-size:22px;font-weight:600;font-family:'DM Mono',monospace;line-height:1;}
+.metric.green .metric-value{color:var(--green);}
+.metric.amber .metric-value{color:var(--amber);}
+.metric.red .metric-value{color:var(--red);}
+
+/* Toolbar */
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+.search-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;color:var(--text);font-size:12.5px;font-family:'DM Sans',sans-serif;width:220px;transition:border-color 0.15s;}
+.search-input:focus{outline:none;border-color:var(--green);}
+.search-input::placeholder{color:var(--text3);}
+select.filter{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text2);font-size:12px;cursor:pointer;height:34px;}
+select.filter:focus{outline:none;border-color:var(--green);}
+.spacer{flex:1;}
+.btn{padding:7px 14px;font-size:12px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;height:34px;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.sm{font-size:11px;padding:3px 9px;height:26px;}
+.btn.red{border-color:var(--red);color:var(--red);}
+.btn.red:hover{background:var(--red-dim);}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;white-space:nowrap;}
+td{font-size:12.5px;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.015);}
+.td-main{color:var(--text)!important;font-weight:500;}
+.td-mono{font-family:'DM Mono',monospace;font-size:11.5px;}
+.td-num{font-family:'DM Mono',monospace;text-align:right;}
+.td-actions{text-align:right;white-space:nowrap;}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;font-weight:500;}
+.badge.ok{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);}
+.badge.bajo{background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-border);}
+.badge.sin{background:var(--red-dim);color:var(--red);border:1px solid var(--red-border);}
+.badge.uid{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.25);}
+.badge.qty{background:var(--surface2);color:var(--text3);border:1px solid var(--border);}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:24px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:600;letter-spacing:-0.02em;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;}
+.modal-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;color:var(--text2);margin-bottom:5px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:13px;transition:border-color 0.15s;}
+.form-input:focus{outline:none;border-color:var(--green);}
+.form-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:13px;cursor:pointer;}
+.form-select:focus{outline:none;border-color:var(--green);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+
+/* Variantes section */
+.variantes-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;}
+.var-chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-family:'DM Mono',monospace;}
+.var-chip-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;line-height:1;padding:0;}
+.var-chip-del:hover{color:var(--red);}
+.var-add-row{display:flex;gap:6px;margin-top:8px;}
+.var-add-row input{flex:1;}
+
+/* Stock inline editor */
+.stock-edit{display:flex;align-items:center;gap:6px;}
+.stock-num{font-family:'DM Mono',monospace;font-size:13px;color:var(--text);min-width:30px;text-align:right;}
+.stock-btn{background:var(--surface3);border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;transition:all 0.1s;}
+.stock-btn:hover{border-color:var(--border2);color:var(--text);}
+
+/* Empty state */
+.empty{text-align:center;padding:40px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+
+/* Toast */
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:11px;font-family:'DM Mono',monospace;padding:9px 14px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;}
+
+/* Unidades panel */
+.uid-list{display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;}
+.uid-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);}
+.uid-code{font-family:'DM Mono',monospace;font-size:11px;color:var(--text);}
+.uid-estado{font-size:10px;}
+
+/* Scan input */
+.scan-wrap{position:relative;}
+.scan-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;}
+.scan-input{padding-left:30px!important;}
+
+/* Loading */
+.loading{display:flex;align-items:center;gap:8px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;padding:20px 0;}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Config */
+.config-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-size:13px;}
+.config-row:first-child{border-top:none;}
+.config-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-name">Totem Nube</div>
+      <div class="logo-sub">STOCK · FASE 1 · v1.0</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Inventario</div>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <span class="icon">◈</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('catalogo')">
+        <span class="icon">▤</span> Catálogo SKUs
+      </div>
+      <div class="nav-item" onclick="showPage('stock')">
+        <span class="icon">◻</span> Stock actual
+      </div>
+      <div class="nav-item" onclick="showPage('unidades')">
+        <span class="icon">◈</span> Unidades físicas
+      </div>
+      <div class="nav-section">Sistema</div>
+      <div class="nav-item" onclick="showPage('config')">
+        <span class="icon">⚙</span> Configuración
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="conn-status">
+        <div class="conn-dot" id="conn-dot"></div>
+        <span id="conn-text">Conectando...</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Resumen del inventario actual</div>
+      </div>
+      <div class="metrics" id="dash-metrics">
+        <div class="metric"><div class="metric-label">SKUs totales</div><div class="metric-value" id="m-skus">—</div></div>
+        <div class="metric green"><div class="metric-label">En stock OK</div><div class="metric-value" id="m-ok">—</div></div>
+        <div class="metric amber"><div class="metric-label">Stock bajo</div><div class="metric-value" id="m-bajo">—</div></div>
+        <div class="metric red"><div class="metric-label">Sin stock</div><div class="metric-value" id="m-sin">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Alertas de stock</div>
+        <div id="dash-alertas"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+      </div>
+    </div>
+
+    <!-- CATÁLOGO -->
+    <div class="page" id="page-catalogo">
+      <div class="page-header">
+        <div class="page-title">Catálogo de SKUs</div>
+        <div class="page-sub">Todos los modelos de insumos registrados</div>
+      </div>
+      <div class="toolbar">
+        <input class="search-input" type="text" placeholder="Buscar SKU o nombre..." id="cat-search" oninput="renderCatalogo()">
+        <select class="filter" id="cat-cat" onchange="renderCatalogo()">
+          <option value="">Todas las categorías</option>
+        </select>
+        <select class="filter" id="cat-track" onchange="renderCatalogo()">
+          <option value="">Todos los tipos</option>
+          <option value="uid">Por unidad (UID)</option>
+          <option value="cantidad">Por cantidad</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn green" onclick="openModalSku()">+ Nuevo SKU</button>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Categoría</th>
+                <th>Tracking</th>
+                <th>Variantes</th>
+                <th>Stock mín.</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="cat-tbody">
+              <tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- STOCK ACTUAL -->
+    <div class="page" id="page-stock">
+      <div class="page-header">
+        <div class="page-title">Stock actual</div>
+        <div class="page-sub">Cantidad disponible por SKU y variante</div>
+      </div>
+      <div class="toolbar">
+        <input class="search-input" type="text" placeholder="Buscar..." id="stock-search" oninput="renderStock()">
+        <select class="filter" id="stock-cat" onchange="renderStock()">
+          <option value="">Todas las categorías</option>
+        </select>
+        <select class="filter" id="stock-alerta" onchange="renderStock()">
+          <option value="">Todos los estados</option>
+          <option value="ok">OK</option>
+          <option value="bajo">Stock bajo</option>
+          <option value="sin_stock">Sin stock</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn" onclick="loadStock()">↻ Actualizar</button>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Nombre</th>
+                <th>Variante</th>
+                <th>Categoría</th>
+                <th style="text-align:right">Disponible</th>
+                <th style="text-align:right">Reservado</th>
+                <th style="text-align:right">Total</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="stock-tbody">
+              <tr><td colspan="9"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- UNIDADES FÍSICAS -->
+    <div class="page" id="page-unidades">
+      <div class="page-header">
+        <div class="page-title">Unidades físicas</div>
+        <div class="page-sub">Registro individual de piezas con UID / número de serie</div>
+      </div>
+      <div class="toolbar">
+        <div class="scan-wrap">
+          <span class="scan-icon">⌗</span>
+          <input class="search-input scan-input" type="text" placeholder="Escanear o buscar UID..." id="uid-search" oninput="renderUnidades()">
+        </div>
+        <select class="filter" id="uid-sku" onchange="renderUnidades()">
+          <option value="">Todos los SKUs</option>
+        </select>
+        <select class="filter" id="uid-estado" onchange="renderUnidades()">
+          <option value="">Todos los estados</option>
+          <option value="stock">En stock</option>
+          <option value="reservado">Reservado</option>
+          <option value="producido">Producido</option>
+          <option value="baja">Baja</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn green" onclick="openModalUid()">+ Registrar unidad</button>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>UID / Código</th>
+                <th>SKU</th>
+                <th>Nombre</th>
+                <th>Variante</th>
+                <th>N° Serie</th>
+                <th>Estado</th>
+                <th>Fecha ingreso</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="uid-tbody">
+              <tr><td colspan="8"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="page-header">
+        <div class="page-title">Configuración</div>
+        <div class="page-sub">Conexión y parámetros del sistema</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Conexión Supabase</div>
+        <div class="form-group">
+          <label class="form-label">Project URL</label>
+          <input class="form-input" type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anon Key</label>
+          <input class="form-input" type="text" id="cfg-key" placeholder="eyJ...">
+        </div>
+        <button class="btn green" onclick="saveConfig()">Guardar y reconectar</button>
+      </div>
+      <div class="card" id="cfg-info" style="display:none">
+        <div class="card-title">Estado de conexión</div>
+        <div id="cfg-info-content"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL SKU -->
+<div class="modal-bg" id="modal-sku">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-sku-title">Nuevo SKU</span>
+      <button class="modal-close" onclick="closeModal('modal-sku')">×</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Código *</label>
+        <input class="form-input" type="text" id="sku-codigo" placeholder="GAB-22-INC">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoría *</label>
+        <select class="form-select" id="sku-cat"></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre *</label>
+      <input class="form-input" type="text" id="sku-nombre" placeholder="Gabinete inclinado 22&quot;">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descripción</label>
+      <input class="form-input" type="text" id="sku-desc" placeholder="Opcional">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo de tracking</label>
+        <select class="form-select" id="sku-tracking" onchange="toggleVariantes()">
+          <option value="uid">Por unidad física (UID)</option>
+          <option value="cantidad">Por cantidad (bulk)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stock mínimo (alerta)</label>
+        <input class="form-input" type="number" id="sku-minimo" value="0" min="0">
+      </div>
+    </div>
+    <!-- Variantes -->
+    <div class="form-group" id="variantes-section">
+      <label class="form-label">Variantes (ej: colores)</label>
+      <div class="variantes-list" id="variantes-lista"></div>
+      <div class="var-add-row">
+        <input class="form-input" type="text" id="var-nueva" placeholder="Ej: Negro, Blanco, Pendiente..." style="font-size:12px;">
+        <button class="btn" onclick="addVariante()">+ Agregar</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace;">
+        Tip: "Pendiente" permite comprar sin definir color todavía
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-sku')">Cancelar</button>
+      <button class="btn green" onclick="saveSku()">Guardar SKU</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL UNIDAD -->
+<div class="modal-bg" id="modal-uid">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Registrar unidad física</span>
+      <button class="modal-close" onclick="closeModal('modal-uid')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">SKU *</label>
+      <select class="form-select" id="uid-sku-sel" onchange="loadVariantesUid()"></select>
+    </div>
+    <div class="form-group" id="uid-var-group">
+      <label class="form-label">Variante</label>
+      <select class="form-select" id="uid-var-sel"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">UID / Código de barras *</label>
+        <input class="form-input" type="text" id="uid-codigo" placeholder="Ej: GAB-22-INC-0001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">N° de serie fabricante</label>
+        <input class="form-input" type="text" id="uid-serie" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas</label>
+      <input class="form-input" type="text" id="uid-notas" placeholder="Opcional">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-uid')">Cancelar</button>
+      <button class="btn green" onclick="saveUid()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AJUSTE STOCK -->
+<div class="modal-bg" id="modal-stock-adj">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-adj-title">Ajustar stock</span>
+      <button class="modal-close" onclick="closeModal('modal-stock-adj')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cantidad actual</label>
+      <input class="form-input" type="number" id="adj-cantidad" min="0">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Motivo del ajuste</label>
+      <input class="form-input" type="text" id="adj-motivo" placeholder="Inventario inicial, corrección, etc.">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-stock-adj')">Cancelar</button>
+      <button class="btn green" onclick="saveAdj()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+let SUPA_URL = localStorage.getItem('supa_url') || '';
+let SUPA_KEY = localStorage.getItem('supa_key') || '';
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let categorias = [];
+let skus = [];
+let stockData = [];
+let unidades = [];
+let variantesTemp = [];
+let editingSkuId = null;
+let adjStockId = null;
+
+// ─── API ───────────────────────────────────────────────────────────────────
+async function api(path, method='GET', body=null){
+  if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración');
+  const opts = {
+    method,
+    headers:{
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'return=representation' : ''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  if(!res.ok){
+    const err = await res.text();
+    throw new Error(err);
+  }
+  if(res.status===204) return null;
+  return res.json();
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────────────────────
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  event?.currentTarget?.classList.add('active');
+  // Load data for page
+  if(id==='dashboard') loadDashboard();
+  if(id==='catalogo') loadCatalogo();
+  if(id==='stock') loadStock();
+  if(id==='unidades') loadUnidades();
+  if(id==='config') loadConfig();
+}
+
+// ─── CONNECTION ─────────────────────────────────────────────────────────────
+async function checkConnection(){
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-text');
+  if(!SUPA_URL || !SUPA_KEY){
+    dot.className='conn-dot err';
+    txt.textContent='Sin configurar';
+    return false;
+  }
+  try {
+    await api('categorias?select=id&limit=1');
+    dot.className='conn-dot ok';
+    txt.textContent='Conectado';
+    return true;
+  } catch(e){
+    dot.className='conn-dot err';
+    txt.textContent='Error conexión';
+    return false;
+  }
+}
+
+// ─── DASHBOARD ──────────────────────────────────────────────────────────────
+async function loadDashboard(){
+  try {
+    const data = await api('stock_disponible?select=*&order=alerta.asc');
+    const total = await api('skus?select=id&activo=eq.true');
+    document.getElementById('m-skus').textContent = total?.length ?? '—';
+    const ok = data.filter(d=>d.alerta==='ok').length;
+    const bajo = data.filter(d=>d.alerta==='bajo').length;
+    const sin = data.filter(d=>d.alerta==='sin_stock').length;
+    document.getElementById('m-ok').textContent = ok;
+    document.getElementById('m-bajo').textContent = bajo;
+    document.getElementById('m-sin').textContent = sin;
+    // Alertas
+    const alertas = data.filter(d=>d.alerta!=='ok');
+    const el = document.getElementById('dash-alertas');
+    if(!alertas.length){
+      el.innerHTML = '<div class="empty"><div class="empty-icon">✓</div>Todo el stock está en niveles normales</div>';
+    } else {
+      el.innerHTML = `<table><thead><tr><th>SKU</th><th>Nombre</th><th>Variante</th><th style="text-align:right">Disponible</th><th style="text-align:right">Mínimo</th><th>Estado</th></tr></thead><tbody>
+        ${alertas.map(d=>`<tr>
+          <td class="td-mono">${d.codigo}</td>
+          <td class="td-main">${d.nombre}</td>
+          <td class="td-mono" style="font-size:11px;color:var(--text3)">${d.variante||'—'}</td>
+          <td class="td-num">${d.disponible}</td>
+          <td class="td-num" style="color:var(--text3)">${d.stock_minimo}</td>
+          <td>${badgeAlerta(d.alerta)}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+    }
+  } catch(e){ console.error(e); }
+}
+
+// ─── CATÁLOGO ───────────────────────────────────────────────────────────────
+async function loadCatalogo(){
+  try {
+    categorias = await api('categorias?select=*&order=orden.asc');
+    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc');
+    // Fill category filters
+    fillCatFilters();
+    renderCatalogo();
+  } catch(e){ console.error(e); }
+}
+
+function fillCatFilters(){
+  const opts = categorias.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  ['cat-cat','stock-cat'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = '<option value="">Todas las categorías</option>' + opts;
+  });
+  // SKU select in modal
+  const skuSel = document.getElementById('sku-cat');
+  if(skuSel) skuSel.innerHTML = opts;
+  // SKU select in uid modal
+  fillUidSkuSelect();
+}
+
+function renderCatalogo(){
+  const search = document.getElementById('cat-search')?.value.toLowerCase()||'';
+  const catFil = document.getElementById('cat-cat')?.value||'';
+  const trackFil = document.getElementById('cat-track')?.value||'';
+  let rows = skus.filter(s=>{
+    if(search && !s.codigo.toLowerCase().includes(search) && !s.nombre.toLowerCase().includes(search)) return false;
+    if(catFil && String(s.categoria_id)!==catFil) return false;
+    if(trackFil && s.tracking!==trackFil) return false;
+    return s.activo;
+  });
+  const tbody = document.getElementById('cat-tbody');
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">▤</div>No hay SKUs con esos filtros</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(s=>{
+    const vars = s.variantes||[];
+    const varChips = vars.map(v=>`<span style="font-size:10px;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:'DM Mono',monospace;">${v.valor}</span>`).join(' ');
+    return `<tr>
+      <td class="td-mono td-main">${s.codigo}</td>
+      <td>${s.nombre}</td>
+      <td style="font-size:11px;color:var(--text3)">${s.categorias?.nombre||'—'}</td>
+      <td>${s.tracking==='uid'?'<span class="badge uid">UID</span>':'<span class="badge qty">Cantidad</span>'}</td>
+      <td>${varChips||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+      <td class="td-num">${s.stock_minimo}</td>
+      <td class="td-actions">
+        <button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── STOCK ──────────────────────────────────────────────────────────────────
+async function loadStock(){
+  try {
+    stockData = await api('stock_disponible?select=*&order=alerta.asc,nombre.asc');
+    // También cargar SKUs con tracking=uid para mostrar conteo de unidades
+    const uidSkus = await api('skus?select=id,codigo,nombre,stock_minimo,categorias(nombre)&tracking=eq.uid&activo=eq.true');
+    // Para UIDs, contar unidades en stock
+    const uidCounts = await api('unidades?select=sku_id,estado&estado=in.(stock,reservado)');
+    
+    // Merge UID skus into display
+    const uidRows = uidSkus.map(s=>{
+      const total = uidCounts.filter(u=>u.sku_id===s.id).length;
+      const reservado = uidCounts.filter(u=>u.sku_id===s.id && u.estado==='reservado').length;
+      const disponible = total - reservado;
+      let alerta = 'ok';
+      if(disponible<=0) alerta='sin_stock';
+      else if(disponible<=s.stock_minimo) alerta='bajo';
+      return {codigo:s.codigo,nombre:s.nombre,variante:null,categoria:s.categorias?.nombre||'—',cantidad:total,cantidad_reservada:reservado,disponible,stock_minimo:s.stock_minimo,alerta,tracking:'uid',sku_id:s.id};
+    });
+
+    renderStock(stockData, uidRows);
+  } catch(e){ console.error(e); renderStock([]); }
+}
+
+function renderStock(qtyData=stockData, uidData=[]){
+  const search = document.getElementById('stock-search')?.value.toLowerCase()||'';
+  const catFil = document.getElementById('stock-cat')?.value||'';
+  const alertFil = document.getElementById('stock-alerta')?.value||'';
+
+  let rows = [...(qtyData||[]), ...(uidData||[])].filter(d=>{
+    if(search && !d.codigo?.toLowerCase().includes(search) && !d.nombre?.toLowerCase().includes(search)) return false;
+    if(alertFil && d.alerta!==alertFil) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('stock-tbody');
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">◻</div>No hay datos de stock</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(d=>`<tr>
+    <td class="td-mono" style="font-size:11.5px">${d.codigo}</td>
+    <td class="td-main">${d.nombre}</td>
+    <td class="td-mono" style="font-size:11px;color:var(--text3)">${d.variante||'—'}</td>
+    <td style="font-size:11px;color:var(--text3)">${d.categoria||'—'}</td>
+    <td class="td-num" style="color:${d.disponible<=0?'var(--red)':d.disponible<=d.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${d.disponible}</td>
+    <td class="td-num" style="color:var(--text3)">${d.cantidad_reservada||0}</td>
+    <td class="td-num">${d.cantidad||0}</td>
+    <td>${badgeAlerta(d.alerta)}</td>
+    <td class="td-actions">
+      ${d.tracking==='uid'
+        ? `<button class="btn sm" onclick="showPage('unidades')">Ver UIDs</button>`
+        : `<button class="btn sm" onclick="openAdj(${d.id},'${d.codigo} ${d.variante||''}',${d.cantidad})">Ajustar</button>`
+      }
+    </td>
+  </tr>`).join('');
+}
+
+// ─── UNIDADES ───────────────────────────────────────────────────────────────
+async function loadUnidades(){
+  try {
+    unidades = await api('unidades?select=*,skus(codigo,nombre),variantes(valor)&order=created_at.desc');
+    // Fill SKU filter
+    if(!skus.length) skus = await api('skus?select=*&tracking=eq.uid&activo=eq.true');
+    const sel = document.getElementById('uid-sku');
+    if(sel) sel.innerHTML = '<option value="">Todos los SKUs</option>' + 
+      skus.filter(s=>s.tracking==='uid').map(s=>`<option value="${s.id}">${s.codigo} — ${s.nombre}</option>`).join('');
+    renderUnidades();
+  } catch(e){ console.error(e); }
+}
+
+function renderUnidades(){
+  const search = document.getElementById('uid-search')?.value.toLowerCase()||'';
+  const skuFil = document.getElementById('uid-sku')?.value||'';
+  const estadoFil = document.getElementById('uid-estado')?.value||'';
+  let rows = unidades.filter(u=>{
+    if(search && !u.uid.toLowerCase().includes(search) && !(u.nro_serie||'').toLowerCase().includes(search)) return false;
+    if(skuFil && String(u.sku_id)!==skuFil) return false;
+    if(estadoFil && u.estado!==estadoFil) return false;
+    return true;
+  });
+  const tbody = document.getElementById('uid-tbody');
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">◈</div>No hay unidades registradas</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(u=>`<tr>
+    <td class="td-mono td-main" style="font-size:12px">${u.uid}</td>
+    <td class="td-mono" style="font-size:11px">${u.skus?.codigo||'—'}</td>
+    <td>${u.skus?.nombre||'—'}</td>
+    <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.variantes?.valor||'—'}</td>
+    <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.nro_serie||'—'}</td>
+    <td>${badgeEstado(u.estado)}</td>
+    <td style="font-size:11px;color:var(--text3)">${formatDate(u.created_at)}</td>
+    <td class="td-actions">
+      <button class="btn sm red" onclick="deleteUid(${u.id})">Baja</button>
+    </td>
+  </tr>`).join('');
+}
+
+// ─── MODALS ─────────────────────────────────────────────────────────────────
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function openModalSku(id=null){
+  editingSkuId = id;
+  variantesTemp = [];
+  document.getElementById('modal-sku-title').textContent = id ? 'Editar SKU' : 'Nuevo SKU';
+  // Fill cat select
+  const catSel = document.getElementById('sku-cat');
+  catSel.innerHTML = categorias.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  if(id){
+    const s = skus.find(x=>x.id===id);
+    if(s){
+      document.getElementById('sku-codigo').value = s.codigo;
+      document.getElementById('sku-nombre').value = s.nombre;
+      document.getElementById('sku-desc').value = s.descripcion||'';
+      document.getElementById('sku-tracking').value = s.tracking;
+      document.getElementById('sku-minimo').value = s.stock_minimo;
+      catSel.value = s.categoria_id;
+      variantesTemp = (s.variantes||[]).map(v=>({...v}));
+    }
+  } else {
+    document.getElementById('sku-codigo').value='';
+    document.getElementById('sku-nombre').value='';
+    document.getElementById('sku-desc').value='';
+    document.getElementById('sku-tracking').value='uid';
+    document.getElementById('sku-minimo').value='0';
+  }
+  renderVariantesTemp();
+  toggleVariantes();
+  openModal('modal-sku');
+}
+
+function toggleVariantes(){
+  const track = document.getElementById('sku-tracking').value;
+  document.getElementById('variantes-section').style.display = track==='uid' ? 'block' : 'none';
+}
+
+function renderVariantesTemp(){
+  const el = document.getElementById('variantes-lista');
+  if(!variantesTemp.length){ el.innerHTML='<span style="font-size:11px;color:var(--text3);font-family:\'DM Mono\',monospace;">Sin variantes definidas</span>'; return; }
+  el.innerHTML = variantesTemp.map((v,i)=>`<div class="var-chip">${v.valor}<button class="var-chip-del" onclick="removeVariante(${i})">×</button></div>`).join('');
+}
+
+function addVariante(){
+  const val = document.getElementById('var-nueva').value.trim();
+  if(!val) return;
+  variantesTemp.push({atributo:'color',valor:val});
+  document.getElementById('var-nueva').value='';
+  renderVariantesTemp();
+}
+
+function removeVariante(i){
+  variantesTemp.splice(i,1);
+  renderVariantesTemp();
+}
+
+async function saveSku(){
+  const codigo = document.getElementById('sku-codigo').value.trim();
+  const nombre = document.getElementById('sku-nombre').value.trim();
+  if(!codigo||!nombre){ toast('Completá código y nombre'); return; }
+  const payload = {
+    codigo: codigo.toUpperCase(),
+    nombre,
+    descripcion: document.getElementById('sku-desc').value.trim()||null,
+    categoria_id: parseInt(document.getElementById('sku-cat').value),
+    tracking: document.getElementById('sku-tracking').value,
+    stock_minimo: parseInt(document.getElementById('sku-minimo').value)||0,
+    activo: true
+  };
+  try {
+    let skuId = editingSkuId;
+    if(editingSkuId){
+      await api(`skus?id=eq.${editingSkuId}`, 'PATCH', payload);
+    } else {
+      const res = await api('skus', 'POST', payload);
+      skuId = res[0]?.id;
+    }
+    // Save variantes
+    if(skuId && payload.tracking==='uid'){
+      // Delete existing and re-insert
+      await api(`variantes?sku_id=eq.${skuId}`, 'DELETE');
+      if(variantesTemp.length){
+        await api('variantes', 'POST', variantesTemp.map(v=>({sku_id:skuId,atributo:v.atributo,valor:v.valor})));
+      }
+    }
+    // If cantidad tracking, ensure stock row exists
+    if(payload.tracking==='cantidad' && !editingSkuId){
+      await api('stock', 'POST', [{sku_id:skuId, variante_id:null, cantidad:0}]);
+    }
+    closeModal('modal-sku');
+    toast('SKU guardado ✓');
+    loadCatalogo();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── UID MODAL ──────────────────────────────────────────────────────────────
+function fillUidSkuSelect(){
+  const sel = document.getElementById('uid-sku-sel');
+  if(!sel) return;
+  sel.innerHTML = skus.filter(s=>s.tracking==='uid').map(s=>`<option value="${s.id}">${s.codigo} — ${s.nombre}</option>`).join('');
+}
+
+async function loadVariantesUid(){
+  const skuId = document.getElementById('uid-sku-sel').value;
+  const sel = document.getElementById('uid-var-sel');
+  const grp = document.getElementById('uid-var-group');
+  if(!skuId){ grp.style.display='none'; return; }
+  try {
+    const vars = await api(`variantes?sku_id=eq.${skuId}&select=*`);
+    if(!vars?.length){ grp.style.display='none'; return; }
+    grp.style.display='block';
+    sel.innerHTML = '<option value="">Sin variante</option>' + vars.map(v=>`<option value="${v.id}">${v.valor}</option>`).join('');
+  } catch(e){}
+}
+
+function openModalUid(){
+  if(!skus.filter(s=>s.tracking==='uid').length){ toast('Primero cargá SKUs con tracking UID'); return; }
+  fillUidSkuSelect();
+  document.getElementById('uid-codigo').value='';
+  document.getElementById('uid-serie').value='';
+  document.getElementById('uid-notas').value='';
+  document.getElementById('uid-var-group').style.display='none';
+  openModal('modal-uid');
+  loadVariantesUid();
+}
+
+async function saveUid(){
+  const uid = document.getElementById('uid-codigo').value.trim();
+  const skuId = document.getElementById('uid-sku-sel').value;
+  if(!uid||!skuId){ toast('Completá UID y SKU'); return; }
+  const varId = document.getElementById('uid-var-sel').value||null;
+  try {
+    await api('unidades', 'POST', [{
+      uid: uid.toUpperCase(),
+      sku_id: parseInt(skuId),
+      variante_id: varId ? parseInt(varId) : null,
+      nro_serie: document.getElementById('uid-serie').value.trim()||null,
+      notas: document.getElementById('uid-notas').value.trim()||null,
+      estado: 'stock'
+    }]);
+    closeModal('modal-uid');
+    toast('Unidad registrada ✓');
+    loadUnidades();
+  } catch(e){ toast('Error: '+(e.message.includes('unique')?'Ese UID ya existe':e.message)); }
+}
+
+async function deleteUid(id){
+  if(!confirm('¿Dar de baja esta unidad?')) return;
+  try {
+    await api(`unidades?id=eq.${id}`, 'PATCH', {estado:'baja'});
+    toast('Unidad dada de baja');
+    loadUnidades();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── STOCK AJUSTE ───────────────────────────────────────────────────────────
+function openAdj(stockId, label, current){
+  adjStockId = stockId;
+  document.getElementById('modal-adj-title').textContent = 'Ajustar: ' + label;
+  document.getElementById('adj-cantidad').value = current;
+  document.getElementById('adj-motivo').value = '';
+  openModal('modal-stock-adj');
+}
+
+async function saveAdj(){
+  const qty = parseInt(document.getElementById('adj-cantidad').value);
+  if(isNaN(qty)||qty<0){ toast('Cantidad inválida'); return; }
+  try {
+    await api(`stock?id=eq.${adjStockId}`, 'PATCH', {cantidad:qty, updated_at:new Date().toISOString()});
+    closeModal('modal-stock-adj');
+    toast('Stock actualizado ✓');
+    loadStock();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── CONFIG ─────────────────────────────────────────────────────────────────
+function loadConfig(){
+  document.getElementById('cfg-url').value = SUPA_URL;
+  document.getElementById('cfg-key').value = SUPA_KEY;
+}
+
+async function saveConfig(){
+  SUPA_URL = document.getElementById('cfg-url').value.trim().replace(/\/$/,'');
+  SUPA_KEY = document.getElementById('cfg-key').value.trim();
+  localStorage.setItem('supa_url', SUPA_URL);
+  localStorage.setItem('supa_key', SUPA_KEY);
+  const ok = await checkConnection();
+  const info = document.getElementById('cfg-info');
+  const content = document.getElementById('cfg-info-content');
+  info.style.display='block';
+  content.innerHTML = ok
+    ? '<div class="config-row"><span style="color:var(--green)">✓ Conexión exitosa</span></div>'
+    : '<div class="config-row"><span style="color:var(--red)">✗ No se pudo conectar — verificá las credenciales</span></div>';
+  if(ok) toast('Conectado a Supabase ✓');
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function badgeAlerta(a){
+  if(a==='ok') return '<span class="badge ok">● OK</span>';
+  if(a==='bajo') return '<span class="badge bajo">▲ Bajo</span>';
+  return '<span class="badge sin">✕ Sin stock</span>';
+}
+function badgeEstado(e){
+  const map={stock:'ok',reservado:'bajo',producido:'qty',baja:'sin'};
+  const label={stock:'En stock',reservado:'Reservado',producido:'Producido',baja:'Baja'};
+  return `<span class="badge ${map[e]||'qty'}">${label[e]||e}</span>`;
+}
+function formatDate(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.opacity='1';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.opacity='0'; }, 2500);
+}
+
+// ─── INIT ───────────────────────────────────────────────────────────────────
+async function init(){
+  // Load config from localStorage
+  const ok = await checkConnection();
+  if(ok){
+    loadDashboard();
+    // Pre-load categorías y skus
+    categorias = await api('categorias?select=*&order=orden.asc').catch(()=>[]);
+    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc&activo=eq.true').catch(()=>[]);
+    fillCatFilters();
+  } else {
+    // Si no hay config, ir a config page
+    if(!SUPA_URL || !SUPA_KEY){
+      showPage('config');
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      document.querySelector('.nav-item:last-child').classList.add('active');
+    }
+  }
+}
+
+// Keyboard: Enter en variante nueva
+document.getElementById('var-nueva')?.addEventListener('keydown', e=>{ if(e.key==='Enter') addVariante(); });
+
+init();
+</script>
+</body>
+</html>

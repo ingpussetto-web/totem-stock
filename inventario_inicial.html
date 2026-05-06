@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Inventario Inicial</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root {
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);
+  --blue:#4d9fff;
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.main{padding:28px 32px;overflow-y:auto;}
+
+.logo{padding:20px;border-bottom:1px solid var(--border);}
+.logo-name{font-size:14px;font-weight:600;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px;}
+.nav{padding:12px 0;flex:1;}
+.nav-section{padding:10px 16px 4px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;font-size:12.5px;color:var(--text2);transition:all 0.12s;border-left:2px solid transparent;}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.025);}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim);}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.conn-dot.ok{background:var(--green);}
+
+.page{display:none;}
+.page.active{display:block;}
+.page-header{margin-bottom:24px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;margin-bottom:14px;}
+.card-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:16px;}
+
+.steps{display:flex;gap:0;margin-bottom:24px;}
+.step{flex:1;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);font-size:11px;color:var(--text3);position:relative;text-align:center;}
+.step:first-child{border-radius:var(--radius) 0 0 var(--radius);}
+.step:last-child{border-radius:0 var(--radius) var(--radius) 0;}
+.step.active{background:var(--green-dim);border-color:var(--green-border);color:var(--green);}
+.step.done{background:rgba(0,200,150,0.05);color:var(--text3);}
+.step-num{font-family:'DM Mono',monospace;font-size:10px;display:block;margin-bottom:2px;}
+.step-label{font-weight:500;}
+
+.form-group{margin-bottom:16px;}
+.form-label{font-size:11px;color:var(--text2);margin-bottom:6px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-size:13px;transition:border-color 0.15s;font-family:'DM Sans',sans-serif;}
+.form-input:focus{outline:none;border-color:var(--green);}
+.form-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.form-select:focus{outline:none;border-color:var(--green);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-row-3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+
+.btn{padding:9px 18px;font-size:13px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:7px;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.primary{border-color:var(--green);color:var(--green);font-weight:500;}
+.btn.primary:hover{background:var(--green-dim);}
+.btn.solid{background:var(--green);border-color:var(--green);color:#000;font-weight:600;}
+.btn.solid:hover{background:#00b888;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* Preview de unidades a generar */
+.uid-preview{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;max-height:200px;overflow-y:auto;}
+.uid-chip{background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);}
+
+/* Tabla de inventario */
+table{width:100%;border-collapse:collapse;}
+th{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;}
+td{font-size:12.5px;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.015);}
+.td-main{color:var(--text)!important;font-weight:500;}
+.td-mono{font-family:'DM Mono',monospace;font-size:11px;}
+.badge{display:inline-flex;align-items:center;font-size:10px;padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;}
+.badge.green{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);}
+.badge.amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,166,35,0.25);}
+
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:11px;font-family:'DM Mono',monospace;padding:9px 14px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;}
+.loading{display:flex;align-items:center;gap:8px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;padding:10px 0;}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Resumen por SKU */
+.sku-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:10px;}
+.sku-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;}
+.sku-card-name{font-size:12px;font-weight:500;margin-bottom:4px;}
+.sku-card-detail{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+.sku-card-qty{font-size:20px;font-weight:600;color:var(--green);font-family:'DM Mono',monospace;}
+
+/* Config */
+.config-section{margin-bottom:20px;}
+
+/* ── PRINT STYLES ─────────────────────────────────────────── */
+@media print {
+  body{background:#fff;color:#000;}
+  .app{display:block;}
+  .sidebar,.main > *:not(#print-area){display:none;}
+  #print-area{display:block!important;}
+  @page{size:A4;margin:8mm;}
+}
+
+#print-area{display:none;}
+.label-sheet{
+  width:210mm;
+  padding:4mm;
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:3mm;
+  background:#fff;
+}
+.label{
+  width:105mm;
+  height:74mm;
+  border:0.5pt solid #ccc;
+  border-radius:2mm;
+  padding:4mm;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  font-family:Arial,sans-serif;
+  position:relative;
+  overflow:hidden;
+  page-break-inside:avoid;
+}
+.label-header{display:flex;justify-content:space-between;align-items:flex-start;}
+.label-brand{font-size:7pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
+.label-estado{font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:1mm 2mm;font-weight:600;}
+.label-nombre{font-size:9pt;font-weight:700;color:#111;line-height:1.2;margin:2mm 0 1mm;}
+.label-variante{font-size:8pt;color:#444;margin-bottom:1mm;}
+.label-body{display:flex;align-items:center;gap:3mm;flex:1;}
+.label-qr{flex-shrink:0;}
+.label-info{flex:1;}
+.label-uid{font-size:7pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.3;margin-bottom:1.5mm;}
+.label-uid-label{font-size:5.5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5mm;}
+.label-footer{display:flex;justify-content:space-between;align-items:flex-end;border-top:0.5pt solid #eee;padding-top:1.5mm;margin-top:1mm;}
+.label-fecha{font-size:6pt;color:#888;}
+.label-num{font-size:6pt;color:#aaa;font-family:'Courier New',monospace;}
+.label-accion{font-size:6pt;color:#1976d2;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-name">Totem Nube</div>
+      <div class="logo-sub">INVENTARIO INICIAL · v1.0</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Proceso</div>
+      <div class="nav-item active" onclick="showPage('inventariar')">
+        <span>◈</span> Inventariar insumos
+      </div>
+      <div class="nav-item" onclick="showPage('resumen')">
+        <span>▤</span> Resumen inventario
+      </div>
+      <div class="nav-section">Sistema</div>
+      <div class="nav-item" onclick="showPage('config')">
+        <span>⚙</span> Configuración
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="conn-status">
+        <div class="conn-dot" id="conn-dot"></div>
+        <span id="conn-text">Conectando...</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- INVENTARIAR -->
+    <div class="page active" id="page-inventariar">
+      <div class="page-header">
+        <div class="page-title">Inventariar insumos</div>
+        <div class="page-sub">Contá las unidades físicas, generá UIDs y etiquetas para imprimir</div>
+      </div>
+
+      <div class="steps">
+        <div class="step active" id="step1"><span class="step-num">01</span><span class="step-label">Seleccionar insumo</span></div>
+        <div class="step" id="step2"><span class="step-num">02</span><span class="step-label">Cantidad y UIDs</span></div>
+        <div class="step" id="step3"><span class="step-num">03</span><span class="step-label">Imprimir etiquetas</span></div>
+      </div>
+
+      <!-- PASO 1 -->
+      <div id="panel1">
+        <div class="card">
+          <div class="card-title">¿Qué insumo estás inventariando?</div>
+          <div class="form-group">
+            <label class="form-label">Categoría</label>
+            <select class="form-select" id="sel-cat" onchange="filtrarSkus()">
+              <option value="">— Seleccioná una categoría —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Insumo (SKU)</label>
+            <select class="form-select" id="sel-sku" onchange="onSkuChange()" disabled>
+              <option value="">— Seleccioná un insumo —</option>
+            </select>
+          </div>
+          <div class="form-group" id="grp-variante" style="display:none">
+            <label class="form-label">Color / Variante</label>
+            <select class="form-select" id="sel-variante">
+              <option value="">— Seleccioná color —</option>
+            </select>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <button class="btn primary" id="btn-paso2" onclick="irPaso2()" disabled>Continuar →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PASO 2 -->
+      <div id="panel2" style="display:none">
+        <div class="card">
+          <div class="card-title">Cantidad contada en depósito</div>
+          <div id="seleccion-resumen" style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">¿Cuántas unidades contaste?</label>
+              <input class="form-input" type="number" id="inp-cantidad" min="1" max="200" value="1" oninput="generarUidPreview()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Prefijo UID (auto)</label>
+              <input class="form-input" type="text" id="inp-prefijo" readonly style="color:var(--text3);">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">UIDs que se van a generar</label>
+            <div class="uid-preview" id="uid-preview"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;">
+            <button class="btn" onclick="irPaso1()">← Volver</button>
+            <button class="btn solid" id="btn-registrar" onclick="registrarYEtiquetas()">Registrar y generar etiquetas →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PASO 3 -->
+      <div id="panel3" style="display:none">
+        <div class="card">
+          <div class="card-title">Etiquetas generadas</div>
+          <div id="resultado-registro" style="margin-bottom:16px;"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn solid" onclick="imprimirEtiquetas()">🖨 Imprimir etiquetas</button>
+            <button class="btn primary" onclick="inventariarMas()">+ Inventariar otro insumo</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div class="card-title">Vista previa de etiquetas</div>
+          <div id="preview-etiquetas" style="background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESUMEN -->
+    <div class="page" id="page-resumen">
+      <div class="page-header">
+        <div class="page-title">Resumen del inventario</div>
+        <div class="page-sub">Unidades físicas registradas en esta sesión</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Por insumo</div>
+        <div id="resumen-content"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Detalle de unidades</div>
+        <table>
+          <thead>
+            <tr><th>UID</th><th>Insumo</th><th>Variante</th><th>Estado</th><th>Registrado</th></tr>
+          </thead>
+          <tbody id="resumen-tbody">
+            <tr><td colspan="5"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="page-header">
+        <div class="page-title">Configuración</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Conexión Supabase</div>
+        <div class="form-group">
+          <label class="form-label">Project URL</label>
+          <input class="form-input" type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anon Key</label>
+          <input class="form-input" type="text" id="cfg-key" placeholder="eyJ...">
+        </div>
+        <button class="btn primary" onclick="saveConfig()">Guardar y reconectar</button>
+        <div id="cfg-status" style="margin-top:10px;font-size:12px;font-family:'DM Mono',monospace;"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ÁREA DE IMPRESIÓN -->
+<div id="print-area"></div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────
+let SUPA_URL = localStorage.getItem('supa_url') || '';
+let SUPA_KEY = localStorage.getItem('supa_key') || '';
+
+// ─── STATE ─────────────────────────────────────────────────
+let categorias = [];
+let skus = [];
+let skusFiltrados = [];
+let variantesActuales = [];
+let etiquetasActuales = []; // [{uid, nombre, variante, prefijo}]
+
+// ─── API ───────────────────────────────────────────────────
+async function api(path, method='GET', body=null){
+  const opts = {
+    method,
+    headers:{
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'return=representation' : ''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  if(res.status===204) return null;
+  return res.json();
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  event?.currentTarget?.classList.add('active');
+  if(id==='resumen') loadResumen();
+  if(id==='config') loadConfig();
+}
+
+// ─── CONNECTION ─────────────────────────────────────────────
+async function checkConnection(){
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-text');
+  if(!SUPA_URL||!SUPA_KEY){ dot.className='conn-dot'; txt.textContent='Sin configurar'; return false; }
+  try {
+    await api('categorias?select=id&limit=1');
+    dot.className='conn-dot ok'; txt.textContent='Conectado'; return true;
+  } catch(e){ dot.className='conn-dot'; txt.textContent='Sin conexión'; return false; }
+}
+
+// ─── LOAD DATA ──────────────────────────────────────────────
+async function loadData(){
+  try {
+    categorias = await api('categorias?select=*&order=orden.asc');
+    // Solo categorías con SKUs uid
+    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&tracking=eq.uid&activo=eq.true&order=nombre.asc');
+    
+    // Fill categorias que tienen skus uid
+    const catIds = [...new Set(skus.map(s=>s.categoria_id))];
+    const catsConSkus = categorias.filter(c=>catIds.includes(c.id));
+    
+    const catSel = document.getElementById('sel-cat');
+    catSel.innerHTML = '<option value="">— Seleccioná una categoría —</option>' +
+      catsConSkus.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  } catch(e){ toast('Error cargando datos: '+e.message); }
+}
+
+// ─── PASO 1 ──────────────────────────────────────────────────
+function filtrarSkus(){
+  const catId = document.getElementById('sel-cat').value;
+  const skuSel = document.getElementById('sel-sku');
+  skuSel.innerHTML = '<option value="">— Seleccioná un insumo —</option>';
+  skuSel.disabled = !catId;
+  document.getElementById('grp-variante').style.display='none';
+  document.getElementById('btn-paso2').disabled=true;
+  if(!catId) return;
+  skusFiltrados = skus.filter(s=>String(s.categoria_id)===catId);
+  skuSel.innerHTML = '<option value="">— Seleccioná un insumo —</option>' +
+    skusFiltrados.map(s=>`<option value="${s.id}">${s.nombre}</option>`).join('');
+}
+
+function onSkuChange(){
+  const skuId = document.getElementById('sel-sku').value;
+  const grpVar = document.getElementById('grp-variante');
+  const btnP2 = document.getElementById('btn-paso2');
+  if(!skuId){ grpVar.style.display='none'; btnP2.disabled=true; return; }
+  
+  const sku = skus.find(s=>String(s.id)===skuId);
+  variantesActuales = (sku?.variantes||[]);
+  
+  if(variantesActuales.length){
+    grpVar.style.display='block';
+    const varSel = document.getElementById('sel-variante');
+    varSel.innerHTML = '<option value="">— Seleccioná color —</option>' +
+      variantesActuales.map(v=>`<option value="${v.id}">${v.valor}</option>`).join('');
+    btnP2.disabled=true;
+    varSel.onchange = ()=>{ btnP2.disabled = !varSel.value; };
+  } else {
+    grpVar.style.display='none';
+    btnP2.disabled=false;
+  }
+}
+
+function irPaso1(){
+  document.getElementById('panel1').style.display='block';
+  document.getElementById('panel2').style.display='none';
+  document.getElementById('panel3').style.display='none';
+  setStep(1);
+}
+
+function irPaso2(){
+  const skuId = document.getElementById('sel-sku').value;
+  if(!skuId) return;
+  const sku = skus.find(s=>String(s.id)===skuId);
+  const varId = document.getElementById('sel-variante').value;
+  const varObj = variantesActuales.find(v=>String(v.id)===varId);
+  
+  // Mostrar resumen
+  let txt = `<strong>${sku.nombre}</strong>`;
+  if(varObj) txt += ` — <span style="color:var(--amber)">${varObj.valor}</span>`;
+  document.getElementById('seleccion-resumen').innerHTML = txt;
+  
+  // Generar prefijo automático
+  const prefijo = generarPrefijo(sku.codigo, varObj?.valor);
+  document.getElementById('inp-prefijo').value = prefijo;
+  
+  document.getElementById('inp-cantidad').value = 1;
+  generarUidPreview();
+  
+  document.getElementById('panel1').style.display='none';
+  document.getElementById('panel2').style.display='block';
+  document.getElementById('panel3').style.display='none';
+  setStep(2);
+}
+
+function generarPrefijo(codigo, variante){
+  let pref = codigo.substring(0,18);
+  if(variante){
+    const varMap = {'Negro':'NEG','Blanco':'BLA','Gris Plomo':'GRP','Gris Claro':'GRC','Azul':'AZU','Rojo':'ROJ','Verde':'VER','A definir':'DEF','XPrinter':'XPR','3 N Star':'NST','Nitcom':'NIT','Garnic':'GAR','Philips':'PHI','Roku':'ROK'};
+    const varCod = varMap[variante] || variante.substring(0,3).toUpperCase();
+    pref = pref + '-' + varCod;
+  }
+  return pref.substring(0,22);
+}
+
+async function generarUidPreview(){
+  const cantidad = parseInt(document.getElementById('inp-cantidad').value)||1;
+  const prefijo = document.getElementById('inp-prefijo').value;
+  
+  // Buscar el último número usado para este prefijo
+  let lastNum = 0;
+  try {
+    const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc&limit=1`);
+    if(existing?.length){
+      const lastUid = existing[0].uid;
+      const match = lastUid.match(/-(\d+)$/);
+      if(match) lastNum = parseInt(match[1]);
+    }
+  } catch(e){}
+  
+  const preview = document.getElementById('uid-preview');
+  preview.innerHTML = '';
+  for(let i=1;i<=Math.min(cantidad,30);i++){
+    const num = String(lastNum+i).padStart(4,'0');
+    const uid = prefijo+'-'+num;
+    const chip = document.createElement('div');
+    chip.className='uid-chip';
+    chip.textContent=uid;
+    preview.appendChild(chip);
+  }
+  if(cantidad>30){
+    const chip = document.createElement('div');
+    chip.className='uid-chip';
+    chip.style.color='var(--text3)';
+    chip.textContent=`... y ${cantidad-30} más`;
+    preview.appendChild(chip);
+  }
+}
+
+// ─── REGISTRAR Y GENERAR ETIQUETAS ──────────────────────────
+async function registrarYEtiquetas(){
+  const skuId = document.getElementById('sel-sku').value;
+  const sku = skus.find(s=>String(s.id)===skuId);
+  const varId = document.getElementById('sel-variante').value||null;
+  const varObj = variantesActuales.find(v=>String(v.id)===varId)||null;
+  const cantidad = parseInt(document.getElementById('inp-cantidad').value)||1;
+  const prefijo = document.getElementById('inp-prefijo').value;
+  
+  const btn = document.getElementById('btn-registrar');
+  btn.disabled=true;
+  btn.textContent='Registrando...';
+  
+  try {
+    // Buscar último número
+    let lastNum = 0;
+    try {
+      const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc&limit=1`);
+      if(existing?.length){
+        const match = existing[0].uid.match(/-(\d+)$/);
+        if(match) lastNum = parseInt(match[1]);
+      }
+    } catch(e){}
+    
+    // Generar unidades
+    const unidades = [];
+    etiquetasActuales = [];
+    for(let i=1;i<=cantidad;i++){
+      const num = String(lastNum+i).padStart(4,'0');
+      const uid = prefijo+'-'+num;
+      unidades.push({
+        uid,
+        sku_id: parseInt(skuId),
+        variante_id: varId ? parseInt(varId) : null,
+        estado: 'stock'
+      });
+      etiquetasActuales.push({
+        uid,
+        nombre: sku.nombre,
+        variante: varObj?.valor||null,
+        num: lastNum+i
+      });
+    }
+    
+    // Insertar en Supabase
+    await api('unidades', 'POST', unidades);
+    
+    // Mostrar resultado
+    document.getElementById('resultado-registro').innerHTML = `
+      <div style="padding:12px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:var(--radius);font-size:13px;color:var(--green);">
+        ✓ ${cantidad} unidad${cantidad>1?'es':''} registrada${cantidad>1?'s':''} en stock
+        ${varObj ? `— <strong>${varObj.valor}</strong>` : ''}
+      </div>`;
+    
+    // Generar vista previa de etiquetas
+    generarVistaEtiquetas();
+    
+    document.getElementById('panel2').style.display='none';
+    document.getElementById('panel3').style.display='block';
+    setStep(3);
+    toast(`${cantidad} UID${cantidad>1?'s':''} registrados ✓`);
+    
+  } catch(e){
+    toast('Error: '+(e.message.includes('unique')?'Algunos UIDs ya existen — revisá el prefijo':e.message));
+  } finally {
+    btn.disabled=false;
+    btn.textContent='Registrar y generar etiquetas →';
+  }
+}
+
+// ─── ETIQUETAS ────────────────────────────────────────────────
+function generarVistaEtiquetas(){
+  const preview = document.getElementById('preview-etiquetas');
+  preview.innerHTML = '';
+  
+  // Generar en grupos de 8 (una hoja A4)
+  const hojas = [];
+  for(let i=0;i<etiquetasActuales.length;i+=8){
+    hojas.push(etiquetasActuales.slice(i,i+8));
+  }
+  
+  hojas.forEach((hoja,hi)=>{
+    const sheet = document.createElement('div');
+    sheet.className='label-sheet';
+    sheet.style.marginBottom='8mm';
+    sheet.style.pageBreakAfter='always';
+    
+    hoja.forEach(et=>{
+      const label = crearEtiqueta(et);
+      sheet.appendChild(label);
+    });
+    
+    preview.appendChild(sheet);
+  });
+}
+
+function crearEtiqueta(et){
+  const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  
+  const label = document.createElement('div');
+  label.className='label';
+  
+  label.innerHTML = `
+    <div>
+      <div class="label-header">
+        <div class="label-brand">Totem Nube</div>
+        <div class="label-estado">EN STOCK</div>
+      </div>
+      <div class="label-nombre">${et.nombre}</div>
+      ${et.variante ? `<div class="label-variante">Color: ${et.variante}</div>` : ''}
+    </div>
+    <div class="label-body">
+      <div class="label-qr" id="qr-${et.uid.replace(/[^a-z0-9]/gi,'_')}"></div>
+      <div class="label-info">
+        <div class="label-uid-label">UID</div>
+        <div class="label-uid">${et.uid}</div>
+        <div class="label-accion">Escanear al asignar</div>
+      </div>
+    </div>
+    <div class="label-footer">
+      <div class="label-fecha">Inventariado: ${fecha}</div>
+      <div class="label-num">#${String(et.num).padStart(4,'0')}</div>
+    </div>`;
+  
+  // Generar QR después de que el DOM esté listo
+  setTimeout(()=>{
+    const qrEl = label.querySelector(`#qr-${et.uid.replace(/[^a-z0-9]/gi,'_')}`);
+    if(qrEl && window.QRCode){
+      new QRCode(qrEl, {
+        text: et.uid,
+        width: 80,
+        height: 80,
+        colorDark: '#000',
+        colorLight: '#fff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  }, 100);
+  
+  return label;
+}
+
+function imprimirEtiquetas(){
+  // Mover etiquetas al área de impresión
+  const printArea = document.getElementById('print-area');
+  printArea.innerHTML = document.getElementById('preview-etiquetas').innerHTML;
+  window.print();
+}
+
+function inventariarMas(){
+  etiquetasActuales = [];
+  document.getElementById('panel1').style.display='block';
+  document.getElementById('panel2').style.display='none';
+  document.getElementById('panel3').style.display='none';
+  // Reset selects
+  document.getElementById('sel-cat').value='';
+  document.getElementById('sel-sku').innerHTML='<option value="">— Seleccioná un insumo —</option>';
+  document.getElementById('sel-sku').disabled=true;
+  document.getElementById('grp-variante').style.display='none';
+  document.getElementById('btn-paso2').disabled=true;
+  setStep(1);
+}
+
+// ─── STEPS ────────────────────────────────────────────────────
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    const el = document.getElementById('step'+i);
+    el.className = 'step' + (i===n?' active':i<n?' done':'');
+  });
+}
+
+// ─── RESUMEN ─────────────────────────────────────────────────
+async function loadResumen(){
+  try {
+    const unidades = await api('unidades?select=*,skus(codigo,nombre),variantes(valor)&estado=eq.stock&order=created_at.desc');
+    
+    // Agrupar por SKU+variante
+    const grupos = {};
+    unidades.forEach(u=>{
+      const key = u.sku_id + '-' + (u.variante_id||'null');
+      if(!grupos[key]) grupos[key]={nombre:u.skus?.nombre,variante:u.variantes?.valor,count:0};
+      grupos[key].count++;
+    });
+    
+    const resEl = document.getElementById('resumen-content');
+    resEl.innerHTML = `<div class="sku-summary">${
+      Object.values(grupos).map(g=>`
+        <div class="sku-card">
+          <div class="sku-card-qty">${g.count}</div>
+          <div class="sku-card-name">${g.nombre}</div>
+          <div class="sku-card-detail">${g.variante||'Sin variante'}</div>
+        </div>`).join('')
+    }</div>`;
+    
+    const tbody = document.getElementById('resumen-tbody');
+    tbody.innerHTML = unidades.map(u=>`<tr>
+      <td class="td-mono td-main">${u.uid}</td>
+      <td>${u.skus?.nombre||'—'}</td>
+      <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.variantes?.valor||'—'}</td>
+      <td><span class="badge green">En stock</span></td>
+      <td style="font-size:11px;color:var(--text3)">${new Date(u.created_at).toLocaleDateString('es-AR')}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin unidades registradas aún</td></tr>';
+    
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── CONFIG ────────────────────────────────────────────────────
+function loadConfig(){
+  document.getElementById('cfg-url').value=SUPA_URL;
+  document.getElementById('cfg-key').value=SUPA_KEY;
+}
+async function saveConfig(){
+  SUPA_URL=document.getElementById('cfg-url').value.trim().replace(/\/$/,'');
+  SUPA_KEY=document.getElementById('cfg-key').value.trim();
+  localStorage.setItem('supa_url',SUPA_URL);
+  localStorage.setItem('supa_key',SUPA_KEY);
+  const ok=await checkConnection();
+  document.getElementById('cfg-status').innerHTML=ok
+    ?'<span style="color:var(--green)">✓ Conectado</span>'
+    :'<span style="color:var(--red)">✗ Error de conexión</span>';
+  if(ok) loadData();
+}
+
+// ─── HELPERS ────────────────────────────────────────────────────
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(el._t); el._t=setTimeout(()=>{el.style.opacity='0';},2800);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────
+async function init(){
+  const ok=await checkConnection();
+  if(ok){ await loadData(); }
+  else if(!SUPA_URL||!SUPA_KEY){ showPage('config'); }
+}
+init();
+</script>
+</body>
+</html>

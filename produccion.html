@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Producción</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.09);--blue-border:rgba(77,159,255,0.25);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh;}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.main{padding:24px 28px;overflow-y:auto;}
+.logo{padding:18px 20px;border-bottom:1px solid var(--border);}
+.logo-name{font-size:14px;font-weight:600;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px;}
+.nav{padding:10px 0;flex:1;}
+.nav-section{padding:10px 16px 4px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;font-size:12.5px;color:var(--text2);transition:all 0.12s;border-left:2px solid transparent;}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.025);}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim);}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--border);}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.conn-dot.ok{background:var(--green);}
+
+.page{display:none;}
+.page.active{display:block;}
+.page-header{margin-bottom:20px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:12px;}
+.card-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:14px;}
+
+/* OP List */
+.op-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:8px;cursor:pointer;transition:all 0.15s;border-left:3px solid var(--green);}
+.op-card:hover{border-color:var(--green-border);background:rgba(0,200,150,0.03);}
+.op-numero{font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);margin-bottom:3px;}
+.op-cliente{font-size:15px;font-weight:600;color:var(--text);}
+.op-producto{font-size:12px;color:var(--text2);margin-top:2px;}
+.op-meta{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:4px;}
+.op-progress-mini{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.progress-bar{flex:1;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width 0.3s;}
+.progress-label{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;}
+
+/* Scan area */
+.scan-area{background:var(--surface2);border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;transition:border-color 0.2s;}
+.scan-area.active{border-color:var(--green);border-style:solid;background:var(--green-dim);}
+.scan-area.error{border-color:var(--red);border-style:solid;background:var(--red-dim);}
+.scan-label{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;}
+.scan-input{width:100%;background:transparent;border:none;font-size:18px;font-family:'DM Mono',monospace;color:var(--text);outline:none;caret-color:var(--green);}
+.scan-input::placeholder{color:var(--text3);font-size:14px;}
+.scan-feedback{font-size:13px;margin-top:8px;min-height:20px;font-family:'DM Mono',monospace;}
+.scan-feedback.ok{color:var(--green);}
+.scan-feedback.err{color:var(--red);}
+.scan-feedback.warn{color:var(--amber);}
+
+/* Checklist */
+.checklist{display:flex;flex-direction:column;gap:4px;}
+.check-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);border:1px solid var(--border);transition:all 0.2s;}
+.check-item.asignado{background:var(--green-dim);border-color:var(--green-border);}
+.check-item.pendiente{background:var(--surface2);}
+.check-item.no_aplica{opacity:0.35;}
+.check-icon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+.check-item.asignado .check-icon{background:var(--green);color:#000;}
+.check-item.pendiente .check-icon{background:var(--surface3);border:1px solid var(--border2);color:var(--text3);}
+.check-item.no_aplica .check-icon{background:var(--surface3);color:var(--text3);}
+.check-nombre{flex:1;font-size:13px;}
+.check-item.asignado .check-nombre{color:var(--green);}
+.check-item.pendiente .check-nombre{color:var(--text);}
+.check-uid{font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);margin-top:2px;}
+.check-qty{font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);white-space:nowrap;}
+
+/* OP header en vista detalle */
+.op-detail-header{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:16px;}
+.op-detail-numero{font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);}
+.op-detail-cliente{font-size:18px;font-weight:600;margin:3px 0;}
+.op-detail-producto{font-size:13px;color:var(--text2);}
+.op-detail-color{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--amber);font-family:'DM Mono',monospace;margin-top:4px;}
+
+/* Progress big */
+.progress-big{margin:16px 0;}
+.progress-big-bar{height:8px;background:var(--surface3);border-radius:4px;overflow:hidden;margin-bottom:6px;}
+.progress-big-fill{height:100%;background:var(--green);border-radius:4px;transition:width 0.4s;}
+.progress-big-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+/* Buttons */
+.btn{padding:7px 14px;font-size:12px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;height:34px;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.solid-green{background:var(--green);border-color:var(--green);color:#000;font-weight:600;}
+.btn.solid-green:hover{background:#00b888;}
+.btn.red{border-color:var(--red);color:var(--red);}
+.btn.red:hover{background:var(--red-dim);}
+.btn.amber{border-color:var(--amber);color:var(--amber);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn.lg{height:44px;font-size:14px;padding:0 20px;}
+
+/* Alert faltantes */
+.alert-faltantes{background:var(--red-dim);border:1px solid var(--red-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;}
+.alert-title{font-size:12px;font-weight:600;color:var(--red);margin-bottom:6px;font-family:'DM Mono',monospace;}
+.alert-items{font-size:12px;color:var(--text2);}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:24px;width:480px;max-width:95vw;}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:12px;}
+.modal-body{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;}
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;color:var(--text2);margin-bottom:5px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;}
+.form-input:focus{outline:none;border-color:var(--green);}
+textarea.form-input{resize:vertical;min-height:80px;}
+
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:11px;font-family:'DM Mono',monospace;padding:9px 14px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;}
+.loading{display:flex;align-items:center;gap:8px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;padding:20px 0;}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.empty{text-align:center;padding:40px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+
+/* Scan success flash */
+@keyframes flashGreen{0%{background:rgba(0,200,150,0.3);}100%{background:transparent;}}
+.flash-green{animation:flashGreen 0.6s ease-out;}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-name">Totem Nube</div>
+      <div class="logo-sub">PRODUCCIÓN · v1.0</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Trabajo</div>
+      <div class="nav-item active" id="nav-ops" onclick="showPage('ops')">
+        <span>◈</span> Órdenes activas
+      </div>
+      <div class="nav-item" id="nav-detalle" onclick="showPage('detalle')" style="display:none">
+        <span>▤</span> <span id="nav-op-label">OP actual</span>
+      </div>
+      <div class="nav-section">Sistema</div>
+      <div class="nav-item" onclick="showPage('config')">
+        <span>⚙</span> Configuración
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="conn-status">
+        <div class="conn-dot" id="conn-dot"></div>
+        <span id="conn-text">Conectando...</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- LISTA DE OPs -->
+    <div class="page active" id="page-ops">
+      <div class="page-header">
+        <div class="page-title">Órdenes para fabricar</div>
+        <div class="page-sub">Seleccioná una orden para empezar a asignar insumos</div>
+      </div>
+      <div id="ops-list"><div class="loading"><div class="spinner"></div>Cargando órdenes...</div></div>
+    </div>
+
+    <!-- DETALLE DE OP + ESCANEO -->
+    <div class="page" id="page-detalle">
+      <div id="op-detail-header"></div>
+
+      <!-- Barra de progreso -->
+      <div class="progress-big">
+        <div class="progress-big-bar"><div class="progress-big-fill" id="prog-fill" style="width:0%"></div></div>
+        <div class="progress-big-label">
+          <span id="prog-label">0 de 0 insumos asignados</span>
+          <span id="prog-pct">0%</span>
+        </div>
+      </div>
+
+      <!-- Scanner -->
+      <div class="scan-area" id="scan-area">
+        <div class="scan-label">Escanear insumo</div>
+        <input class="scan-input" type="text" id="scan-input"
+          placeholder="Apuntá el lector al código QR del insumo..."
+          autocomplete="off" autocorrect="off" spellcheck="false"
+          oninput="onScanInput(this.value)"
+          onkeydown="if(event.key==='Enter') procesarScan()">
+        <div class="scan-feedback" id="scan-feedback"></div>
+      </div>
+
+      <!-- Faltantes alert -->
+      <div id="faltantes-alert" style="display:none"></div>
+
+      <!-- Checklist -->
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;">
+          <span>Lista de insumos</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn" style="height:24px;font-size:10px;" onclick="toggleVerTodos()">
+              <span id="toggle-label">Ver todos</span>
+            </button>
+          </div>
+        </div>
+        <div class="checklist" id="checklist"></div>
+      </div>
+
+      <!-- Acciones -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <button class="btn" onclick="volverAOPs()">← Volver</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>
+          <button class="btn solid-green lg" id="btn-cerrar" onclick="cerrarOP()">✓ Cerrar OP</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="page-header">
+        <div class="page-title">Configuración</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Conexión</div>
+        <div class="form-group">
+          <label class="form-label">Project URL</label>
+          <input class="form-input" type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anon Key</label>
+          <input class="form-input" type="text" id="cfg-key" placeholder="eyJ...">
+        </div>
+        <button class="btn green" onclick="saveConfig()">Guardar y reconectar</button>
+        <div id="cfg-status" style="margin-top:10px;font-size:12px;font-family:'DM Mono',monospace;"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL FALTANTE -->
+<div class="modal-bg" id="modal-faltante">
+  <div class="modal">
+    <div class="modal-title">⚠ Reportar insumo faltante</div>
+    <div class="modal-body">Describí qué insumo falta o qué problema encontraste. Se enviará una alerta a Gerencia/Compras.</div>
+    <div class="form-group">
+      <label class="form-label">Detalle del faltante</label>
+      <textarea class="form-input" id="faltante-texto" placeholder="Ej: No hay gabinetes Atril 19&quot; blancos en depósito..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-faltante')">Cancelar</button>
+      <button class="btn amber" onclick="enviarReporteFaltante()">Enviar alerta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CERRAR SIN COMPLETAR -->
+<div class="modal-bg" id="modal-cerrar">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--amber)">⚠ Insumos sin asignar</div>
+    <div class="modal-body" id="modal-cerrar-body"></div>
+    <div class="form-group">
+      <label class="form-label">Justificación (requerida)</label>
+      <textarea class="form-input" id="cerrar-justificacion" placeholder="Ej: Cliente aportó su propia Mini PC. Gerencia autorizó continuar."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-cerrar')">Cancelar</button>
+      <button class="btn amber" onclick="confirmarCierreConFaltantes()">Cerrar igual con justificación</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────
+let SUPA_URL = localStorage.getItem('supa_url') || '';
+let SUPA_KEY = localStorage.getItem('supa_key') || '';
+
+// ─── STATE ─────────────────────────────────────────────────
+let ops = [];
+let currentOP = null;
+let bomItems = [];
+let verSoloFaltantes = true;
+let scanTimeout = null;
+
+// ─── API ───────────────────────────────────────────────────
+async function api(path, method='GET', body=null){
+  if(!SUPA_URL||!SUPA_KEY) throw new Error('Sin configuración');
+  const opts = {
+    method,
+    headers:{
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL.replace(/\/$/,'')+'/rest/v1/'+path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  if(res.status===204) return null;
+  return res.json();
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.getElementById('nav-'+id)?.classList.add('active');
+  if(id==='config') loadConfig();
+  if(id==='detalle') setTimeout(()=>document.getElementById('scan-input')?.focus(), 100);
+}
+
+function volverAOPs(){
+  currentOP = null;
+  bomItems = [];
+  document.getElementById('nav-detalle').style.display='none';
+  showPage('ops');
+  loadOPs();
+}
+
+// ─── CONNECTION ─────────────────────────────────────────────
+async function checkConnection(){
+  const dot=document.getElementById('conn-dot');
+  const txt=document.getElementById('conn-text');
+  if(!SUPA_URL||!SUPA_KEY){dot.className='conn-dot';txt.textContent='Sin configurar';return false;}
+  try{
+    await api('categorias?select=id&limit=1');
+    dot.className='conn-dot ok';txt.textContent='Conectado';return true;
+  }catch(e){dot.className='conn-dot';txt.textContent='Sin conexión';return false;}
+}
+
+// ─── LOAD OPs ───────────────────────────────────────────────
+async function loadOPs(){
+  try{
+    // Solo OPs en estado en_produccion
+    ops = await api('op_progreso?estado=eq.en_produccion&select=*&order=created_at.asc');
+    renderOPs();
+  }catch(e){
+    document.getElementById('ops-list').innerHTML=`<div class="empty"><div class="empty-icon">⚠</div>Error cargando órdenes</div>`;
+  }
+}
+
+function renderOPs(){
+  const el = document.getElementById('ops-list');
+  if(!ops.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">✓</div>No hay órdenes activas para producción</div>';
+    return;
+  }
+  el.innerHTML = ops.map(o=>{
+    const pct = o.items_total>0 ? Math.round((o.items_asignados/o.items_total)*100) : 0;
+    const fecha = new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
+    return `<div class="op-card" onclick="abrirOP(${o.id})">
+      <div class="op-numero">${o.op_numero}</div>
+      <div class="op-cliente">${o.cliente}</div>
+      <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
+      <div class="op-meta">${fecha}${o.color_gabinete?' · '+o.color_gabinete:''}</div>
+      <div class="op-progress-mini">
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="progress-label">${o.items_asignados}/${o.items_total}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── ABRIR OP ───────────────────────────────────────────────
+async function abrirOP(opId){
+  try{
+    currentOP = ops.find(o=>o.id===opId);
+    if(!currentOP) return;
+
+    // Cargar BOM items (solo incluidos)
+    bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)&order=id.asc`);
+
+    // Mostrar header
+    document.getElementById('op-detail-header').innerHTML = `
+      <div class="op-detail-header">
+        <div class="op-detail-numero">${currentOP.op_numero} · ${currentOP.v14_orden||''}</div>
+        <div class="op-detail-cliente">${currentOP.cliente}</div>
+        <div class="op-detail-producto">${currentOP.producto_nombre} × ${currentOP.cantidad}</div>
+        ${currentOP.color_gabinete?`<div class="op-detail-color">● Color gabinete: ${currentOP.color_gabinete}</div>`:''}
+      </div>`;
+
+    // Nav item
+    document.getElementById('nav-detalle').style.display='flex';
+    document.getElementById('nav-op-label').textContent = currentOP.op_numero;
+
+    actualizarProgreso();
+    renderChecklist();
+    showPage('detalle');
+    document.getElementById('scan-input').focus();
+  }catch(e){toast('Error: '+e.message);}
+}
+
+// ─── PROGRESO ───────────────────────────────────────────────
+function actualizarProgreso(){
+  const total = bomItems.filter(i=>i.incluido!==false).length;
+  const asignados = bomItems.filter(i=>i.estado==='asignado').length;
+  const pct = total>0 ? Math.round((asignados/total)*100) : 0;
+  document.getElementById('prog-fill').style.width = pct+'%';
+  document.getElementById('prog-label').textContent = `${asignados} de ${total} insumos asignados`;
+  document.getElementById('prog-pct').textContent = pct+'%';
+
+  // Mostrar faltantes si hay
+  const faltantes = bomItems.filter(i=>i.incluido!==false && i.estado==='pendiente');
+  const alertEl = document.getElementById('faltantes-alert');
+  if(faltantes.length && asignados > 0){
+    alertEl.style.display='block';
+    alertEl.innerHTML = `<div class="alert-faltantes">
+      <div class="alert-title">⚠ ${faltantes.length} insumo${faltantes.length>1?'s':''} pendiente${faltantes.length>1?'s':''}</div>
+      <div class="alert-items">${faltantes.map(f=>f.nombre).join(', ')}</div>
+    </div>`;
+  } else {
+    alertEl.style.display='none';
+  }
+}
+
+// ─── CHECKLIST ───────────────────────────────────────────────
+function renderChecklist(){
+  const items = verSoloFaltantes
+    ? bomItems.filter(i=>i.estado!=='asignado')
+    : bomItems;
+
+  const el = document.getElementById('checklist');
+  if(!items.length && verSoloFaltantes){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--green);font-family:\'DM Mono\',monospace;font-size:12px;">✓ Todos los insumos asignados</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(item=>{
+    const estado = item.estado || 'pendiente';
+    const variante = item.variantes?.valor || '';
+    return `<div class="check-item ${estado}" id="ci-${item.id}">
+      <div class="check-icon">${estado==='asignado'?'✓':'○'}</div>
+      <div style="flex:1">
+        <div class="check-nombre">${item.nombre}${variante?' — '+variante:''}</div>
+        ${item.uid_asignado?`<div class="check-uid">UID: ${item.uid_asignado}</div>`:''}
+        ${item.notas&&!item.uid_asignado?`<div class="check-uid">${item.notas}</div>`:''}
+      </div>
+      <div class="check-qty">×${item.qty}</div>
+      ${estado==='asignado'
+        ? `<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 6px;" onclick="desasignarItem(${item.id})" title="Desasignar">↩</button>`
+        : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="asignarManual(${item.id})">Asignar</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function toggleVerTodos(){
+  verSoloFaltantes = !verSoloFaltantes;
+  document.getElementById('toggle-label').textContent = verSoloFaltantes ? 'Ver todos' : 'Solo pendientes';
+  renderChecklist();
+}
+
+// ─── ESCANEO ───────────────────────────────────────────────
+let scanBuffer = '';
+
+function onScanInput(val){
+  scanBuffer = val;
+  // El lector manda todo de golpe y termina con Enter
+  // Pero también manejamos tipeo manual con delay
+  clearTimeout(scanTimeout);
+  if(val.length > 3){
+    scanTimeout = setTimeout(()=>{
+      if(scanBuffer === val) procesarScan();
+    }, 800);
+  }
+  setFeedback('', '');
+}
+
+async function procesarScan(){
+  const uid = document.getElementById('scan-input').value.trim().toUpperCase();
+  if(!uid){ return; }
+
+  const scanArea = document.getElementById('scan-area');
+
+  try{
+    // Buscar la unidad física por UID
+    const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre)`);
+
+    if(!unidades || !unidades.length){
+      scanArea.className='scan-area error';
+      setFeedback(`✕ UID "${uid}" no encontrado en el sistema`, 'err');
+      setTimeout(()=>scanArea.className='scan-area', 2000);
+      return;
+    }
+
+    const unidad = unidades[0];
+
+    // Verificar que la unidad esté disponible (en stock)
+    if(unidad.estado !== 'stock'){
+      scanArea.className='scan-area error';
+      setFeedback(`✕ Esta unidad ya está en estado "${unidad.estado}"`, 'err');
+      setTimeout(()=>scanArea.className='scan-area', 2000);
+      return;
+    }
+
+    // Buscar item en la BOM que corresponda a este SKU y esté pendiente
+    const itemsCompatibles = bomItems.filter(i=>
+      i.sku_id === unidad.sku_id &&
+      i.estado === 'pendiente' &&
+      i.incluido !== false
+    );
+
+    if(!itemsCompatibles.length){
+      // Verificar si ya está asignado
+      const yaAsignado = bomItems.find(i=>i.uid_asignado===uid);
+      if(yaAsignado){
+        setFeedback(`⚠ Este insumo ya está asignado a esta OP`, 'warn');
+      } else {
+        scanArea.className='scan-area error';
+        setFeedback(`✕ "${unidad.skus?.nombre}" no está en la lista de esta OP o ya fue asignado`, 'err');
+        setTimeout(()=>scanArea.className='scan-area', 2000);
+      }
+      return;
+    }
+
+    // Tomar el primer item compatible
+    const item = itemsCompatibles[0];
+
+    // Actualizar item en BOM
+    await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
+      estado: 'asignado',
+      uid_asignado: uid
+    });
+
+    // Actualizar unidad física → reservado
+    await api(`unidades?id=eq.${unidad.id}`, 'PATCH', {
+      estado: 'reservado',
+      updated_at: new Date().toISOString()
+    });
+
+    // Actualizar estado local
+    item.estado = 'asignado';
+    item.uid_asignado = uid;
+
+    // Feedback visual
+    scanArea.className='scan-area active';
+    setFeedback(`✓ ${unidad.skus?.nombre} asignado correctamente`, 'ok');
+    document.getElementById('scan-input').value='';
+    scanBuffer='';
+
+    // Flash en checklist item
+    const ciEl = document.getElementById('ci-'+item.id);
+    if(ciEl) ciEl.classList.add('flash-green');
+
+    actualizarProgreso();
+    renderChecklist();
+
+    setTimeout(()=>{ scanArea.className='scan-area'; }, 1500);
+    document.getElementById('scan-input').focus();
+
+  }catch(e){
+    setFeedback('✕ Error: '+e.message, 'err');
+  }
+}
+
+function setFeedback(msg, type){
+  const el = document.getElementById('scan-feedback');
+  el.textContent = msg;
+  el.className = 'scan-feedback' + (type?' '+type:'');
+}
+
+// ─── ASIGNACIÓN MANUAL ───────────────────────────────────────
+async function asignarManual(itemId){
+  const item = bomItems.find(i=>i.id===itemId);
+  if(!item) return;
+
+  // Para insumos de cantidad (no UID), asignar directamente sin escanear
+  if(item.skus?.tracking === 'cantidad'){
+    if(!confirm(`¿Confirmar uso de "${item.nombre}" × ${item.qty}?\nSe descontará del stock.`)) return;
+    try{
+      // Descontar del stock por cantidad
+      const stockRows = await api(`stock?sku_id=eq.${item.sku_id}&select=id,cantidad`);
+      if(stockRows && stockRows.length){
+        const s = stockRows[0];
+        await api(`stock?id=eq.${s.id}`, 'PATCH', {
+          cantidad: Math.max(0, s.cantidad - item.qty),
+          updated_at: new Date().toISOString()
+        });
+      }
+      await api(`op_bom_items?id=eq.${itemId}`, 'PATCH', {
+        estado: 'asignado',
+        uid_asignado: 'CANTIDAD-DESCONTADA'
+      });
+      item.estado='asignado';
+      item.uid_asignado='CANTIDAD-DESCONTADA';
+      actualizarProgreso();
+      renderChecklist();
+      toast(`${item.nombre} asignado ✓`);
+    }catch(e){toast('Error: '+e.message);}
+  } else {
+    // Para UID, enfocar el scanner
+    document.getElementById('scan-input').focus();
+    setFeedback(`Escaneá el QR de: ${item.nombre}`, 'warn');
+  }
+}
+
+async function desasignarItem(itemId){
+  const item = bomItems.find(i=>i.id===itemId);
+  if(!item || !confirm('¿Desasignar este insumo?')) return;
+  try{
+    // Si tiene UID, devolver a stock
+    if(item.uid_asignado && item.uid_asignado !== 'CANTIDAD-DESCONTADA'){
+      await api(`unidades?uid=eq.${encodeURIComponent(item.uid_asignado)}`, 'PATCH', {estado:'stock'});
+    }
+    // Si era cantidad, restaurar stock
+    if(item.uid_asignado === 'CANTIDAD-DESCONTADA'){
+      const stockRows = await api(`stock?sku_id=eq.${item.sku_id}&select=id,cantidad`);
+      if(stockRows && stockRows.length){
+        await api(`stock?id=eq.${stockRows[0].id}`, 'PATCH', {cantidad: stockRows[0].cantidad + item.qty});
+      }
+    }
+    await api(`op_bom_items?id=eq.${itemId}`, 'PATCH', {estado:'pendiente', uid_asignado:null});
+    item.estado='pendiente';
+    item.uid_asignado=null;
+    actualizarProgreso();
+    renderChecklist();
+    toast('Insumo desasignado');
+  }catch(e){toast('Error: '+e.message);}
+}
+
+// ─── CERRAR OP ───────────────────────────────────────────────
+async function cerrarOP(){
+  const faltantes = bomItems.filter(i=>i.incluido!==false && i.estado==='pendiente');
+
+  if(faltantes.length){
+    // Hay faltantes — pedir justificación
+    document.getElementById('modal-cerrar-body').innerHTML =
+      `Hay <strong style="color:var(--red)">${faltantes.length} insumo${faltantes.length>1?'s':''}</strong> sin asignar:<br><br>` +
+      faltantes.map(f=>`• ${f.nombre}`).join('<br>') +
+      '<br><br>Si cerrás la OP con faltantes, se enviará una alerta a Gerencia.';
+    document.getElementById('cerrar-justificacion').value='';
+    openModal('modal-cerrar');
+  } else {
+    if(!confirm('¿Confirmar cierre de la OP? Todos los insumos están asignados.')) return;
+    await ejecutarCierreOP('Todos los insumos asignados correctamente.');
+  }
+}
+
+async function confirmarCierreConFaltantes(){
+  const justif = document.getElementById('cerrar-justificacion').value.trim();
+  if(!justif){ toast('Ingresá una justificación'); return; }
+  closeModal('modal-cerrar');
+  await ejecutarCierreOP(justif);
+}
+
+async function ejecutarCierreOP(notas){
+  try{
+    // Marcar unidades asignadas como "producido"
+    const uidsAsignados = bomItems
+      .filter(i=>i.uid_asignado && i.uid_asignado!=='CANTIDAD-DESCONTADA')
+      .map(i=>i.uid_asignado);
+
+    for(const uid of uidsAsignados){
+      await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', {estado:'producido'});
+    }
+
+    // Cerrar OP
+    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
+      estado: 'completada',
+      notas,
+      updated_at: new Date().toISOString()
+    });
+
+    toast('✓ OP cerrada exitosamente');
+    setTimeout(()=>volverAOPs(), 1500);
+  }catch(e){toast('Error cerrando OP: '+e.message);}
+}
+
+// ─── REPORTE FALTANTE ────────────────────────────────────────
+async function enviarReporteFaltante(){
+  const texto = document.getElementById('faltante-texto').value.trim();
+  if(!texto){ toast('Describí el faltante'); return; }
+  try{
+    // Guardar en notas de la OP
+    const notasActuales = currentOP.notas || '';
+    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
+      notas: notasActuales + '\n⚠ FALTANTE REPORTADO: ' + texto + ' [' + new Date().toLocaleString('es-AR') + ']'
+    });
+    closeModal('modal-faltante');
+    toast('Alerta enviada a Gerencia ✓');
+    document.getElementById('faltante-texto').value='';
+  }catch(e){toast('Error: '+e.message);}
+}
+
+function abrirModalFaltante(){
+  document.getElementById('faltante-texto').value='';
+  openModal('modal-faltante');
+}
+
+// ─── MODALS ─────────────────────────────────────────────────
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// ─── CONFIG ─────────────────────────────────────────────────
+function loadConfig(){
+  document.getElementById('cfg-url').value=SUPA_URL;
+  document.getElementById('cfg-key').value=SUPA_KEY;
+}
+async function saveConfig(){
+  SUPA_URL=document.getElementById('cfg-url').value.trim().replace(/\/$/,'');
+  SUPA_KEY=document.getElementById('cfg-key').value.trim();
+  localStorage.setItem('supa_url',SUPA_URL);
+  localStorage.setItem('supa_key',SUPA_KEY);
+  const ok=await checkConnection();
+  document.getElementById('cfg-status').innerHTML=ok
+    ?'<span style="color:var(--green)">✓ Conectado</span>'
+    :'<span style="color:var(--red)">✗ Error</span>';
+  if(ok) loadOPs();
+}
+
+// ─── HELPERS ────────────────────────────────────────────────
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.style.opacity='1';
+  clearTimeout(el._t);el._t=setTimeout(()=>{el.style.opacity='0';},2800);
+}
+
+// ─── INIT ────────────────────────────────────────────────────
+async function init(){
+  const ok=await checkConnection();
+  if(ok) loadOPs();
+  else if(!SUPA_URL||!SUPA_KEY) showPage('config');
+}
+init();
+</script>
+</body>
+</html>
