@@ -110,6 +110,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   .sidebar,.main > *:not(#print-area){display:none;}
   #print-area{display:block!important;}
   @page{size:A4;margin:8mm;}
+  .label-sheet:last-child{page-break-after:avoid!important;margin-bottom:0!important;}
+  html,body{height:auto!important;}
 }
 
 #print-area{display:none;}
@@ -581,7 +583,8 @@ function generarVistaEtiquetas(){
     const sheet = document.createElement('div');
     sheet.className='label-sheet';
     sheet.style.marginBottom='8mm';
-    sheet.style.pageBreakAfter='always';
+    // pageBreakAfter solo entre hojas, no en la última
+    if(hi < hojas.length - 1) sheet.style.pageBreakAfter='always';
     
     hoja.forEach(et=>{
       const label = crearEtiqueta(et);
@@ -625,7 +628,7 @@ function crearEtiqueta(et){
     const qrEl = label.querySelector(`#qr-${et.uid.replace(/[^a-z0-9]/gi,'_')}`);
     if(qrEl && window.QRCode){
       new QRCode(qrEl, {
-        text: et.uid,
+        text: 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=' + et.uid,
         width: 80,
         height: 80,
         colorDark: '#000',

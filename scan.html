@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Totem Nube — Escaneo</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.12);--green-border:rgba(0,200,150,0.3);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.12);--amber-border:rgba(245,166,35,0.3);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.1);--red-border:rgba(255,94,94,0.3);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);--blue-border:rgba(77,159,255,0.3);
+  --radius:10px;--radius-lg:16px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;}
+
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:10px;}
+.header-logo{font-size:13px;font-weight:600;}
+.header-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+.container{padding:20px 16px;max-width:480px;margin:0 auto;}
+
+/* Estado badge grande */
+.estado-card{border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;text-align:center;}
+.estado-card.stock{background:var(--green-dim);border:1px solid var(--green-border);}
+.estado-card.reservado{background:var(--amber-dim);border:1px solid var(--amber-border);}
+.estado-card.producido{background:var(--surface2);border:1px solid var(--border2);}
+.estado-card.baja{background:var(--red-dim);border:1px solid var(--red-border);}
+.estado-card.notfound{background:var(--red-dim);border:1px solid var(--red-border);}
+
+.estado-icon{font-size:36px;margin-bottom:8px;}
+.estado-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;margin-bottom:4px;}
+.estado-card.stock .estado-label{color:var(--green);}
+.estado-card.reservado .estado-label{color:var(--amber);}
+.estado-card.producido .estado-label{color:var(--text3);}
+.estado-card.baja .estado-label{color:var(--red);}
+.estado-card.notfound .estado-label{color:var(--red);}
+
+/* Info del insumo */
+.insumo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.insumo-nombre{font-size:17px;font-weight:600;margin-bottom:4px;}
+.insumo-variante{font-size:13px;color:var(--amber);font-family:'DM Mono',monospace;margin-bottom:8px;}
+.insumo-uid{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;padding:6px 10px;background:var(--surface2);border-radius:6px;word-break:break-all;}
+
+/* Info de asignación */
+.asig-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.asig-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:12px;}
+.asig-row{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border);}
+.asig-row:last-child{border-bottom:none;}
+.asig-key{font-size:11px;color:var(--text3);}
+.asig-val{font-size:12px;color:var(--text);text-align:right;font-family:'DM Mono',monospace;max-width:60%;}
+
+/* OPs disponibles */
+.ops-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.ops-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:12px;}
+.op-item{padding:12px;background:var(--surface2);border-radius:var(--radius);margin-bottom:8px;border:1px solid var(--border);}
+.op-item:last-child{margin-bottom:0;}
+.op-item-numero{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:2px;}
+.op-item-cliente{font-size:14px;font-weight:500;margin-bottom:2px;}
+.op-item-producto{font-size:12px;color:var(--text2);}
+.op-item-color{font-size:11px;color:var(--amber);font-family:'DM Mono',monospace;margin-top:3px;}
+.btn-asignar{width:100%;margin-top:10px;background:var(--green);border:none;border-radius:var(--radius);color:#000;font-size:14px;font-weight:600;padding:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background 0.15s;}
+.btn-asignar:hover{background:#00b888;}
+.btn-asignar:disabled{opacity:0.5;cursor:not-allowed;}
+
+.btn-secondary{width:100%;background:transparent;border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);font-size:13px;padding:10px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;}
+
+/* Loading */
+.loading-wrap{text-align:center;padding:60px 20px;}
+.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-txt{font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+/* Nombre input */
+.nombre-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.nombre-label{font-size:11px;color:var(--text2);margin-bottom:8px;display:block;}
+.nombre-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;color:var(--text);font-size:15px;font-family:'DM Sans',sans-serif;}
+.nombre-input:focus{outline:none;border-color:var(--green);}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:12px;font-family:'DM Mono',monospace;padding:10px 18px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;white-space:nowrap;}
+
+/* Confirmación */
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:flex-end;justify-content:center;padding:0;}
+.confirm-overlay.open{display:flex;}
+.confirm-sheet{background:var(--surface);border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:24px 20px;width:100%;max-width:480px;}
+.confirm-title{font-size:16px;font-weight:600;margin-bottom:6px;}
+.confirm-body{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5;}
+.confirm-btn-yes{width:100%;background:var(--green);border:none;border-radius:var(--radius);color:#000;font-size:15px;font-weight:600;padding:14px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:8px;}
+.confirm-btn-no{width:100%;background:transparent;border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);font-size:14px;padding:12px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-logo">Totem Nube</div>
+    <div class="header-sub">CONTROL DE INSUMOS</div>
+  </div>
+</div>
+
+<div class="container" id="container">
+  <div class="loading-wrap">
+    <div class="spinner"></div>
+    <div class="loading-txt">Cargando información...</div>
+  </div>
+</div>
+
+<!-- Confirmación asignación -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-sheet">
+    <div class="confirm-title" id="confirm-title">Confirmar asignación</div>
+    <div class="confirm-body" id="confirm-body"></div>
+    <button class="confirm-btn-yes" id="confirm-yes">Confirmar asignación</button>
+    <button class="confirm-btn-no" onclick="closeConfirm()">Cancelar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPA_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY0OTI5NjYsImV4cCI6MjA2MjA2ODk2Nn0.yfRMD3NTM_rBxEZnAzMVvqzMkRwQLRVW2fGf9cEPLUo';
+
+let unidadActual = null;
+let opSeleccionada = null;
+
+async function api(path, method='GET', body=null){
+  const opts = {
+    method,
+    headers:{
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL+'/rest/v1/'+path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  if(res.status===204) return null;
+  return res.json();
+}
+
+async function init(){
+  const params = new URLSearchParams(window.location.search);
+  const uid = params.get('uid');
+
+  if(!uid){
+    renderError('Sin UID', 'Este QR no contiene un código de insumo válido.');
+    return;
+  }
+
+  try{
+    // Buscar la unidad física
+    const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre,tracking,categorias(nombre)),variantes(id,valor)`);
+
+    if(!unidades || !unidades.length){
+      renderNotFound(uid);
+      return;
+    }
+
+    unidadActual = unidades[0];
+
+    if(unidadActual.estado === 'stock'){
+      await renderEnStock();
+    } else if(unidadActual.estado === 'reservado'){
+      await renderReservado();
+    } else if(unidadActual.estado === 'producido'){
+      renderProducido();
+    } else {
+      renderBaja();
+    }
+  }catch(e){
+    renderError('Error de conexión', e.message);
+  }
+}
+
+async function renderEnStock(){
+  const u = unidadActual;
+  const variante = u.variantes?.valor || '';
+
+  // Buscar OPs en_produccion que necesiten este SKU
+  const bomItems = await api(
+    `op_bom_items?sku_id=eq.${u.sku_id}&estado=eq.pendiente&incluido=eq.true&select=*,ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete,estado)&ordenes_produccion.estado=eq.en_produccion`
+  );
+
+  // Filtrar solo las de OPs en producción
+  const itemsValidos = (bomItems||[]).filter(b=>b.ordenes_produccion?.estado==='en_produccion');
+
+  const opsHTML = itemsValidos.length
+    ? itemsValidos.map(b=>{
+        const op = b.ordenes_produccion;
+        return `<div class="op-item">
+          <div class="op-item-numero">${op.op_numero}</div>
+          <div class="op-item-cliente">${op.cliente}</div>
+          <div class="op-item-producto">${op.producto_nombre}</div>
+          ${op.color_gabinete?`<div class="op-item-color">● Color: ${op.color_gabinete}</div>`:''}
+          <button class="btn-asignar" onclick="prepararAsignacion(${b.id}, ${op.id}, '${op.op_numero}', '${op.cliente}')">
+            Asignar a esta OP
+          </button>
+        </div>`;
+      }).join('')
+    : `<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">
+        No hay órdenes activas que requieran este insumo
+      </div>`;
+
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card stock">
+      <div class="estado-icon">✓</div>
+      <div class="estado-label">En stock — disponible</div>
+    </div>
+
+    <div class="insumo-card">
+      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
+      ${variante?`<div class="insumo-variante">● ${variante}</div>`:''}
+      <div class="insumo-uid">${u.uid}</div>
+    </div>
+
+    <div class="nombre-section">
+      <label class="nombre-label">Tu nombre (para el registro)</label>
+      <input class="nombre-input" type="text" id="inp-nombre" placeholder="Ej: Juan García" autocomplete="name">
+    </div>
+
+    <div class="ops-card">
+      <div class="ops-title">Órdenes de producción activas</div>
+      ${opsHTML}
+    </div>
+  `;
+}
+
+async function renderReservado(){
+  const u = unidadActual;
+  const variante = u.variantes?.valor || '';
+
+  // Buscar a qué OP está asignado
+  const bomItems = await api(
+    `op_bom_items?uid_asignado=eq.${encodeURIComponent(u.uid)}&select=*,ordenes_produccion(op_numero,cliente,producto_nombre,color_gabinete)`
+  );
+
+  const bom = bomItems?.[0];
+  const op = bom?.ordenes_produccion;
+  const fechaAsig = u.updated_at ? new Date(u.updated_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card reservado">
+      <div class="estado-icon">🔒</div>
+      <div class="estado-label">Reservado — asignado a producción</div>
+    </div>
+
+    <div class="insumo-card">
+      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
+      ${variante?`<div class="insumo-variante">● ${variante}</div>`:''}
+      <div class="insumo-uid">${u.uid}</div>
+    </div>
+
+    ${op ? `
+    <div class="asig-card">
+      <div class="asig-title">Asignación actual</div>
+      <div class="asig-row"><div class="asig-key">N° Orden</div><div class="asig-val">${op.op_numero}</div></div>
+      <div class="asig-row"><div class="asig-key">Cliente</div><div class="asig-val">${op.cliente}</div></div>
+      <div class="asig-row"><div class="asig-key">Producto</div><div class="asig-val">${op.producto_nombre}</div></div>
+      ${op.color_gabinete?`<div class="asig-row"><div class="asig-key">Color</div><div class="asig-val" style="color:var(--amber)">${op.color_gabinete}</div></div>`:''}
+      <div class="asig-row"><div class="asig-key">Asignado</div><div class="asig-val">${fechaAsig}</div></div>
+    </div>` : ''}
+  `;
+}
+
+function renderProducido(){
+  const u = unidadActual;
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card producido">
+      <div class="estado-icon">📦</div>
+      <div class="estado-label">Incorporado a tótem</div>
+    </div>
+    <div class="insumo-card">
+      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
+      <div class="insumo-uid">${u.uid}</div>
+    </div>
+    <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">
+      Este insumo ya fue incorporado a un equipo terminado.
+    </div>
+  `;
+}
+
+function renderBaja(){
+  const u = unidadActual;
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card baja">
+      <div class="estado-icon">✕</div>
+      <div class="estado-label">Dado de baja</div>
+    </div>
+    <div class="insumo-card">
+      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
+      <div class="insumo-uid">${u.uid}</div>
+    </div>
+  `;
+}
+
+function renderNotFound(uid){
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card notfound">
+      <div class="estado-icon">?</div>
+      <div class="estado-label">UID no encontrado</div>
+    </div>
+    <div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;word-break:break-all;">
+      ${uid}
+    </div>
+    <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px;">
+      Este código no está registrado en el sistema.
+    </div>
+  `;
+}
+
+function renderError(titulo, msg){
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card notfound">
+      <div class="estado-icon">⚠</div>
+      <div class="estado-label">${titulo}</div>
+    </div>
+    <div style="padding:12px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">${msg}</div>
+  `;
+}
+
+// ─── ASIGNACIÓN ──────────────────────────────────────────────
+let pendingBomId = null;
+let pendingOpId = null;
+
+function prepararAsignacion(bomId, opId, opNumero, cliente){
+  const nombre = document.getElementById('inp-nombre')?.value.trim();
+  if(!nombre){
+    toast('Ingresá tu nombre antes de asignar');
+    document.getElementById('inp-nombre')?.focus();
+    return;
+  }
+
+  pendingBomId = bomId;
+  pendingOpId = opId;
+
+  document.getElementById('confirm-title').textContent = 'Confirmar asignación';
+  document.getElementById('confirm-body').innerHTML =
+    `<strong>${unidadActual.skus?.nombre}</strong> ${unidadActual.variantes?.valor?'('+unidadActual.variantes.valor+')':''}<br><br>` +
+    `→ <strong>${opNumero}</strong><br>` +
+    `Cliente: ${cliente}<br><br>` +
+    `Asignado por: <strong>${nombre}</strong>`;
+
+  document.getElementById('confirm-yes').onclick = () => ejecutarAsignacion(nombre);
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+
+function closeConfirm(){
+  document.getElementById('confirm-overlay').classList.remove('open');
+}
+
+async function ejecutarAsignacion(nombre){
+  closeConfirm();
+  const btn = document.querySelector('.btn-asignar');
+  if(btn) btn.disabled = true;
+
+  try{
+    // Actualizar op_bom_items
+    await api(`op_bom_items?id=eq.${pendingBomId}`, 'PATCH', {
+      estado: 'asignado',
+      uid_asignado: unidadActual.uid,
+      notas: `Asignado por: ${nombre} — ${new Date().toLocaleString('es-AR')}`
+    });
+
+    // Actualizar unidad → reservado
+    await api(`unidades?id=eq.${unidadActual.id}`, 'PATCH', {
+      estado: 'reservado',
+      updated_at: new Date().toISOString()
+    });
+
+    // Refrescar la vista
+    unidadActual.estado = 'reservado';
+    unidadActual.updated_at = new Date().toISOString();
+    toast('✓ Asignado correctamente');
+    setTimeout(()=>renderReservado(), 800);
+
+  }catch(e){
+    toast('Error: '+e.message);
+    if(btn) btn.disabled = false;
+  }
+}
+
+// ─── TOAST ────────────────────────────────────────────────────
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.style.opacity='1';
+  clearTimeout(el._t);el._t=setTimeout(()=>{el.style.opacity='0';},2500);
+}
+
+init();
+</script>
+</body>
+</html>
