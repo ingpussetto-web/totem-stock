@@ -417,12 +417,67 @@ async function abrirBOM(opId){
     // Cargar items BOM con SKU y variantes
     currentBOMItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
 
-    // Cargar variantes por SKU para los que tienen tracking uid
+    // Cargar categoría Mini PCs
+    const minipcCat = await api(`categorias?nombre=eq.Mini PCs&select=id`).catch(()=>[]);
+    const minipcCatId = minipcCat?.[0]?.id;
+
+    // Cargar modelos de Mini PC con stock
+    let minipcModelos = [];
+    if(minipcCatId){
+      const minipcSkus = await api(`skus?categoria_id=eq.${minipcCatId}&activo=eq.true&select=id,nombre`).catch(()=>[]);
+      for(let s of minipcSkus){
+        const uds = await api(`unidades?sku_id=eq.${s.id}&estado=eq.stock&select=id`).catch(()=>[]);
+        minipcModelos.push({id: s.id, nombre: s.nombre, stock: uds?.length || 0});
+      }
+    }
+
+    // Cargar stock para cada item de la BOM
     for(let item of currentBOMItems){
-      if(item.sku_id && item.skus?.tracking==='uid'){
-        item._variantes = await api(`variantes?sku_id=eq.${item.sku_id}&select=*`).catch(()=>[]);
+      item._stock = 0;
+      item._stockDefinir = 0;
+      item._variantes = [];
+      item._minipcModelos = null;
+
+      if(!item.sku_id) continue;
+
+      if(item.skus?.tracking === 'uid'){
+        if(item.skus?.categoria_id === minipcCatId){
+          // Mini PC: lista de modelos con stock
+          item._minipcModelos = minipcModelos;
+          const modeloActual = minipcModelos.find(m=>m.id===item.sku_id);
+          item._stock = modeloActual?.stock || 0;
+        } else {
+          // UID tracking: contar unidades en stock
+          item._variantes = await api(`variantes?sku_id=eq.${item.sku_id}&select=*`).catch(()=>[]);
+
+          // Stock del color/variante específica
+          if(item.variante_id){
+            const uds = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&estado=eq.stock&select=id`).catch(()=>[]);
+            item._stock = uds?.length || 0;
+          } else {
+            const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+            item._stock = uds?.length || 0;
+          }
+
+          // Para gabinetes: también contar "A definir"
+          const esGabinete = item.v14_key && item.v14_key.startsWith('gab_');
+          if(esGabinete){
+            const varDefinir = item._variantes.find(v=>v.valor==='A definir'||v.valor==='a definir');
+            if(varDefinir){
+              const udsDefinir = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${varDefinir.id}&estado=eq.stock&select=id`).catch(()=>[]);
+              item._stockDefinir = udsDefinir?.length || 0;
+            }
+          }
+        }
       } else {
-        item._variantes = [];
+        // Cantidad tracking: leer tabla stock
+        if(item.variante_id){
+          const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
+          item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+        } else {
+          const st = await api(`stock?sku_id=eq.${item.sku_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
+          item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+        }
       }
     }
 
@@ -485,15 +540,63 @@ function renderBOMItem(item){
   const incluido = item.incluido !== false;
   const hasVariantes = item._variantes && item._variantes.length > 0;
   const varActual = item.variante_id;
+  const esGabinete = item.v14_key && item.v14_key.startsWith('gab_');
+  const esCooller = item.v14_key && (item.v14_key === 'cooler' || item.v14_key === 'cooler_doble');
 
   let varHTML = '';
-  if(hasVariantes){
+  const esMiniPC = item._minipcModelos !== null && item._minipcModelos !== undefined;
+
+  if(esMiniPC && !esCooller){
+    // Selector de modelo de Mini PC con stock real
+    const opciones = item._minipcModelos.map(m=>{
+      const sinStock = m.stock === 0;
+      const selected = item.sku_id === m.id ? 'selected' : '';
+      return `<option value="${m.id}" ${selected} ${sinStock?'disabled':''}>
+        ${m.nombre}${sinStock?' — Sin stock':' ('+m.stock+' ud.)'}
+      </option>`;
+    }).join('');
+    varHTML = `<select class="var-select" style="max-width:200px;" onchange="cambiarModeloMiniPC(${item.id},this.value)" ${!incluido?'disabled':''}>
+      <option value="">Seleccionar modelo...</option>
+      ${opciones}
+    </select>`;
+  } else if(hasVariantes && !esGabinete && !esCooller){
+    // Dropdown de variantes para impresoras y periféricos
     varHTML = `<select class="var-select" onchange="cambiarVariante(${item.id},this.value)" ${!incluido?'disabled':''}>
-      <option value="">Color...</option>
+      <option value="">Modelo...</option>
       ${item._variantes.map(v=>`<option value="${v.id}" ${varActual==v.id?'selected':''}>${v.valor}</option>`).join('')}
     </select>`;
+  } else if(esGabinete && selectedColor){
+    // Gabinete muestra el color ya definido en la OP, sin dropdown
+    varHTML = `<span class="bom-item-variante">● ${selectedColor}</span>`;
   } else if(item.notas && item.notas.startsWith('Color:')){
     varHTML = `<span class="bom-item-variante">${item.notas}</span>`;
+  }
+
+  // Stock badge
+  const stock = item._stock || 0;
+  const stockDefinir = item._stockDefinir || 0;
+  const esGabinete2 = item.v14_key && item.v14_key.startsWith('gab_');
+  let stockHTML = '';
+  if(item.sku_id){
+    let stockLabel = '';
+    let stockColor = '';
+    if(stock <= 0 && stockDefinir <= 0){
+      stockLabel = 'Sin stock';
+      stockColor = 'var(--red)';
+    } else if(stock > 0 && stockDefinir > 0 && esGabinete2){
+      stockLabel = stock + ' ud. + ' + stockDefinir + ' A definir';
+      stockColor = 'var(--green)';
+    } else if(stock <= 0 && stockDefinir > 0 && esGabinete2){
+      stockLabel = stockDefinir + ' ud. A definir';
+      stockColor = 'var(--amber)';
+    } else if(stock > 0 && stock < item.qty){
+      stockLabel = stock + ' ud. (insuficiente)';
+      stockColor = 'var(--amber)';
+    } else {
+      stockLabel = stock + ' ud.';
+      stockColor = 'var(--green)';
+    }
+    stockHTML = `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${stockColor};white-space:nowrap;padding:2px 7px;border-radius:8px;background:${stockColor}22;border:1px solid ${stockColor}44;">${stockLabel}</span>`;
   }
 
   return `<div class="bom-item ${incluido?'':'excluido'}" id="bom-item-${item.id}">
@@ -502,6 +605,7 @@ function renderBOMItem(item){
     </button>
     <div class="bom-item-nombre">${item.nombre}</div>
     ${varHTML}
+    ${stockHTML}
     <div class="bom-item-qty">×${item.qty}</div>
   </div>`;
 }
@@ -517,6 +621,17 @@ function cambiarVariante(itemId, varId){
   const item = currentBOMItems.find(i=>i.id===itemId);
   if(!item) return;
   item.variante_id = varId ? parseInt(varId) : null;
+}
+
+function cambiarModeloMiniPC(itemId, nuevoSkuId){
+  const item = currentBOMItems.find(i=>i.id===itemId);
+  if(!item || !nuevoSkuId) return;
+  const modelo = item._minipcModelos.find(m=>String(m.id)===nuevoSkuId);
+  if(!modelo) return;
+  // Actualizar el SKU y nombre del item
+  item.sku_id = parseInt(nuevoSkuId);
+  item.nombre = modelo.nombre;
+  item._skuCambiado = true;
 }
 
 function selectColor(color){
@@ -590,11 +705,17 @@ async function guardarBOM(estado){
         }]);
       } else {
         // Actualizar existente
-        await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
+        const patch = {
           incluido: item.incluido,
           variante_id: item.variante_id||null,
           notas: item.notas
-        });
+        };
+        // Si cambiaron el modelo de Mini PC, actualizar sku_id y nombre
+        if(item._skuCambiado){
+          patch.sku_id = item.sku_id;
+          patch.nombre = item.nombre;
+        }
+        await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
       }
     }
 
@@ -607,6 +728,17 @@ async function guardarBOM(estado){
 async function confirmarBOM(){
   if(!selectedColor || selectedColor==='A definir'){
     if(!confirm('El color del gabinete está como "A definir". ¿Confirmás igual?')) return;
+  }
+  // Verificar items sin stock
+  const sinStock = currentBOMItems.filter(i=>
+    i.incluido !== false &&
+    i.sku_id &&
+    (i._stock||0) <= 0 &&
+    (i._stockDefinir||0) <= 0
+  );
+  if(sinStock.length){
+    const lista = sinStock.map(i=>'• '+i.nombre).join('\n');
+    if(!confirm(`⚠ ${sinStock.length} insumo${sinStock.length>1?'s':''} sin stock al confirmar:\n\n${lista}\n\nSe registrará la alerta para Compras. ¿Confirmás igual?`)) return;
   }
   await guardarBOM('bom_confirmada');
 }
