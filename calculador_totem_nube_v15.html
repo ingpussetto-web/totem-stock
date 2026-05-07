@@ -6049,5 +6049,25 @@ async function crearOP(proyId){
     <button onclick="resolveColor(null)" style="width:100%;margin-top:12px;padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
   </div>
 </div>
+
+<script>
+// ─── SELECTOR DE COLOR PARA OP ───────────────────────────────────────────────
+var _colorResolve = null;
+
+function resolveColor(color){
+  document.getElementById('modal-color-op').style.display='none';
+  if(_colorResolve) _colorResolve(color);
+  _colorResolve = null;
+}
+
+function seleccionarColor(cliente, orden){
+  return new Promise(function(resolve){
+    _colorResolve = resolve;
+    var sub = document.getElementById('modal-color-sub');
+    if(sub) sub.textContent = cliente + ' — ' + orden;
+    document.getElementById('modal-color-op').style.display='flex';
+  });
+}
+</script>
 </body>
 </html>
