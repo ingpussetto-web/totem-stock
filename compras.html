@@ -192,12 +192,18 @@ textarea.form-input{resize:vertical;min-height:70px;}
 
 /* Print */
 @media print{
-  .sidebar,.toolbar,.oc-actions,.modal-bg,#toast,.btn{display:none!important;}
-  .main{padding:0;}
-  .oc-print{display:block!important;}
-  @page{size:A4;margin:15mm;}
+  body *{visibility:hidden;}
+  #print-zone,#print-zone *{visibility:visible;}
+  #print-zone{
+    position:fixed;inset:0;
+    background:#fff;color:#000;
+    padding:20mm;
+    font-family:'DM Sans',sans-serif;
+  }
+  #print-zone *{color:#000!important;background:transparent!important;border-color:#ccc!important;}
+  @page{size:A4;margin:0;}
 }
-.oc-print{display:none;}
+#print-zone{display:none;}
 </style>
 </head>
 <body>
@@ -487,6 +493,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
     <div id="oc-preview-content" style="margin-bottom:16px;"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-preview')">Cerrar</button>
+      <button class="btn" onclick="imprimirOC()">🖨 Imprimir / PDF</button>
       <button class="btn blue" onclick="compartirOC()">📱 Compartir por WA/Mail</button>
       <button class="btn solid-green" onclick="aprobarOC()">✓ Aprobar OC</button>
     </div>
@@ -1031,22 +1038,63 @@ async function editarOC(ocId){
   }catch(e){toast('Error: '+e.message);}
 }
 
+
+function imprimirOC(){
+  // Copiar contenido al print zone y disparar impresión
+  const previewContent = document.getElementById('oc-preview-content').innerHTML;
+  let printZone = document.getElementById('print-zone');
+  if(!printZone){
+    printZone = document.createElement('div');
+    printZone.id = 'print-zone';
+    document.body.appendChild(printZone);
+  }
+  printZone.style.display = 'block';
+  printZone.innerHTML = `
+    <div style="font-family:'DM Sans',sans-serif;max-width:180mm;margin:0 auto;">
+      ${previewContent}
+    </div>`;
+  window.print();
+  setTimeout(()=>{ printZone.style.display='none'; }, 1000);
+}
+
 function compartirOC(){
   if(!provSeleccionado) return;
   const tel=provSeleccionado.telefono?.replace(/\D/g,'')||'';
-  const msg=encodeURIComponent(`Hola ${provSeleccionado.contacto||''}! Te adjuntamos nuestra orden de compra. Quedamos atentos a confirmar. Saludos, Totem Nube`);
+  // Armar resumen de items
+  const resumen = lineas.map(l=>`• ${l.nombre}${l.color?' ('+l.color+')':''} x${l.cantidad}`).join('\n');
+  const sym = document.getElementById('oc-moneda')?.value==='USD'?'USD ':'$';
+  const total = sym + formatNum(totalNetoOC);
+  const msg=encodeURIComponent(
+    `Hola ${provSeleccionado.contacto||''}!\n\n`+
+    `Te enviamos nuestra Orden de Compra desde Totem Nube.\n\n`+
+    `*Detalle:*\n${resumen}\n\n`+
+    `*Total neto:* ${total}\n`+
+    `*Condición:* ${document.getElementById('oc-observaciones')?.value||'A confirmar'}\n\n`+
+    `Quedamos atentos a confirmar. Saludos!`
+  );
   if(tel) window.open(`https://wa.me/549${tel}?text=${msg}`,'_blank');
   else window.open(`mailto:${provSeleccionado.mail}?subject=Orden de Compra Totem Nube&body=${decodeURIComponent(msg)}`,'_blank');
 }
 
 async function compartirOCId(ocId){
   const oc=await api(`ordenes_compra?id=eq.${ocId}&select=*,proveedores(*)&limit=1`);
+  const items=await api(`oc_items?oc_id=eq.${ocId}&select=*`);
   if(!oc?.length) return;
-  const p=oc[0].proveedores;
+  const o=oc[0];
+  const p=o.proveedores;
   const tel=p?.telefono?.replace(/\D/g,'')||'';
-  const msg=encodeURIComponent(`Hola ${p?.contacto||''}! Te adjuntamos la OC ${oc[0].oc_numero}. Saludos, Totem Nube`);
+  const sym=o.moneda==='USD'?'USD ':'$';
+  const resumen=(items||[]).map(i=>`• ${i.nombre}${i.color?' ('+i.color+')':''} x${i.cantidad}`).join('\n');
+  const msg=encodeURIComponent(
+    `Hola ${p?.contacto||''}!\n\n`+
+    `Te enviamos la *${o.oc_numero}* de Totem Nube.\n\n`+
+    `*Detalle:*\n${resumen}\n\n`+
+    `*Total neto:* ${sym}${formatNum(o.total_neto)}\n`+
+    `*Condición:* ${o.condicion_pago||'A confirmar'}\n\n`+
+    `Quedamos atentos a confirmar. Saludos!`
+  );
   if(tel) window.open(`https://wa.me/549${tel}?text=${msg}`,'_blank');
-  else if(p?.mail) window.open(`mailto:${p.mail}?subject=OC ${oc[0].oc_numero} - Totem Nube&body=${decodeURIComponent(msg)}`,'_blank');
+  else if(p?.mail) window.open(`mailto:${p.mail}?subject=${o.oc_numero} - Totem Nube&body=${decodeURIComponent(msg)}`,'_blank');
   else toast('Sin teléfono ni mail registrado para este proveedor');
 }
 
