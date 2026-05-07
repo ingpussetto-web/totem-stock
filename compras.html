@@ -703,13 +703,14 @@ function filtrarSkusLinea(){
   skuSel.disabled=false;
 }
 
-function agregarLinea(){
+async function agregarLinea(){
   const skuId=parseInt(document.getElementById('add-sku-sel').value);
   if(!skuId){toast('Seleccioná un insumo');return;}
   const sku=skus.find(s=>s.id===skuId);
   if(!sku) return;
-  // Verificar si ya está
   if(lineas.find(l=>l.sku_id===skuId)){toast('Ese insumo ya está en la OC');return;}
+  // Cargar variantes del SKU
+  const variantes = await api(`variantes?sku_id=eq.${skuId}&select=*&order=valor.asc`).catch(()=>[]);
   lineas.push({
     id:'new-'+Date.now(),
     sku_id:skuId,
@@ -719,6 +720,7 @@ function agregarLinea(){
     iva_pct:21,
     precio_unitario_neto:0,
     color:'',
+    _variantes: variantes,
     _nuevo:true
   });
   document.getElementById('add-cat-sel').value='';
@@ -738,8 +740,14 @@ function renderLineas(){
     <div class="linea-item">
       <div>
         <div style="font-size:12px;font-weight:500;">${l.nombre}</div>
-        <input class="linea-input" type="text" placeholder="Color/variante (opcional)" value="${l.color||''}"
-          oninput="lineas[${i}].color=this.value" style="margin-top:4px;font-size:11px;">
+        ${l._variantes && l._variantes.length > 0
+          ? `<select class="linea-input" style="margin-top:4px;font-size:11px;" onchange="lineas[${i}].color=this.value">
+              <option value="">— Color/variante —</option>
+              ${l._variantes.map(v=>`<option value="${v.valor}" ${l.color===v.valor?'selected':''}>${v.valor}</option>`).join('')}
+              <option value="A definir" ${l.color==='A definir'?'selected':''}>A definir</option>
+            </select>`
+          : ''
+        }
       </div>
       <input class="linea-input" type="number" value="${l.cantidad}" min="1"
         oninput="lineas[${i}].cantidad=parseFloat(this.value)||1;calcularLineaNeto(${i});calcularTotales();">
