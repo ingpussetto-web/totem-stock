@@ -743,8 +743,8 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         </label>
         <!-- HDMI (solo si Mini PC activa) -->
         <label id="add-hdmi-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin-bottom:2px;">
-          <input type="checkbox" id="add-hdmi" onchange="toggleAdicional('hdmi')" style="width:14px;height:14px;" disabled />
-          <span id="add-hdmi-label" style="color:var(--text3);">Transmisor HDMI inalámbrico <span style="font-size:10px;">(requiere Mini PC)</span></span>
+          <input type="checkbox" id="add-hdmi" onchange="toggleAdicional('hdmi')" style="width:14px;height:14px;" />
+          <span id="add-hdmi-label" style="color:var(--text2);">Transmisor HDMI inalámbrico</span>
           <input type="number" id="add-hdmi-precio" value="170400" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-hdmi-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" onchange="syncAdicional('hdmi')" />
@@ -3183,15 +3183,9 @@ function toggleAdicional(tipo){
     const checked = document.getElementById('add-minipc')?.checked;
     const cantEl = document.getElementById('add-minipc-cant');
     const precioEl = document.getElementById('add-minipc-precio');
-    const hdmiCheck = document.getElementById('add-hdmi');
-    const hdmiLabel = document.getElementById('add-hdmi-label');
     if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
     if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
-    if(hdmiCheck){
-      hdmiCheck.disabled = !checked;
-      if(!checked){ hdmiCheck.checked = false; toggleAdicional('hdmi'); }
-    }
-    if(hdmiLabel) hdmiLabel.style.color = checked ? 'var(--text2)' : 'var(--text3)';
+    // HDMI ya no depende de Mini PC — son opciones independientes
   }
   if(tipo === 'hdmi'){
     const checked = document.getElementById('add-hdmi')?.checked;
@@ -3228,7 +3222,7 @@ function guardarBorrador(){
     const montoMp = parseFloat(document.getElementById('add-minipc-precio')?.value)||610600;
     cotItemsTemp.push({prodId:'minipc_beelink_n95', nombre:'Player Mini PC Beelink N95 8GB', cant:cant, precio:montoMp, cat:'periferico'});
   }
-  if(document.getElementById('add-hdmi')?.checked && !document.getElementById('add-hdmi').disabled){
+  if(document.getElementById('add-hdmi')?.checked){
     const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
     const montoHd = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
     cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:montoHd, cat:'periferico'});
@@ -3282,7 +3276,7 @@ function abrirNuevaCotizacion(editId){
     const hdmiChk = document.getElementById('add-hdmi');
     if(ploteoChk){ ploteoChk.checked = tienePloteoItem; toggleAdicional('ploteo'); }
     if(minipcChk){ minipcChk.checked = tieneMinipcItem; toggleAdicional('minipc'); }
-    if(hdmiChk && tieneMinipcItem){ hdmiChk.disabled = false; hdmiChk.checked = tieneHdmiItem; toggleAdicional('hdmi'); }
+    if(hdmiChk){ hdmiChk.disabled = false; hdmiChk.checked = tieneHdmiItem; if(tieneHdmiItem) toggleAdicional('hdmi'); }
     // Transporte
     const transp = document.getElementById('cot-transporte');
     const transpMonto = document.getElementById('cot-transporte-monto');
@@ -5986,9 +5980,24 @@ async function crearOP(proyId){
   const color = await seleccionarColor(p.cliente, p.orden);
   if(color === null) return; // cancelado
 
-  // Generar número de OP basado en la orden del v14 (único por proyecto)
-  // p.orden tiene formato ej: 2026-05-004 → OP-2026-05-004
-  const opNumero = 'OP-' + (p.orden || Date.now().toString(36).toUpperCase());
+  // Generar número de OP correlativo por día
+  // Formato: OP05052026-001
+  const fechaHoy = new Date();
+  const dd = String(fechaHoy.getDate()).padStart(2,'0');
+  const mm = String(fechaHoy.getMonth()+1).padStart(2,'0');
+  const yyyy = fechaHoy.getFullYear();
+  const prefijoDia = 'OP'+dd+mm+yyyy+'-';
+  
+  // Buscar el último número del día
+  let ultimoNum = 0;
+  try {
+    const opsHoy = await stockAPI('ordenes_produccion?op_numero=like.'+encodeURIComponent(prefijoDia+'%')+'&select=op_numero&order=op_numero.desc&limit=1');
+    if(opsHoy && opsHoy.length){
+      const match = opsHoy[0].op_numero.match(/-(\d+)$/);
+      if(match) ultimoNum = parseInt(match[1]);
+    }
+  } catch(e){}
+  const opNumero = prefijoDia + String(ultimoNum + 1).padStart(3,'0');
 
   // Buscar el producto en PRODUCTOS para obtener la BOM
   // Tomamos el primer item de equipo y buscamos por nombre
