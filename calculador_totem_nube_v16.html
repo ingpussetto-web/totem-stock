@@ -5938,12 +5938,12 @@ function mostrarNotifOP(opNumero, cliente, producto, color){
 
   const banner = document.createElement('div');
   banner.id = 'notif-op-banner';
-  banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e1e22;border:1px solid rgba(0,200,150,0.4);border-radius:12px;padding:16px 20px;z-index:9999;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:'DM Sans',sans-serif;';
+  banner.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e1e22;border:1px solid rgba(0,200,150,0.4);border-radius:12px;padding:16px 20px;z-index:9999;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:'DM Sans',sans-serif;";
   banner.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
       '<div>' +
         '<div style="font-size:13px;font-weight:600;color:#00c896;margin-bottom:4px;">✓ OP creada exitosamente</div>' +
-        '<div style="font-size:12px;color:#888;font-family:'DM Mono',monospace;">' + opNumero + '</div>' +
+        '<div style="font-size:12px;color:#888;font-family:monospace;">' + opNumero + '</div>' +
         '<div style="font-size:12px;color:#ccc;margin-top:4px;">' + cliente + ' · ' + producto + (color?' · <span style="color:#f5a623;">● '+color+'</span>':'') + '</div>' +
       '</div>' +
       '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#666;cursor:pointer;font-size:18px;padding:0;line-height:1;">×</button>' +
