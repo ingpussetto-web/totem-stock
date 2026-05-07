@@ -415,7 +415,7 @@ async function abrirBOM(opId){
     if(!currentOP) return;
 
     // Cargar items BOM con SKU y variantes
-    currentBOMItems = await api(`op_bom_items?op_id=eq.${opId}&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
+    currentBOMItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
 
     // Cargar variantes por SKU para los que tienen tracking uid
     for(let item of currentBOMItems){
@@ -441,19 +441,33 @@ async function abrirBOM(opId){
     if(!allSkus.length){
       allSkus = await api('skus?select=id,codigo,nombre,categorias(nombre)&activo=eq.true&order=nombre.asc');
     }
+    // Solo mostrar insumos opcionales que tiene sentido agregar
+    const EXTRAS_PERMITIDOS = [
+      'CAMARA-WEB-HD-LOGITECH-C505',
+      'LECTOR-QR-GARNIC',
+      'PARLANTES-GENIUS-SP-HF180-6W',
+      'MOUSE-PARA-PULSADOR',
+      'BOTON-PULSADOR-ARCADE-46-MM',
+      'HDMI'
+    ];
+    const skusExtra = allSkus.filter(s =>
+      EXTRAS_PERMITIDOS.some(cod => s.codigo?.includes(cod) || s.nombre?.toLowerCase().includes('camara') || s.nombre?.toLowerCase().includes('lector') || s.nombre?.toLowerCase().includes('parlante') || s.nombre?.toLowerCase().includes('mouse') || s.nombre?.toLowerCase().includes('boton') || s.nombre?.toLowerCase().includes('pulsador')
+    ));
     const skuSel = document.getElementById('add-sku-sel');
-    skuSel.innerHTML = '<option value="">— Seleccioná insumo —</option>' +
-      allSkus.map(s=>`<option value="${s.id}">${s.nombre} (${s.categorias?.nombre||'—'})</option>`).join('');
+    skuSel.innerHTML = '<option value="">— Seleccioná insumo opcional —</option>' +
+      skusExtra.map(s=>`<option value="${s.id}">${s.nombre}</option>`).join('');
 
     openModal('modal-bom');
   }catch(e){toast('Error: '+e.message);}
 }
 
 function renderBOMEditor(){
+  // Solo mostrar items con SKU real (los que descuentan stock)
+  const itemsConSku = currentBOMItems.filter(item => item.sku_id);
   // Agrupar por categoría
   const grupos = {};
-  currentBOMItems.forEach(item=>{
-    const cat = item.skus?.categorias?.nombre || (item.sku_id ? 'Otros' : 'Servicios');
+  itemsConSku.forEach(item=>{
+    const cat = item.skus?.categorias?.nombre || 'Otros';
     if(!grupos[cat]) grupos[cat]=[];
     grupos[cat].push(item);
   });
