@@ -5945,12 +5945,9 @@ async function crearOP(proyId){
   const color = await seleccionarColor(p.cliente, p.orden);
   if(color === null) return; // cancelado
 
-  // Generar número de OP
-  const fecha = new Date();
-  const anio = fecha.getFullYear();
-  const mes = String(fecha.getMonth()+1).padStart(2,'0');
-  const rand = String(Math.floor(Math.random()*900)+100);
-  const opNumero = 'OP-' + anio + '-' + mes + '-' + rand;
+  // Generar número de OP basado en la orden del v14 (único por proyecto)
+  // p.orden tiene formato ej: 2026-05-004 → OP-2026-05-004
+  const opNumero = 'OP-' + (p.orden || Date.now().toString(36).toUpperCase());
 
   // Buscar el producto en PRODUCTOS para obtener la BOM
   // Tomamos el primer item de equipo y buscamos por nombre
