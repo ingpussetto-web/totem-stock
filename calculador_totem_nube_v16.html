@@ -5929,6 +5929,36 @@ async function cargarInfoOP(proyId, orden){
   }
 }
 
+
+// ─── NOTIFICACIÓN OP CREADA ──────────────────────────────────────────────────
+function mostrarNotifOP(opNumero, cliente, producto, color){
+  // Crear banner de notificación en la página
+  const existing = document.getElementById('notif-op-banner');
+  if(existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'notif-op-banner';
+  banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e1e22;border:1px solid rgba(0,200,150,0.4);border-radius:12px;padding:16px 20px;z-index:9999;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:'DM Sans',sans-serif;';
+  banner.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:600;color:#00c896;margin-bottom:4px;">✓ OP creada exitosamente</div>' +
+        '<div style="font-size:12px;color:#888;font-family:'DM Mono',monospace;">' + opNumero + '</div>' +
+        '<div style="font-size:12px;color:#ccc;margin-top:4px;">' + cliente + ' · ' + producto + (color?' · <span style="color:#f5a623;">● '+color+'</span>':'') + '</div>' +
+      '</div>' +
+      '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#666;cursor:pointer;font-size:18px;padding:0;line-height:1;">×</button>' +
+    '</div>' +
+    '<div style="margin-top:12px;display:flex;gap:8px;">' +
+      '<a href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html" target="_blank" style="flex:1;text-align:center;background:#00c896;color:#000;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;text-decoration:none;">→ Revisar BOM en Órdenes</a>' +
+      '<button onclick="this.parentElement.parentElement.remove()" style="background:transparent;border:1px solid rgba(255,255,255,0.1);color:#888;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer;">Cerrar</button>' +
+    '</div>';
+
+  document.body.appendChild(banner);
+
+  // Auto-cerrar en 15 segundos
+  setTimeout(function(){ if(banner.parentElement) banner.remove(); }, 15000);
+}
+
 // ─── INTEGRACIÓN STOCK — CREAR OP ────────────────────────────────────────────
 
 const STOCK_URL = localStorage.getItem('supa_url') || '';
@@ -6075,18 +6105,8 @@ async function crearOP(proyId){
       await stockAPI('op_bom_items', 'POST', bomPayload);
     }
 
-    // Mostrar confirmación con opción de ir a ops_ventas
-    const irAOps = confirm(
-      '✓ Orden de Producción creada exitosamente.\n\n' +
-      'N°: ' + opNumero + '\n' +
-      'Cliente: ' + p.cliente + '\n' +
-      'Producto: ' + itemNombre + '\n' +
-      'Color gabinete: ' + color + '\n\n' +
-      '¿Ir al módulo de Órdenes de Producción para revisar la BOM?'
-    );
-    if(irAOps){
-      window.open('https://ingpussetto-web.github.io/totem-stock/ops_ventas.html', '_blank');
-    }
+    // Mostrar notificación con link a ops_ventas (sin popup bloqueado)
+    mostrarNotifOP(opNumero, p.cliente, itemNombre, color);
 
   } catch(e){
     alert('Error creando la OP: ' + e.message);
