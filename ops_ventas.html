@@ -389,7 +389,10 @@ function renderOPCard(o){
           ? `<button class="btn amber sm" onclick="abrirBOM(${o.id})">✏ Revisar BOM</button>`
           : ''}
         ${o.estado==='bom_confirmada'
-          ? `<button class="btn solid-green sm" onclick="cambiarEstado(${o.id},'en_produccion')">→ Liberar a Producción</button>`
+          ? `<button class="btn solid-green sm" onclick="liberarAProduccion(${o.id})">→ Liberar a Producción</button>`
+          : ''}
+        ${o.estado==='en_produccion'
+          ? `<a href="https://ingpussetto-web.github.io/totem-stock/produccion.html" target="_blank" class="btn green sm">→ Ir a Producción</a>`
           : ''}
         ${o.estado==='en_produccion'
           ? `<button class="btn green sm" onclick="cambiarEstado(${o.id},'completada')">✓ Marcar completada</button>`
@@ -741,6 +744,21 @@ async function confirmarBOM(){
     if(!confirm(`⚠ ${sinStock.length} insumo${sinStock.length>1?'s':''} sin stock al confirmar:\n\n${lista}\n\nSe registrará la alerta para Compras. ¿Confirmás igual?`)) return;
   }
   await guardarBOM('bom_confirmada');
+}
+
+async function liberarAProduccion(opId){
+  if(!confirm('¿Confirmar liberación a Producción?')) return;
+  try{
+    await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', {estado:'en_produccion', updated_at:new Date().toISOString()});
+    toast('OP liberada a Producción ✓');
+    loadOPs();
+    // Preguntar si ir a producción
+    setTimeout(()=>{
+      if(confirm('OP liberada. ¿Ir al módulo de Producción ahora?')){
+        window.open('https://ingpussetto-web.github.io/totem-stock/produccion.html','_blank');
+      }
+    }, 500);
+  }catch(e){toast('Error: '+e.message);}
 }
 
 async function cambiarEstado(opId, nuevoEstado){
