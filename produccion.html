@@ -385,7 +385,7 @@ async function abrirOP(opId){
     if(!currentOP) return;
 
     // Cargar BOM items (solo incluidos)
-    bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)&order=id.asc`);
+    bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&sku_id=not.is.null&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)&order=id.asc`);
 
     // Mostrar header
     document.getElementById('op-detail-header').innerHTML = `
