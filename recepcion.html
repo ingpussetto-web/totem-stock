@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Recepción de Insumos</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.09);--blue-border:rgba(77,159,255,0.25);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.main{padding:28px 32px;overflow-y:auto;}
+.logo{padding:20px;border-bottom:1px solid var(--border);}
+.logo-name{font-size:14px;font-weight:600;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px;}
+.nav{padding:12px 0;flex:1;}
+.nav-section{padding:10px 16px 4px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;font-size:12.5px;color:var(--text2);transition:all 0.12s;border-left:2px solid transparent;text-decoration:none;}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.025);}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim);}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.conn-dot.ok{background:var(--green);}
+
+.page{display:none;}
+.page.active{display:block;}
+.page-header{margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;margin-bottom:12px;}
+.card-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:14px;}
+
+/* Metrics */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:20px;}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+.metric.amber{background:var(--amber-dim);border-color:var(--amber-border);}
+.metric.green{background:var(--green-dim);border-color:var(--green-border);}
+.metric.red{background:var(--red-dim);border-color:var(--red-border);}
+.metric-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;margin-bottom:5px;}
+.metric-value{font-size:22px;font-weight:600;font-family:'DM Mono',monospace;}
+.metric.amber .metric-value{color:var(--amber);}
+.metric.green .metric-value{color:var(--green);}
+.metric.red .metric-value{color:var(--red);}
+
+/* Buttons */
+.btn{padding:7px 14px;font-size:12px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;height:34px;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.solid-green{background:var(--green);border-color:var(--green);color:#000;font-weight:600;}
+.btn.solid-green:hover{background:#00b888;}
+.btn.amber{border-color:var(--amber);color:var(--amber);}
+.btn.amber:hover{background:var(--amber-dim);}
+.btn.red{border-color:var(--red);color:var(--red);}
+.btn.red:hover{background:var(--red-dim);}
+.btn.sm{font-size:11px;padding:3px 9px;height:26px;}
+.btn.lg{height:40px;font-size:13px;padding:0 20px;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* OC Pendientes */
+.oc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:8px;cursor:pointer;transition:all 0.15s;border-left:3px solid var(--amber);}
+.oc-card:hover{border-color:var(--amber-border);background:var(--amber-dim);}
+.oc-card.parcial{border-left-color:var(--blue);}
+.oc-numero{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:3px;}
+.oc-items-count{font-size:13px;font-weight:600;}
+.oc-meta{font-size:11px;color:var(--text2);margin-top:3px;}
+.oc-fecha{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+/* Badge */
+.badge{display:inline-flex;align-items:center;font-size:10px;padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;font-weight:500;}
+.badge.amber{background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-border);}
+.badge.blue{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue-border);}
+.badge.green{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);}
+.badge.red{background:var(--red-dim);color:var(--red);border:1px solid var(--red-border);}
+
+/* Item de recepción */
+.rec-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;}
+.rec-item.con-desvio{border-color:var(--amber-border);background:var(--amber-dim);}
+.rec-item-nombre{font-size:14px;font-weight:600;margin-bottom:8px;}
+.rec-item-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end;}
+.rec-field{display:flex;flex-direction:column;gap:4px;}
+.rec-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;}
+.rec-input{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;width:100%;}
+.rec-input:focus{outline:none;border-color:var(--green);}
+.rec-input.desvio{border-color:var(--amber);background:rgba(245,166,35,0.05);}
+.rec-select{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;cursor:pointer;width:100%;}
+.rec-select:focus{outline:none;border-color:var(--green);}
+.rec-select.desvio{border-color:var(--amber);}
+.rec-esperado{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:3px;}
+.desvio-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;margin-top:6px;}
+
+/* UIDs panel */
+.uid-gen-panel{background:var(--green-dim);border:1px solid var(--green-border);border-radius:var(--radius);padding:12px 14px;margin-top:8px;}
+.uid-gen-title{font-size:10px;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;}
+.uid-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.uid-chip{font-size:10px;font-family:'DM Mono',monospace;background:var(--surface2);border:1px solid var(--green-border);border-radius:4px;padding:2px 8px;color:var(--green);}
+
+/* Etiquetas print */
+@media print{
+  body *{visibility:hidden;}
+  #print-etiquetas,#print-etiquetas *{visibility:visible;}
+  #print-etiquetas{position:fixed;inset:0;background:#fff;padding:8mm;}
+  @page{size:A4;margin:0;}
+}
+#print-etiquetas{display:none;}
+.label-sheet{width:210mm;display:grid;grid-template-columns:repeat(2,1fr);gap:3mm;}
+.label{width:105mm;height:74mm;border:0.5pt solid #ccc;border-radius:2mm;padding:4mm;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;page-break-inside:avoid;}
+.label-brand{font-size:7pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
+.label-nombre{font-size:9pt;font-weight:700;color:#111;line-height:1.2;margin:2mm 0 1mm;}
+.label-variante{font-size:8pt;color:#444;margin-bottom:1mm;}
+.label-body{display:flex;align-items:center;gap:3mm;flex:1;}
+.label-uid-label{font-size:5.5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5mm;}
+.label-uid{font-size:7pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.3;}
+.label-footer{display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1.5mm;margin-top:1mm;font-size:6pt;color:#888;}
+.label-estado{font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:1mm 2mm;font-weight:600;}
+
+/* Form */
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;color:var(--text2);margin-bottom:5px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;}
+.form-input:focus{outline:none;border-color:var(--green);}
+textarea.form-input{resize:vertical;min-height:70px;}
+
+/* Steps */
+.steps{display:flex;gap:0;margin-bottom:20px;}
+.step{flex:1;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);font-size:11px;color:var(--text3);text-align:center;}
+.step:first-child{border-radius:var(--radius) 0 0 var(--radius);}
+.step:last-child{border-radius:0 var(--radius) var(--radius) 0;}
+.step.active{background:var(--green-dim);border-color:var(--green-border);color:var(--green);}
+.step.done{background:rgba(0,200,150,0.03);color:var(--text3);}
+.step-num{font-family:'DM Mono',monospace;font-size:10px;display:block;margin-bottom:2px;}
+
+/* Desvio alert */
+.desvio-alert{background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;}
+.desvio-alert-title{font-size:12px;font-weight:600;color:var(--amber);margin-bottom:6px;}
+.desvio-alert-item{font-size:12px;color:var(--text2);padding:2px 0;}
+
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:11px;font-family:'DM Mono',monospace;padding:9px 14px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;}
+.loading{display:flex;align-items:center;gap:8px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;padding:20px 0;}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.empty{text-align:center;padding:40px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-name">Totem Nube</div>
+      <div class="logo-sub">RECEPCIÓN · v1.0</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Proceso</div>
+      <div class="nav-item active" id="nav-pendientes" onclick="showPage('pendientes')">
+        <span>◈</span> Entregas pendientes
+      </div>
+      <div class="nav-item" id="nav-historial" onclick="showPage('historial')">
+        <span>▤</span> Historial recepciones
+      </div>
+      <div class="nav-section">Sistema</div>
+      <div class="nav-item" id="nav-config" onclick="showPage('config')">
+        <span>⚙</span> Configuración
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="conn-status">
+        <div class="conn-dot" id="conn-dot"></div>
+        <span id="conn-text">Conectando...</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- PENDIENTES -->
+    <div class="page active" id="page-pendientes">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Entregas pendientes</div>
+          <div class="page-sub">Órdenes de compra aprobadas en espera de recepción</div>
+        </div>
+        <button class="btn" onclick="loadPendientes()">↻ Actualizar</button>
+      </div>
+      <div class="metrics">
+        <div class="metric amber"><div class="metric-label">Pendientes totales</div><div class="metric-value" id="m-pendientes">—</div></div>
+        <div class="metric blue"><div class="metric-label">Recep. parciales</div><div class="metric-value" id="m-parciales">—</div></div>
+        <div class="metric red"><div class="metric-label">Con desvíos hoy</div><div class="metric-value" id="m-desvios">—</div></div>
+      </div>
+      <div id="pendientes-list"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- RECEPCIÓN ACTIVA -->
+    <div class="page" id="page-recepcion">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="rec-title">Recepcionando</div>
+          <div class="page-sub" id="rec-sub">—</div>
+        </div>
+        <button class="btn" onclick="showPage('pendientes');loadPendientes();">← Volver</button>
+      </div>
+
+      <div class="steps">
+        <div class="step active" id="step1"><span class="step-num">01</span>Verificar insumos</div>
+        <div class="step" id="step2"><span class="step-num">02</span>Confirmar desvíos</div>
+        <div class="step" id="step3"><span class="step-num">03</span>Generar etiquetas</div>
+      </div>
+
+      <!-- Panel 1: Items -->
+      <div id="rec-panel1">
+        <div class="card">
+          <div class="card-title">Insumos esperados — completá lo que llegó</div>
+          <div id="rec-items-list"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observaciones de recepción</label>
+          <textarea class="form-input" id="rec-observaciones" placeholder="Ej: Llegaron en buen estado. Faltaron 2 gabinetes negros que vendrán la próxima semana."></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+          <button class="btn solid-green lg" onclick="procesarRecepcion()">Confirmar recepción →</button>
+        </div>
+      </div>
+
+      <!-- Panel 2: Desvíos -->
+      <div id="rec-panel2" style="display:none;">
+        <div id="desvios-panel"></div>
+        <div style="display:flex;justify-content:space-between;margin-top:14px;">
+          <button class="btn" onclick="volverPanel1()">← Revisar</button>
+          <button class="btn solid-green lg" onclick="confirmarConDesvios()">Confirmar igual y registrar →</button>
+        </div>
+      </div>
+
+      <!-- Panel 3: Etiquetas -->
+      <div id="rec-panel3" style="display:none;">
+        <div class="card">
+          <div class="card-title">✓ Recepción registrada</div>
+          <div id="rec-resultado"></div>
+        </div>
+        <div id="etiquetas-preview-wrap" style="display:none;">
+          <div class="card">
+            <div class="card-title" style="display:flex;justify-content:space-between;">
+              <span>Etiquetas generadas</span>
+              <button class="btn solid-green sm" onclick="imprimirEtiquetas()">🖨 Imprimir</button>
+            </div>
+            <div id="etiquetas-preview" style="background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto;"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="btn solid-green" onclick="showPage('pendientes');loadPendientes();">✓ Finalizar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div class="page" id="page-historial">
+      <div class="page-header">
+        <div><div class="page-title">Historial de recepciones</div></div>
+        <button class="btn" onclick="loadHistorial()">↻ Actualizar</button>
+      </div>
+      <div id="historial-list"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="page-header"><div><div class="page-title">Configuración</div></div></div>
+      <div class="card">
+        <div class="card-title">Conexión Supabase</div>
+        <div class="form-group">
+          <label class="form-label">Project URL</label>
+          <input class="form-input" type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anon Key</label>
+          <input class="form-input" type="text" id="cfg-key" placeholder="eyJ...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tu nombre (para registros)</label>
+          <input class="form-input" type="text" id="cfg-nombre" placeholder="Ej: Carlos">
+        </div>
+        <button class="btn green" onclick="saveConfig()">Guardar y reconectar</button>
+        <div id="cfg-status" style="margin-top:10px;font-size:12px;font-family:'DM Mono',monospace;"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="print-etiquetas"></div>
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────
+let SUPA_URL = localStorage.getItem('supa_url') || '';
+let SUPA_KEY = localStorage.getItem('supa_key') || '';
+let MI_NOMBRE = localStorage.getItem('rec_nombre') || 'Depósito';
+const GITHUB_BASE = 'https://ingpussetto-web.github.io/totem-stock/';
+
+// ─── STATE ─────────────────────────────────────────────────
+let ocActual = null;
+let itemsActual = [];
+let recepcionItems = []; // {oc_item_id, nombre, cantidad_esperada, cantidad_recibida, color_esperado, color_recibido, sku_id, tracking, variantes}
+let desviosDetectados = [];
+let etiquetasGeneradas = [];
+
+// ─── API ───────────────────────────────────────────────────
+async function api(path, method='GET', body=null){
+  if(!SUPA_URL||!SUPA_KEY) throw new Error('Sin configuración');
+  const opts={method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':method==='POST'?'return=representation':method==='PATCH'?'return=representation':''}};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(SUPA_URL.replace(/\/$/,'')+'/rest/v1/'+path,opts);
+  if(!res.ok) throw new Error(await res.text());
+  if(res.status===204) return null;
+  return res.json();
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.getElementById('nav-'+id)?.classList.add('active');
+  if(id==='historial') loadHistorial();
+  if(id==='config') loadConfig();
+}
+
+// ─── CONNECTION ─────────────────────────────────────────────
+async function checkConnection(){
+  const dot=document.getElementById('conn-dot');
+  const txt=document.getElementById('conn-text');
+  if(!SUPA_URL||!SUPA_KEY){dot.className='conn-dot';txt.textContent='Sin configurar';return false;}
+  try{await api('categorias?select=id&limit=1');dot.className='conn-dot ok';txt.textContent='Conectado';return true;}
+  catch(e){dot.className='conn-dot';txt.textContent='Sin conexión';return false;}
+}
+
+// ─── PENDIENTES ─────────────────────────────────────────────
+async function loadPendientes(){
+  try{
+    // OCs aprobadas o con recepción parcial — SIN datos de proveedor ni precio
+    const ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago&order=created_at.asc');
+
+    // Contar items por OC
+    for(let oc of ocs){
+      const items = await api(`oc_items?oc_id=eq.${oc.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
+      oc._items = items||[];
+      oc._pendientes = items?.reduce((s,i)=>s+(i.cantidad-(i.cantidad_recibida||0)),0)||0;
+    }
+
+    // Métricas
+    document.getElementById('m-pendientes').textContent = ocs.filter(o=>o.estado==='aprobada').length;
+    document.getElementById('m-parciales').textContent = ocs.filter(o=>o.estado==='recibida_parcial').length;
+
+    // Desvíos hoy
+    const hoy = new Date().toISOString().split('T')[0];
+    const desviosHoy = await api(`recepciones?tiene_desvios=eq.true&created_at=gte.${hoy}T00:00:00&select=id`);
+    document.getElementById('m-desvios').textContent = desviosHoy?.length||0;
+
+    const el = document.getElementById('pendientes-list');
+    if(!ocs.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Sin entregas pendientes</div>';
+      return;
+    }
+
+    el.innerHTML = ocs.map(oc=>{
+      const fecha = new Date(oc.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      const diasAtras = Math.floor((Date.now()-new Date(oc.created_at))/(1000*60*60*24));
+      const esParcial = oc.estado==='recibida_parcial';
+      return `<div class="oc-card ${esParcial?'parcial':''}" onclick="abrirRecepcion(${oc.id})">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="oc-numero">${oc.oc_numero}</div>
+            <div class="oc-items-count">${oc._items.length} insumo${oc._items.length!==1?'s':''} · ${oc._pendientes} unid. pendientes</div>
+            <div class="oc-meta">${oc.condicion_pago||'—'}</div>
+            <div class="oc-fecha">${fecha} · hace ${diasAtras} día${diasAtras!==1?'s':''}</div>
+          </div>
+          <span class="badge ${esParcial?'blue':'amber'}">${esParcial?'Parcial pendiente':'En espera'}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    document.getElementById('pendientes-list').innerHTML='<div class="empty">Error cargando pendientes</div>';
+  }
+}
+
+// ─── ABRIR RECEPCIÓN ────────────────────────────────────────
+async function abrirRecepcion(ocId){
+  try{
+    ocActual = await api(`ordenes_compra?id=eq.${ocId}&select=id,oc_numero,estado,created_at&limit=1`);
+    ocActual = ocActual[0];
+
+    // Items sin precio — solo nombre, cantidad, color y SKU
+    itemsActual = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)`);
+
+    document.getElementById('rec-title').textContent = 'Recepcionando ' + ocActual.oc_numero;
+    document.getElementById('rec-sub').textContent = itemsActual.length + ' insumos · ' + new Date(ocActual.created_at).toLocaleDateString('es-AR');
+
+    // Cargar variantes para cada item con color
+    for(let item of itemsActual){
+      if(item.sku_id){
+        item._variantes = await api(`variantes?sku_id=eq.${item.sku_id}&select=*`).catch(()=>[]);
+      } else {
+        item._variantes = [];
+      }
+    }
+
+    renderItemsRecepcion();
+    showPage('recepcion');
+    setStep(1);
+  }catch(e){toast('Error: '+e.message);}
+}
+
+function renderItemsRecepcion(){
+  const el = document.getElementById('rec-items-list');
+  el.innerHTML = itemsActual.map((item,i)=>{
+    const pendiente = item.cantidad - (item.cantidad_recibida||0);
+    const hasVariantes = item._variantes?.length > 0;
+
+    const colorSelect = hasVariantes
+      ? `<select class="rec-select" id="color-rec-${i}" onchange="checkDesvio(${i})">
+          <option value="">— Color —</option>
+          ${item._variantes.map(v=>`<option value="${v.valor}" ${v.valor===item.color?'selected':''}>${v.valor}</option>`).join('')}
+          <option value="A definir" ${item.color==='A definir'?'selected':''}>A definir</option>
+        </select>
+        <div class="rec-esperado">Esperado: ${item.color||'Sin color'}</div>`
+      : `<div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">Sin variante</div>`;
+
+    return `<div class="rec-item" id="rec-item-${i}">
+      <div class="rec-item-nombre">${item.nombre}
+        ${item.skus?.tracking==='uid'?'<span style="font-size:10px;color:var(--blue);margin-left:6px;font-family:\'DM Mono\',monospace;">UID</span>':''}
+      </div>
+      <div class="rec-item-grid">
+        <div class="rec-field">
+          <div class="rec-label">Cantidad esperada</div>
+          <div style="font-size:16px;font-weight:600;font-family:'DM Mono',monospace;color:var(--text3);">${pendiente}</div>
+        </div>
+        <div class="rec-field">
+          <div class="rec-label">Cantidad recibida</div>
+          <input class="rec-input" type="number" id="qty-rec-${i}" value="${pendiente}" min="0" max="${pendiente}"
+            oninput="checkDesvio(${i})">
+        </div>
+        <div class="rec-field">
+          <div class="rec-label">Color / variante</div>
+          ${colorSelect}
+        </div>
+      </div>
+      <div id="desvio-indicator-${i}"></div>
+    </div>`;
+  }).join('');
+}
+
+function checkDesvio(i){
+  const item = itemsActual[i];
+  const pendiente = item.cantidad - (item.cantidad_recibida||0);
+  const qtyRec = parseFloat(document.getElementById(`qty-rec-${i}`)?.value)||0;
+  const colorRec = document.getElementById(`color-rec-${i}`)?.value||'';
+  const colorEsp = item.color||'';
+
+  const qtyDesvio = qtyRec < pendiente;
+  const colorDesvio = colorRec && colorEsp && colorRec !== colorEsp;
+  const hayDesvio = qtyDesvio || colorDesvio;
+
+  const itemEl = document.getElementById(`rec-item-${i}`);
+  const indEl = document.getElementById(`desvio-indicator-${i}`);
+  const qtyEl = document.getElementById(`qty-rec-${i}`);
+  const colorEl = document.getElementById(`color-rec-${i}`);
+
+  if(hayDesvio){
+    itemEl.classList.add('con-desvio');
+    qtyEl?.classList.toggle('desvio', qtyDesvio);
+    colorEl?.classList.toggle('desvio', colorDesvio);
+    let msg = '⚠ Desvío: ';
+    if(qtyDesvio) msg += `recibís ${qtyRec} de ${pendiente} esperados`;
+    if(colorDesvio) msg += (qtyDesvio?' · ':'')+`color ${colorRec} vs ${colorEsp} pedido`;
+    indEl.innerHTML = `<div class="desvio-badge">${msg}</div>`;
+  } else {
+    itemEl.classList.remove('con-desvio');
+    qtyEl?.classList.remove('desvio');
+    colorEl?.classList.remove('desvio');
+    indEl.innerHTML = '';
+  }
+}
+
+// ─── PROCESAR RECEPCIÓN ─────────────────────────────────────
+function procesarRecepcion(){
+  // Recolectar lo que ingresó el usuario
+  recepcionItems = itemsActual.map((item,i)=>{
+    const pendiente = item.cantidad - (item.cantidad_recibida||0);
+    const qtyRec = parseFloat(document.getElementById(`qty-rec-${i}`)?.value)||0;
+    const colorRec = document.getElementById(`color-rec-${i}`)?.value||item.color||'';
+    const qtyDesvio = qtyRec < pendiente;
+    const colorDesvio = colorRec && item.color && colorRec !== item.color;
+    return {
+      oc_item_id: item.id,
+      sku_id: item.sku_id,
+      nombre: item.nombre,
+      tracking: item.skus?.tracking,
+      cantidad_esperada: pendiente,
+      cantidad_recibida: qtyRec,
+      color_esperado: item.color||'',
+      color_recibido: colorRec,
+      tiene_desvio: qtyDesvio || colorDesvio,
+      desvio_detalle: qtyDesvio
+        ? `Recibido ${qtyRec} de ${pendiente} esperados${colorDesvio?' · color '+colorRec+' vs '+item.color:''}`
+        : colorDesvio ? `Color recibido: ${colorRec} vs pedido: ${item.color}` : '',
+      _variantes: item._variantes
+    };
+  });
+
+  desviosDetectados = recepcionItems.filter(i=>i.tiene_desvio);
+
+  if(desviosDetectados.length){
+    // Mostrar panel de desvíos para confirmación
+    renderDesvios();
+    document.getElementById('rec-panel1').style.display='none';
+    document.getElementById('rec-panel2').style.display='block';
+    setStep(2);
+  } else {
+    confirmarRecepcion();
+  }
+}
+
+function renderDesvios(){
+  const el = document.getElementById('desvios-panel');
+  el.innerHTML = `<div class="desvio-alert">
+    <div class="desvio-alert-title">⚠ Se detectaron ${desviosDetectados.length} desvío${desviosDetectados.length>1?'s':''} respecto a lo pedido</div>
+    ${desviosDetectados.map(d=>`<div class="desvio-alert-item">• <strong>${d.nombre}</strong>: ${d.desvio_detalle}</div>`).join('')}
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;font-family:'DM Mono',monospace;">Se generará una alerta automática a Compras/Gerencia.</div>
+  </div>`;
+}
+
+function volverPanel1(){
+  document.getElementById('rec-panel1').style.display='block';
+  document.getElementById('rec-panel2').style.display='none';
+  setStep(1);
+}
+
+function confirmarConDesvios(){ confirmarRecepcion(); }
+
+async function confirmarRecepcion(){
+  try{
+    const hayDesvios = desviosDetectados.length > 0;
+    const totalRecibido = recepcionItems.reduce((s,i)=>s+i.cantidad_recibida,0);
+    const totalEsperado = recepcionItems.reduce((s,i)=>s+i.cantidad_esperada,0);
+    const esParcial = totalRecibido < totalEsperado;
+
+    // Generar número de recepción
+    const fecha = new Date();
+    const recNum = `REC-${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`;
+
+    // Crear recepción
+    const recRes = await api('recepciones','POST',[{
+      oc_id: ocActual.id,
+      recepcion_numero: recNum,
+      tipo: esParcial?'parcial':'total',
+      estado: 'confirmada',
+      tiene_desvios: hayDesvios,
+      observaciones: document.getElementById('rec-observaciones').value||null
+    }]);
+    const recId = recRes[0].id;
+
+    // Crear items de recepción
+    await api('recepcion_items','POST', recepcionItems.map(i=>({
+      recepcion_id: recId,
+      oc_item_id: i.oc_item_id,
+      cantidad_esperada: i.cantidad_esperada,
+      cantidad_recibida: i.cantidad_recibida,
+      color_esperado: i.color_esperado||null,
+      color_recibido: i.color_recibido||null,
+      tiene_desvio: i.tiene_desvio,
+      desvio_detalle: i.desvio_detalle||null,
+      ingresado_a_stock: false
+    })));
+
+    // Actualizar cantidad_recibida en oc_items
+    for(const ri of recepcionItems){
+      const ocItem = itemsActual.find(x=>x.id===ri.oc_item_id);
+      if(ocItem){
+        const nuevaRecibida = (ocItem.cantidad_recibida||0) + ri.cantidad_recibida;
+        await api(`oc_items?id=eq.${ri.oc_item_id}`,'PATCH',{cantidad_recibida:nuevaRecibida});
+      }
+    }
+
+    // Actualizar estado de la OC
+    const nuevoEstado = esParcial?'recibida_parcial':'cerrada';
+    await api(`ordenes_compra?id=eq.${ocActual.id}`,'PATCH',{estado:nuevoEstado,updated_at:new Date().toISOString()});
+
+    // Generar alerta si hay desvíos
+    if(hayDesvios){
+      const detalleAlerta = desviosDetectados.map(d=>`${d.nombre}: ${d.desvio_detalle}`).join(' | ');
+      await api('alertas_gerencia','POST',[{
+        tipo: 'desvio_recepcion',
+        mensaje: `Recepción ${recNum} (OC ${ocActual.oc_numero}) con desvíos: ${detalleAlerta}`,
+        leida: false
+      }]);
+    }
+
+    // Ingresar al stock
+    etiquetasGeneradas = [];
+    for(const ri of recepcionItems){
+      if(ri.cantidad_recibida <= 0) continue;
+      if(ri.tracking === 'uid'){
+        await ingresarUIDs(ri, recId);
+      } else {
+        await ingresarCantidad(ri);
+      }
+    }
+
+    // Mostrar resultado
+    mostrarResultado(recNum, esParcial, hayDesvios);
+
+  }catch(e){toast('Error: '+e.message);console.error(e);}
+}
+
+async function ingresarUIDs(ri, recId){
+  // Generar UIDs para insumos trackeados
+  const prefijo = generarPrefijo(ri.nombre, ri.color_recibido);
+
+  // Buscar último número
+  let lastNum = 0;
+  try{
+    const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc&limit=1`);
+    if(existing?.length){
+      const match = existing[0].uid.match(/-(\d+)$/);
+      if(match) lastNum = parseInt(match[1]);
+    }
+  }catch(e){}
+
+  // Buscar variante_id para el color
+  let varianteId = null;
+  if(ri.color_recibido && ri._variantes?.length){
+    const varObj = ri._variantes.find(v=>v.valor===ri.color_recibido);
+    if(varObj) varianteId = varObj.id;
+  }
+
+  const unidades = [];
+  for(let i=1;i<=ri.cantidad_recibida;i++){
+    const uid = prefijo+'-'+String(lastNum+i).padStart(4,'0');
+    unidades.push({uid, sku_id:ri.sku_id, variante_id:varianteId, estado:'stock'});
+    etiquetasGeneradas.push({uid, nombre:ri.nombre, variante:ri.color_recibido, num:lastNum+i});
+  }
+
+  await api('unidades','POST',unidades);
+
+  // Marcar como ingresado
+  await api(`recepcion_items?recepcion_id=eq.${recId}&oc_item_id=eq.${ri.oc_item_id}`,'PATCH',{ingresado_a_stock:true});
+}
+
+async function ingresarCantidad(ri){
+  // Para insumos de cantidad: buscar o crear fila de stock
+  let varianteId = null;
+  if(ri.color_recibido && ri._variantes?.length){
+    const varObj = ri._variantes.find(v=>v.valor===ri.color_recibido);
+    if(varObj) varianteId = varObj.id;
+  }
+
+  const stockRows = varianteId
+    ? await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=eq.${varianteId}&select=id,cantidad`)
+    : await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=is.null&select=id,cantidad`);
+
+  if(stockRows?.length){
+    const nuevaCant = (stockRows[0].cantidad||0) + ri.cantidad_recibida;
+    await api(`stock?id=eq.${stockRows[0].id}`,'PATCH',{cantidad:nuevaCant,updated_at:new Date().toISOString()});
+  } else {
+    await api('stock','POST',[{sku_id:ri.sku_id, variante_id:varianteId, cantidad:ri.cantidad_recibida}]);
+  }
+}
+
+function generarPrefijo(nombre, color){
+  let n = nombre.toUpperCase();
+  n = n.replace(/[^A-Z0-9\s]/g,'').trim().replace(/\s+/g,'-');
+  n = n.substring(0,18);
+  if(color){
+    const colorMap={'Negro':'NEG','Blanco':'BLA','Gris Claro':'GRC','Gris Plomo':'GRP','A definir':'DEF','XPrinter':'XPR','3 N Star':'NST','Nitcom':'NIT','Garnic':'GAR'};
+    const cod = colorMap[color]||color.substring(0,3).toUpperCase();
+    n = n+'-'+cod;
+  }
+  return n.substring(0,24);
+}
+
+function mostrarResultado(recNum, esParcial, hayDesvios){
+  document.getElementById('rec-panel2').style.display='none';
+  document.getElementById('rec-panel3').style.display='block';
+  setStep(3);
+
+  document.getElementById('rec-resultado').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px;">
+      <div style="padding:12px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:var(--radius);">
+        <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:4px;">N° Recepción</div>
+        <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--green);">${recNum}</div>
+      </div>
+      <div style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);">
+        <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:4px;">Tipo</div>
+        <div style="font-size:13px;">${esParcial?'⏳ Recepción parcial':'✓ Recepción total'}</div>
+      </div>
+      ${hayDesvios?`<div style="padding:12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);">
+        <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:4px;">Alerta</div>
+        <div style="font-size:13px;color:var(--amber);">⚠ Desvíos notificados</div>
+      </div>`:''}
+      <div style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);">
+        <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:4px;">UIDs generados</div>
+        <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);">${etiquetasGeneradas.length}</div>
+      </div>
+    </div>
+    ${esParcial?'<div style="font-size:12px;color:var(--amber);padding:8px 12px;background:var(--amber-dim);border-radius:6px;border:1px solid var(--amber-border);">⏳ La OC queda abierta — pendiente de saldo a recepcionar</div>':''}
+  `;
+
+  if(etiquetasGeneradas.length){
+    document.getElementById('etiquetas-preview-wrap').style.display='block';
+    generarVistaEtiquetas();
+  }
+}
+
+// ─── ETIQUETAS ───────────────────────────────────────────────
+function generarVistaEtiquetas(){
+  const preview = document.getElementById('etiquetas-preview');
+  preview.innerHTML='';
+  const hojas=[];
+  for(let i=0;i<etiquetasGeneradas.length;i+=8) hojas.push(etiquetasGeneradas.slice(i,i+8));
+  hojas.forEach((hoja,hi)=>{
+    const sheet=document.createElement('div');
+    sheet.className='label-sheet';
+    sheet.style.marginBottom='8mm';
+    if(hi<hojas.length-1) sheet.style.pageBreakAfter='always';
+    hoja.forEach(et=>{ sheet.appendChild(crearEtiqueta(et)); });
+    preview.appendChild(sheet);
+  });
+}
+
+function crearEtiqueta(et){
+  const fecha=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const label=document.createElement('div');
+  label.className='label';
+  label.innerHTML=`
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="label-brand">Totem Nube</div>
+        <div class="label-estado">EN STOCK</div>
+      </div>
+      <div class="label-nombre">${et.nombre}</div>
+      ${et.variante?`<div class="label-variante">Color: ${et.variante}</div>`:''}
+    </div>
+    <div class="label-body">
+      <div class="label-qr" id="qrlabel-${et.uid.replace(/[^a-z0-9]/gi,'_')}"></div>
+      <div style="flex:1;">
+        <div class="label-uid-label">UID</div>
+        <div class="label-uid">${et.uid}</div>
+      </div>
+    </div>
+    <div class="label-footer">
+      <span>Ingresado: ${fecha}</span>
+      <span>#${String(et.num).padStart(4,'0')}</span>
+    </div>`;
+  setTimeout(()=>{
+    const qrEl=label.querySelector(`#qrlabel-${et.uid.replace(/[^a-z0-9]/gi,'_')}`);
+    if(qrEl&&window.QRCode){
+      new QRCode(qrEl,{
+        text:'https://ingpussetto-web.github.io/totem-stock/scan.html?uid='+et.uid,
+        width:80,height:80,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M
+      });
+    }
+  },100);
+  return label;
+}
+
+function imprimirEtiquetas(){
+  const printEl=document.getElementById('print-etiquetas');
+  printEl.style.display='block';
+  printEl.innerHTML=document.getElementById('etiquetas-preview').innerHTML;
+  window.print();
+  setTimeout(()=>{printEl.style.display='none';},1000);
+}
+
+// ─── HISTORIAL ───────────────────────────────────────────────
+async function loadHistorial(){
+  try{
+    const recs = await api('recepciones?select=*,ordenes_compra(oc_numero)&order=created_at.desc&limit=30');
+    const el = document.getElementById('historial-list');
+    if(!recs?.length){el.innerHTML='<div class="empty"><div class="empty-icon">▤</div>Sin recepciones registradas</div>';return;}
+    el.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${recs.map(r=>{
+      const fecha=new Date(r.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+      return `<div class="card" style="margin-bottom:0;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">${r.recepcion_numero}</div>
+            <div style="font-size:14px;font-weight:600;margin:2px 0;">OC: ${r.ordenes_compra?.oc_numero||'—'}</div>
+            <div style="font-size:11px;color:var(--text2);">${fecha}</div>
+            ${r.observaciones?`<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic;">${r.observaciones}</div>`:''}
+          </div>
+          <div style="text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+            <span class="badge ${r.tipo==='total'?'green':'blue'}">${r.tipo==='total'?'Total':'Parcial'}</span>
+            ${r.tiene_desvios?'<span class="badge amber">⚠ Con desvíos</span>':''}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+  }catch(e){document.getElementById('historial-list').innerHTML='<div class="empty">Error cargando historial</div>';}
+}
+
+// ─── STEPS ────────────────────────────────────────────────────
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    const el=document.getElementById('step'+i);
+    if(el) el.className='step'+(i===n?' active':i<n?' done':'');
+  });
+}
+
+// ─── CONFIG ─────────────────────────────────────────────────
+function loadConfig(){
+  document.getElementById('cfg-url').value=SUPA_URL;
+  document.getElementById('cfg-key').value=SUPA_KEY;
+  document.getElementById('cfg-nombre').value=MI_NOMBRE;
+}
+async function saveConfig(){
+  SUPA_URL=document.getElementById('cfg-url').value.trim().replace(/\/$/,'');
+  SUPA_KEY=document.getElementById('cfg-key').value.trim();
+  MI_NOMBRE=document.getElementById('cfg-nombre').value.trim()||'Depósito';
+  localStorage.setItem('supa_url',SUPA_URL);
+  localStorage.setItem('supa_key',SUPA_KEY);
+  localStorage.setItem('rec_nombre',MI_NOMBRE);
+  const ok=await checkConnection();
+  document.getElementById('cfg-status').innerHTML=ok?'<span style="color:var(--green)">✓ Conectado</span>':'<span style="color:var(--red)">✗ Error</span>';
+  if(ok) loadPendientes();
+}
+
+// ─── HELPERS ────────────────────────────────────────────────
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.style.opacity='1';
+  clearTimeout(el._t);el._t=setTimeout(()=>{el.style.opacity='0';},2800);
+}
+
+// ─── INIT ────────────────────────────────────────────────────
+async function init(){
+  const ok=await checkConnection();
+  if(ok) loadPendientes();
+  else if(!SUPA_URL||!SUPA_KEY) showPage('config');
+}
+init();
+</script>
+</body>
+</html>
