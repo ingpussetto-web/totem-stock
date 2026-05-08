@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1920, initial-scale=1.0">
+<title>Totem Nube — Dashboard Producción</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0f;
+  --panel:#0d1117;
+  --panel2:#111620;
+  --border:rgba(255,255,255,0.06);
+  --border2:rgba(255,255,255,0.12);
+  --text:#e8eaf0;--text2:#7a8099;--text3:#3a4055;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.08);--green-glow:rgba(0,229,160,0.15);
+  --amber:#ffb340;--amber-dim:rgba(255,179,64,0.08);
+  --red:#ff4d6a;--red-dim:rgba(255,77,106,0.08);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.08);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.08);
+  --cyan:#22d3ee;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;}
+
+/* Grid principal */
+.dashboard{
+  display:grid;
+  grid-template-columns:280px 1fr 320px;
+  grid-template-rows:64px 1fr 180px;
+  gap:1px;
+  width:1920px;
+  height:1080px;
+  background:var(--border);
+}
+
+/* Header */
+.header{
+  grid-column:1/-1;
+  background:var(--panel);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 28px;
+  border-bottom:1px solid var(--border2);
+  position:relative;
+  overflow:hidden;
+}
+.header::before{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;
+  height:2px;
+  background:linear-gradient(90deg,var(--green),var(--cyan),var(--blue),var(--purple));
+}
+.logo-area{display:flex;align-items:center;gap:14px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+.logo-text{font-size:15px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:1px;}
+.header-center{position:absolute;left:50%;transform:translateX(-50%);text-align:center;}
+.header-title{font-size:13px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:var(--text2);}
+.header-right{display:flex;align-items:center;gap:24px;}
+.clock{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:var(--text);letter-spacing:0.05em;}
+.date-str{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;text-align:right;}
+.refresh-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 3s infinite;}
+
+/* Panel base */
+.panel{background:var(--panel);padding:18px;}
+.panel-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.15em;font-family:'JetBrains Mono',monospace;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+.panel-count{font-size:9px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+
+/* Columna izquierda — KPIs */
+.col-left{
+  grid-column:1;
+  grid-row:2/3;
+  background:var(--panel);
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+
+.kpi-block{
+  flex:1;
+  background:var(--panel2);
+  padding:18px 20px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  position:relative;
+  overflow:hidden;
+}
+.kpi-block::after{
+  content:'';
+  position:absolute;
+  left:0;top:0;bottom:0;
+  width:3px;
+}
+.kpi-block.green::after{background:var(--green);}
+.kpi-block.amber::after{background:var(--amber);}
+.kpi-block.red::after{background:var(--red);}
+.kpi-block.blue::after{background:var(--blue);}
+.kpi-block.purple::after{background:var(--purple);}
+.kpi-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+.kpi-value{font-size:44px;font-weight:800;line-height:1;letter-spacing:-0.02em;}
+.kpi-block.green .kpi-value{color:var(--green);}
+.kpi-block.amber .kpi-value{color:var(--amber);}
+.kpi-block.red .kpi-value{color:var(--red);}
+.kpi-block.blue .kpi-value{color:var(--blue);}
+.kpi-block.purple .kpi-value{color:var(--purple);}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:6px;font-family:'JetBrains Mono',monospace;}
+
+/* Centro — Lista de OPs */
+.col-center{
+  grid-column:2;
+  grid-row:2/3;
+  background:var(--panel);
+  display:flex;
+  flex-direction:column;
+}
+.ops-table{flex:1;overflow:hidden;}
+.ops-header{
+  display:grid;
+  grid-template-columns:130px 1fr 200px 160px 110px 90px;
+  gap:12px;
+  padding:10px 18px;
+  border-bottom:1px solid var(--border2);
+  background:var(--panel2);
+}
+.ops-header span{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'JetBrains Mono',monospace;}
+.ops-rows{overflow:hidden;}
+.op-row{
+  display:grid;
+  grid-template-columns:130px 1fr 200px 160px 110px 90px;
+  gap:12px;
+  padding:11px 18px;
+  border-bottom:1px solid var(--border);
+  align-items:center;
+  transition:background 0.2s;
+  animation:slideIn 0.3s ease-out;
+}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+.op-row:hover{background:rgba(255,255,255,0.02);}
+.op-row.iniciada{background:rgba(0,229,160,0.03);}
+.op-row.en_produccion{background:rgba(77,159,255,0.03);}
+.op-row.faltantes{background:rgba(255,179,64,0.04);}
+.op-numero{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);}
+.op-cliente{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.op-producto{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.op-fecha{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.op-progreso{display:flex;align-items:center;gap:6px;}
+.mini-bar{flex:1;height:4px;background:var(--panel2);border-radius:2px;overflow:hidden;}
+.mini-fill{height:100%;border-radius:2px;transition:width 0.5s;}
+.mini-pct{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text3);white-space:nowrap;}
+.op-estado-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:9px;font-family:'JetBrains Mono',monospace;font-weight:600;
+  padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;
+}
+.badge-espera{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.2);}
+.badge-iniciada{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,229,160,0.2);}
+.badge-completada{background:rgba(255,255,255,0.04);color:var(--text3);border:1px solid var(--border);}
+.badge-faltantes{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,64,0.2);}
+
+/* Columna derecha — Alertas + Tiempo promedio */
+.col-right{
+  grid-column:3;
+  grid-row:2/3;
+  background:var(--panel);
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+.alertas-panel{
+  flex:1;
+  background:var(--panel2);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  padding:16px;
+}
+.alerta-item{
+  padding:10px 12px;
+  border-radius:6px;
+  margin-bottom:6px;
+  border-left:3px solid;
+  font-size:11px;
+  line-height:1.4;
+}
+.alerta-item.faltante{background:var(--amber-dim);border-color:var(--amber);color:var(--amber);}
+.alerta-item.cierre{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+.alerta-item.info{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
+.alerta-op{font-family:'JetBrains Mono',monospace;font-size:9px;margin-bottom:3px;opacity:0.7;}
+.alerta-msg{color:var(--text);}
+
+.tiempo-panel{
+  background:var(--panel2);
+  padding:16px 20px;
+  height:100px;
+  display:flex;
+  align-items:center;
+  gap:20px;
+}
+.tiempo-value{font-size:36px;font-weight:800;color:var(--cyan);font-family:'JetBrains Mono',monospace;line-height:1;}
+.tiempo-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+.tiempo-sub{font-size:11px;color:var(--text2);}
+
+/* Bottom — Breaking News */
+.bottom-bar{
+  grid-column:1/-1;
+  grid-row:3;
+  background:var(--panel);
+  display:flex;
+  flex-direction:column;
+  border-top:1px solid var(--border2);
+}
+.news-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 20px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.news-tag{
+  background:var(--red);
+  color:#fff;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:0.15em;
+  padding:3px 8px;
+  border-radius:3px;
+  text-transform:uppercase;
+  font-family:'JetBrains Mono',monospace;
+  animation:blink 2s infinite;
+}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.6;}}
+.news-scroll-wrap{flex:1;overflow:hidden;position:relative;}
+.news-scroll{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  overflow-y:hidden;
+  height:100%;
+}
+.news-item{
+  padding:8px 20px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  flex-shrink:0;
+}
+.news-dot{
+  width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px;
+}
+.news-dot.urgente{background:var(--red);box-shadow:0 0 6px var(--red);}
+.news-dot.normal{background:var(--green);}
+.news-dot.info{background:var(--blue);}
+.news-time{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;margin-top:2px;}
+.news-text{font-size:13px;color:var(--text);flex:1;line-height:1.4;}
+.news-autor{font-size:10px;color:var(--text3);white-space:nowrap;margin-top:2px;}
+.news-empty{padding:16px 20px;font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace;text-align:center;}
+
+/* Scrolling ticker for when many news */
+.ticker-wrap{overflow:hidden;white-space:nowrap;padding:0 20px;display:flex;align-items:center;flex:1;}
+.ticker{display:inline-flex;gap:60px;animation:ticker 30s linear infinite;}
+@keyframes ticker{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+.ticker-item{display:inline-flex;align-items:center;gap:10px;font-size:13px;}
+
+/* Empty states */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px;gap:6px;}
+.empty-icon{font-size:24px;opacity:0.4;}
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo-area">
+      <div class="logo-dot"></div>
+      <div>
+        <div class="logo-text">Totem Nube</div>
+        <div class="logo-sub">PRODUCCIÓN · LIVE</div>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="header-title">Dashboard de Producción</div>
+    </div>
+    <div class="header-right">
+      <div class="refresh-dot" title="Actualización automática"></div>
+      <div>
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="date-str" id="date-str">--/--/----</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- COL IZQUIERDA: KPIs -->
+  <div class="col-left">
+    <div class="kpi-block blue">
+      <div class="kpi-label">En espera</div>
+      <div class="kpi-value" id="kpi-espera">—</div>
+      <div class="kpi-sub">OPs confirmadas</div>
+    </div>
+    <div class="kpi-block green">
+      <div class="kpi-label">En curso</div>
+      <div class="kpi-value" id="kpi-curso">—</div>
+      <div class="kpi-sub">Con trabajo iniciado</div>
+    </div>
+    <div class="kpi-block amber">
+      <div class="kpi-label">Con faltantes</div>
+      <div class="kpi-value" id="kpi-faltantes">—</div>
+      <div class="kpi-sub">Insumos sin stock</div>
+    </div>
+    <div class="kpi-block purple">
+      <div class="kpi-label">Completadas hoy</div>
+      <div class="kpi-value" id="kpi-completadas">—</div>
+      <div class="kpi-sub">Cerradas en el día</div>
+    </div>
+  </div>
+
+  <!-- COL CENTRO: Lista OPs -->
+  <div class="col-center">
+    <div style="padding:14px 18px 8px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.15em;font-family:'JetBrains Mono',monospace;">Órdenes activas — ordenadas por antigüedad</div>
+    </div>
+    <div class="ops-header">
+      <span>N° OP</span>
+      <span>Cliente · Producto</span>
+      <span>Estado</span>
+      <span>Fecha</span>
+      <span>Progreso</span>
+      <span>Items</span>
+    </div>
+    <div class="ops-rows" id="ops-rows">
+      <div class="empty-state"><div class="empty-icon">◈</div>Cargando órdenes...</div>
+    </div>
+  </div>
+
+  <!-- COL DERECHA: Alertas + Tiempo -->
+  <div class="col-right">
+    <div class="alertas-panel">
+      <div class="panel-title">
+        <span>Alertas activas</span>
+        <span class="panel-count" id="alertas-count">0</span>
+      </div>
+      <div id="alertas-list" style="flex:1;overflow-y:auto;">
+        <div class="empty-state"><div class="empty-icon">✓</div>Sin alertas</div>
+      </div>
+    </div>
+    <div class="tiempo-panel">
+      <div>
+        <div class="tiempo-label">Tiempo prom. de entrega</div>
+        <div class="tiempo-value" id="tiempo-promedio">—</div>
+        <div class="tiempo-sub" id="tiempo-sub">días desde inicio hasta cierre</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM: Breaking News -->
+  <div class="bottom-bar">
+    <div class="news-header">
+      <div class="news-tag">📢 Novedades</div>
+      <div style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;">Mensajes de Ventas / Gerencia para Producción</div>
+    </div>
+    <div class="news-scroll-wrap">
+      <div class="news-scroll" id="news-list">
+        <div class="news-empty">Sin mensajes activos</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────
+const SUPA_URL = localStorage.getItem('supa_url') || '';
+const SUPA_KEY = localStorage.getItem('supa_key') || '';
+const REFRESH_MS = 30000; // 30 segundos
+
+// ─── API ───────────────────────────────────────────────────
+async function api(path){
+  if(!SUPA_URL||!SUPA_KEY) return null;
+  try{
+    const res = await fetch(SUPA_URL.replace(/\/$/,'')+'/rest/v1/'+path,{
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    });
+    if(!res.ok) return null;
+    return res.json();
+  }catch(e){ return null; }
+}
+
+// ─── CLOCK ──────────────────────────────────────────────────
+function updateClock(){
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = h+':'+m+':'+s;
+  const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  document.getElementById('date-str').textContent =
+    days[now.getDay()]+' '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── LOAD ALL ───────────────────────────────────────────────
+async function loadAll(){
+  await Promise.all([loadOPs(), loadAlertas(), loadNoticias()]);
+}
+
+// ─── OPs ────────────────────────────────────────────────────
+async function loadOPs(){
+  const ops = await api('op_progreso?estado=in.(bom_confirmada,en_produccion,iniciada)&select=*&order=created_at.asc');
+  if(!ops) return;
+
+  // KPIs
+  const espera = ops.filter(o=>o.estado==='bom_confirmada').length;
+  const curso = ops.filter(o=>o.estado==='iniciada').length;
+  document.getElementById('kpi-espera').textContent = espera;
+  document.getElementById('kpi-curso').textContent = curso;
+
+  // Completadas hoy
+  const hoy = new Date().toISOString().split('T')[0];
+  const completadasHoy = await api(`ordenes_produccion?estado=eq.completada&fecha_cierre=gte.${hoy}T00:00:00&select=id`);
+  document.getElementById('kpi-completadas').textContent = completadasHoy?.length || 0;
+
+  // Faltantes (items_pendientes > 0 y en produccion)
+  const conFaltantes = ops.filter(o=>o.items_pendientes > 0 && o.estado !== 'bom_confirmada').length;
+  document.getElementById('kpi-faltantes').textContent = conFaltantes;
+
+  // Tiempo promedio
+  const cerradas = await api('ordenes_produccion?estado=eq.completada&fecha_inicio=not.is.null&fecha_cierre=not.is.null&select=fecha_inicio,fecha_cierre&limit=20');
+  if(cerradas?.length){
+    const dias = cerradas.map(o=>{
+      const ini = new Date(o.fecha_inicio);
+      const fin = new Date(o.fecha_cierre);
+      return (fin-ini)/(1000*60*60*24);
+    });
+    const prom = dias.reduce((a,b)=>a+b,0)/dias.length;
+    document.getElementById('tiempo-promedio').textContent = prom.toFixed(1);
+    document.getElementById('tiempo-sub').textContent = `días prom. (últimas ${cerradas.length} OPs)`;
+  }
+
+  // Render tabla
+  const el = document.getElementById('ops-rows');
+  if(!ops.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">✓</div>Sin órdenes activas</div>';
+    return;
+  }
+
+  el.innerHTML = ops.map(o=>{
+    const pct = o.items_total>0?Math.round((o.items_asignados/o.items_total)*100):0;
+    const esFaltante = o.items_pendientes > 0 && o.estado==='iniciada';
+    const fecha = new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    const diasAtras = Math.floor((Date.now()-new Date(o.created_at))/(1000*60*60*24));
+    const fechaLabel = diasAtras===0?'Hoy':diasAtras===1?'Ayer':diasAtras+'d atrás';
+
+    let badge='';
+    let rowClass='op-row';
+    if(o.estado==='iniciada'){
+      badge='<span class="op-estado-badge badge-iniciada">● En curso</span>';
+      rowClass+=' iniciada';
+    } else if(o.estado==='bom_confirmada'){
+      badge='<span class="op-estado-badge badge-espera">◉ En espera</span>';
+      rowClass+=' en_produccion';
+    }
+    if(esFaltante){
+      badge='<span class="op-estado-badge badge-faltantes">⚠ Faltantes</span>';
+      rowClass+=' faltantes';
+    }
+
+    const fillColor = pct===100?'var(--green)':pct>50?'var(--blue)':'var(--amber)';
+
+    return `<div class="${rowClass}">
+      <div class="op-numero">${o.op_numero}</div>
+      <div>
+        <div class="op-cliente">${o.cliente}</div>
+        <div class="op-producto">${o.producto_nombre}${o.color_gabinete?' · <span style="color:var(--amber)">'+o.color_gabinete+'</span>':''}</div>
+      </div>
+      <div>${badge}</div>
+      <div class="op-fecha">${fecha}<br><span style="color:var(--text3);font-size:9px;">${fechaLabel}</span></div>
+      <div class="op-progreso">
+        <div class="mini-bar"><div class="mini-fill" style="width:${pct}%;background:${fillColor};"></div></div>
+        <div class="mini-pct">${pct}%</div>
+      </div>
+      <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3);">${o.items_asignados}/${o.items_total}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── ALERTAS ─────────────────────────────────────────────────
+async function loadAlertas(){
+  const alertas = await api('alertas_gerencia?leida=eq.false&select=*&order=created_at.desc&limit=8');
+  const el = document.getElementById('alertas-list');
+  document.getElementById('alertas-count').textContent = alertas?.length||0;
+
+  if(!alertas?.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">✓</div>Sin alertas activas</div>';
+    return;
+  }
+
+  const tipoClass={faltante_insumos:'faltante',cierre_sin_escaneo:'cierre',desvio_recepcion:'info'};
+  const tipoLabel={faltante_insumos:'Faltante',cierre_sin_escaneo:'Cierre s/escaneo',desvio_recepcion:'Desvío recepción'};
+
+  el.innerHTML = alertas.map(a=>`
+    <div class="alerta-item ${tipoClass[a.tipo]||'info'}">
+      <div class="alerta-op">${tipoLabel[a.tipo]||a.tipo} · ${new Date(a.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="alerta-msg">${a.mensaje}</div>
+    </div>`).join('');
+}
+
+// ─── NOTICIAS ────────────────────────────────────────────────
+async function loadNoticias(){
+  const noticias = await api('noticias_produccion?activa=eq.true&select=*&order=created_at.desc&limit=10');
+  const el = document.getElementById('news-list');
+
+  if(!noticias?.length){
+    el.innerHTML='<div class="news-empty">Sin mensajes activos</div>';
+    return;
+  }
+
+  el.innerHTML = noticias.map(n=>`
+    <div class="news-item">
+      <div class="news-dot ${n.urgencia}"></div>
+      <div style="flex:1;">
+        <div class="news-text">${n.mensaje}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div class="news-autor">${n.autor||'—'}</div>
+        <div class="news-time">${new Date(n.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── AUTO REFRESH ────────────────────────────────────────────
+loadAll();
+setInterval(loadAll, REFRESH_MS);
+</script>
+</body>
+</html>

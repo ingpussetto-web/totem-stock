@@ -388,12 +388,23 @@ async function abrirOP(opId){
     bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&sku_id=not.is.null&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)&order=id.asc`);
 
     // Mostrar header
+    const esIniciada = currentOP.estado === 'iniciada';
     document.getElementById('op-detail-header').innerHTML = `
       <div class="op-detail-header">
-        <div class="op-detail-numero">${currentOP.op_numero} · ${currentOP.v14_orden||''}</div>
-        <div class="op-detail-cliente">${currentOP.cliente}</div>
-        <div class="op-detail-producto">${currentOP.producto_nombre} × ${currentOP.cantidad}</div>
-        ${currentOP.color_gabinete?`<div class="op-detail-color">● Color gabinete: ${currentOP.color_gabinete}</div>`:''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="op-detail-numero">${currentOP.op_numero} · ${currentOP.v14_orden||''}</div>
+            <div class="op-detail-cliente">${currentOP.cliente}</div>
+            <div class="op-detail-producto">${currentOP.producto_nombre} × ${currentOP.cantidad}</div>
+            ${currentOP.color_gabinete?`<div class="op-detail-color">● Color gabinete: ${currentOP.color_gabinete}</div>`:''}
+          </div>
+          ${!esIniciada && currentOP.estado==='en_produccion'
+            ? `<button class="btn solid-green" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;">▶ Iniciar producción</button>`
+            : esIniciada
+            ? `<div style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">● En curso</div>`
+            : ''
+          }
+        </div>
       </div>`;
 
     // Nav item
@@ -408,6 +419,21 @@ async function abrirOP(opId){
 }
 
 // ─── PROGRESO ───────────────────────────────────────────────
+async function iniciarOP(){
+  if(!currentOP) return;
+  try{
+    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
+      estado: 'iniciada',
+      fecha_inicio: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    currentOP.estado = 'iniciada';
+    toast('OP iniciada ✓');
+    // Recargar para refrescar el header
+    await abrirOP(currentOP.id);
+  }catch(e){ toast('Error: '+e.message); }
+}
+
 function actualizarProgreso(){
   const total = bomItems.filter(i=>i.incluido!==false).length;
   const asignados = bomItems.filter(i=>i.estado==='asignado').length;
@@ -675,8 +701,21 @@ async function ejecutarCierreOP(notas){
     await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
       estado: 'completada',
       notas,
+      fecha_cierre: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
+
+    // Generar alerta si hay faltantes
+    const faltantes = bomItems.filter(i=>i.incluido!==false && i.estado==='pendiente');
+    if(faltantes.length){
+      const listaFaltantes = faltantes.map(f=>f.nombre).join(', ');
+      await api('alertas_gerencia', 'POST', [{
+        tipo: 'cierre_sin_escaneo',
+        op_id: currentOP.id,
+        mensaje: `OP ${currentOP.op_numero} (${currentOP.cliente}) cerrada con ${faltantes.length} insumo${faltantes.length>1?'s':''} sin escanear: ${listaFaltantes}. Justificación: ${notas}`,
+        leida: false
+      }]);
+    }
 
     toast('✓ OP cerrada exitosamente');
     setTimeout(()=>volverAOPs(), 1500);
