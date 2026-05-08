@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Sistema</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0f;
+  --panel:#0d1117;
+  --panel2:#111620;
+  --border:rgba(255,255,255,0.06);
+  --border2:rgba(255,255,255,0.12);
+  --text:#e8eaf0;--text2:#7a8099;--text3:#3a4055;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.08);
+  --amber:#ffb340;--amber-dim:rgba(255,179,64,0.08);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.08);
+  --red:#ff4d6a;--red-dim:rgba(255,77,106,0.08);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.08);
+  --cyan:#22d3ee;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;}
+
+/* Background grid */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size:40px 40px;
+  pointer-events:none;
+}
+
+.wrapper{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:40px 24px;
+  position:relative;
+}
+
+/* Header */
+.header{text-align:center;margin-bottom:48px;}
+.logo{
+  display:inline-flex;align-items:center;gap:12px;
+  margin-bottom:12px;
+}
+.logo-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 12px var(--green);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.85);}}
+.logo-name{
+  font-family:'Syne',sans-serif;
+  font-size:28px;font-weight:800;
+  letter-spacing:-0.02em;
+}
+.logo-sub{
+  font-size:11px;color:var(--text3);
+  font-family:'DM Mono',monospace;
+  letter-spacing:0.15em;text-transform:uppercase;
+  text-align:center;
+}
+.header-line{
+  width:60px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--green),transparent);
+  margin:16px auto 0;
+}
+
+/* Grid de módulos */
+.modules-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:16px;
+  max-width:960px;
+  width:100%;
+}
+
+/* Columna */
+.col-title{
+  font-size:9px;color:var(--text3);
+  text-transform:uppercase;letter-spacing:0.15em;
+  font-family:'DM Mono',monospace;
+  margin-bottom:10px;
+  padding-left:4px;
+}
+
+/* Card módulo */
+.mod-card{
+  display:flex;align-items:center;gap:14px;
+  padding:16px 18px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  text-decoration:none;
+  color:var(--text);
+  transition:all 0.2s;
+  position:relative;
+  overflow:hidden;
+  cursor:pointer;
+}
+.mod-card::before{
+  content:'';
+  position:absolute;inset:0;
+  opacity:0;
+  transition:opacity 0.2s;
+}
+.mod-card:hover{
+  border-color:var(--border2);
+  transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(0,0,0,0.3);
+}
+.mod-card:hover::before{opacity:1;}
+.mod-card:active{transform:translateY(0);}
+
+/* Colores por rol */
+.mod-card.green::before{background:var(--green-dim);}
+.mod-card.green:hover{border-color:rgba(0,229,160,0.25);}
+.mod-card.blue::before{background:var(--blue-dim);}
+.mod-card.blue:hover{border-color:rgba(77,159,255,0.25);}
+.mod-card.amber::before{background:var(--amber-dim);}
+.mod-card.amber:hover{border-color:rgba(255,179,64,0.25);}
+.mod-card.red::before{background:var(--red-dim);}
+.mod-card.red:hover{border-color:rgba(255,77,106,0.25);}
+.mod-card.purple::before{background:var(--purple-dim);}
+.mod-card.purple:hover{border-color:rgba(167,139,250,0.25);}
+.mod-card.cyan::before{background:rgba(34,211,238,0.08);}
+.mod-card.cyan:hover{border-color:rgba(34,211,238,0.25);}
+
+.mod-icon{
+  font-size:22px;
+  width:44px;height:44px;
+  border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  background:var(--panel2);
+  position:relative;z-index:1;
+}
+.mod-info{position:relative;z-index:1;flex:1;}
+.mod-name{font-size:14px;font-weight:600;margin-bottom:2px;}
+.mod-desc{font-size:11px;color:var(--text2);line-height:1.3;}
+.mod-arrow{
+  font-size:14px;color:var(--text3);
+  position:relative;z-index:1;
+  transition:transform 0.2s, color 0.2s;
+}
+.mod-card:hover .mod-arrow{transform:translateX(3px);color:var(--text2);}
+
+/* Badge nuevo */
+.mod-badge{
+  position:absolute;top:10px;right:10px;
+  font-size:8px;font-family:'DM Mono',monospace;
+  padding:2px 6px;border-radius:4px;
+  background:var(--green-dim);color:var(--green);
+  border:1px solid rgba(0,229,160,0.2);
+  letter-spacing:0.08em;
+  z-index:1;
+}
+
+/* Separador */
+.col-sep{
+  width:1px;
+  background:linear-gradient(180deg,transparent,var(--border2),transparent);
+  margin:0 4px;
+  align-self:stretch;
+}
+
+/* Footer */
+.footer{
+  margin-top:40px;
+  text-align:center;
+  font-size:11px;color:var(--text3);
+  font-family:'DM Mono',monospace;
+}
+.footer span{color:var(--green);}
+
+/* Reloj */
+.clock-bar{
+  display:flex;align-items:center;gap:16px;
+  margin-bottom:32px;
+  padding:10px 20px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+.clock-time{font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);}
+.clock-date{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);}
+.clock-sep{width:1px;height:20px;background:var(--border2);}
+
+/* Animación entrada */
+.modules-grid{animation:fadeUp 0.5s ease-out;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+.header{animation:fadeUp 0.4s ease-out;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <div class="logo-name">Totem Nube</div>
+    </div>
+    <div class="logo-sub">Sistema de gestión integral</div>
+    <div class="header-line"></div>
+  </div>
+
+  <!-- RELOJ -->
+  <div class="clock-bar">
+    <div class="clock-time" id="clock">--:--</div>
+    <div class="clock-sep"></div>
+    <div class="clock-date" id="clock-date">--/--/----</div>
+  </div>
+
+  <!-- GRID -->
+  <div class="modules-grid">
+
+    <!-- COLUMNA VENTAS / GERENCIA -->
+    <div>
+      <div class="col-title">📊 Ventas · Gerencia</div>
+
+      <a class="mod-card green" href="calculador_totem_nube_v16.html" target="_blank">
+        <div class="mod-icon">💰</div>
+        <div class="mod-info">
+          <div class="mod-name">Cotizador</div>
+          <div class="mod-desc">Cotizaciones, costeo y detalle de ventas</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card blue" href="ops_ventas.html" target="_blank">
+        <div class="mod-icon">✅</div>
+        <div class="mod-info">
+          <div class="mod-name">Órdenes de Producción</div>
+          <div class="mod-desc">Revisar BOM, confirmar y liberar OPs</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card purple" href="noticias.html" target="_blank">
+        <div class="mod-icon">📢</div>
+        <div class="mod-info">
+          <div class="mod-name">Panel de Noticias</div>
+          <div class="mod-desc">Breaking news para el dashboard de producción</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card amber" href="compras.html" target="_blank">
+        <div class="mod-icon">🛒</div>
+        <div class="mod-info">
+          <div class="mod-name">Compras</div>
+          <div class="mod-desc">Órdenes de compra y proveedores</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+    </div>
+
+    <!-- COLUMNA DEPÓSITO -->
+    <div>
+      <div class="col-title">📦 Depósito · Stock</div>
+
+      <a class="mod-card amber" href="inventario_inicial.html" target="_blank">
+        <div class="mod-icon">🏷</div>
+        <div class="mod-info">
+          <div class="mod-name">Inventario Inicial</div>
+          <div class="mod-desc">Etiquetas, UIDs y seteo de stock inicial</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card green" href="stock_fase1.html" target="_blank">
+        <div class="mod-icon">📊</div>
+        <div class="mod-info">
+          <div class="mod-name">Stock actual</div>
+          <div class="mod-desc">Catálogo, cantidades y unidades físicas</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card red" href="#" onclick="alert('Módulo en desarrollo — Recepción de insumos')" >
+        <div class="mod-badge">Próximo</div>
+        <div class="mod-icon">📥</div>
+        <div class="mod-info">
+          <div class="mod-name">Recepción</div>
+          <div class="mod-desc">Ingreso de insumos comprados al stock</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card blue" href="scan.html?uid=TEST" target="_blank">
+        <div class="mod-icon">📱</div>
+        <div class="mod-info">
+          <div class="mod-name">Escaneo QR</div>
+          <div class="mod-desc">Consulta de insumos desde el celular</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+    </div>
+
+    <!-- COLUMNA PRODUCCIÓN -->
+    <div>
+      <div class="col-title">🏭 Producción</div>
+
+      <a class="mod-card green" href="produccion.html" target="_blank">
+        <div class="mod-icon">🔧</div>
+        <div class="mod-info">
+          <div class="mod-name">Módulo Producción</div>
+          <div class="mod-desc">Checklist de insumos y escaneo por OP</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+
+      <div style="height:8px;"></div>
+
+      <a class="mod-card cyan" href="dashboard_produccion.html" target="_blank">
+        <div class="mod-icon">📺</div>
+        <div class="mod-info">
+          <div class="mod-name">Dashboard TV</div>
+          <div class="mod-desc">Panel en tiempo real para el televisor</div>
+        </div>
+        <div class="mod-arrow">→</div>
+      </a>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer" style="margin-top:32px;">
+    Totem Nube · Sistema de gestión · <span>v1.0</span>
+    &nbsp;·&nbsp; Todos los módulos conectados a Supabase
+  </div>
+
+</div>
+
+<script>
+function updateClock(){
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('clock').textContent = h+':'+m;
+  const days = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  document.getElementById('clock-date').textContent =
+    days[now.getDay()]+' '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear();
+}
+setInterval(updateClock, 1000);
+updateClock();
+</script>
+</body>
+</html>
