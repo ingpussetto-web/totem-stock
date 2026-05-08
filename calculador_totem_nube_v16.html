@@ -3504,10 +3504,29 @@ function guardarCotizacion(estado){
 }
 
 function previsualizarCotizacion(){
+  // Sincronizar adicionales antes de generar preview (fix HDMI sin guardar)
+  const itemsBackup = [...cotItemsTemp];
+  // Limpiar adicionales y re-agregar del estado actual de checkboxes
+  cotItemsTemp = cotItemsTemp.filter(function(i){
+    return !['ploteo','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
+  });
+  if(document.getElementById('add-ploteo')?.checked){
+    const montoPl = parseFloat(document.getElementById('cot-ploteo-monto')?.value)||55000;
+    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:1, precio:montoPl, cat:'servicio'});
+  }
+  if(document.getElementById('add-minipc')?.checked){
+    const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
+    const montoMp = parseFloat(document.getElementById('add-minipc-precio')?.value)||610600;
+    cotItemsTemp.push({prodId:'minipc_beelink_n95', nombre:'Player Mini PC Beelink N95 8GB', cant:cant, precio:montoMp, cat:'periferico'});
+  }
+  if(document.getElementById('add-hdmi')?.checked){
+    const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
+    const montoHd = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
+    cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:montoHd, cat:'periferico'});
+  }
   const c = getCotizacionData('borrador');
   if(!c.empresa){ alert('Completá la empresa cliente.'); return; }
   if(c.items.length===0){ alert('Agregá al menos un ítem.'); return; }
-  // Save temp
   window._cotPreview = c;
   generarPreviewHTML(c);
   document.getElementById('modal-preview').style.display='flex';
@@ -3627,9 +3646,10 @@ function generarPreviewHTML(c){
   +'</table>'
   +'<div class="cot-total-row">'
     +'<div class="cot-total-box">'
+      +'<div style="font-size:11px;opacity:0.85;margin-bottom:3px;">Subtotal neto: '+fmt2(subtotalNeto)+'</div>'
+      +'<div style="font-size:11px;opacity:0.85;margin-bottom:8px;">IVA (10,5%): '+fmt2(totalIva)+'</div>'
       +'<div class="cot-total-label">Total proyecto</div>'
       +'<div class="cot-total-val">'+fmt2(totalConIva)+'</div>'
-      +'<div style="font-size:10px;opacity:0.7;">IVA (10,5%) incluido</div>'
     +'</div>'
   +'</div>'
   + transpNotice

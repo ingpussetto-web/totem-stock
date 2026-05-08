@@ -245,7 +245,13 @@ async function renderReservado(){
 
   const bom = bomItems?.[0];
   const op = bom?.ordenes_produccion;
-  const fechaAsig = u.updated_at ? new Date(u.updated_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+  const fechaAsig = u.updated_at ? new Date(u.updated_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+  // Extraer quién asignó de las notas del bom_item
+  let asignadoPor = '—';
+  if(bom && bom.notas){
+    const matchAP = bom.notas.match(/Asignado por: ([^—]+)/);
+    if(matchAP) asignadoPor = matchAP[1].split(' —')[0].trim();
+  }
 
   document.getElementById('container').innerHTML = `
     <div class="estado-card reservado">
@@ -266,7 +272,8 @@ async function renderReservado(){
       <div class="asig-row"><div class="asig-key">Cliente</div><div class="asig-val">${op.cliente}</div></div>
       <div class="asig-row"><div class="asig-key">Producto</div><div class="asig-val">${op.producto_nombre}</div></div>
       ${op.color_gabinete?`<div class="asig-row"><div class="asig-key">Color</div><div class="asig-val" style="color:var(--amber)">${op.color_gabinete}</div></div>`:''}
-      <div class="asig-row"><div class="asig-key">Asignado</div><div class="asig-val">${fechaAsig}</div></div>
+      <div class="asig-row"><div class="asig-key">Asignado por</div><div class="asig-val">${asignadoPor}</div></div>
+      <div class="asig-row"><div class="asig-key">Fecha</div><div class="asig-val">${fechaAsig}</div></div>
     </div>` : ''}
   `;
 }
