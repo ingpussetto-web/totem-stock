@@ -1301,6 +1301,8 @@ function openModalProveedor(volverAOC=false, provId=null){
   } else {
     ['prov-razon','prov-cuit','prov-contacto','prov-tel','prov-mail','prov-notas'].forEach(id=>document.getElementById(id).value='');
   }
+  // Si venimos desde la OC, cerramos ese modal primero
+  if(volverAOC) closeModal('modal-oc');
   openModal('modal-prov');
 }
 
@@ -1330,6 +1332,8 @@ async function saveProveedor(){
     await loadData();
     closeModal('modal-prov');
     renderProveedores();
+    // Si veníamos desde la OC, la reabrimos
+    if(regresarAOC) openModal('modal-oc');
   }catch(e){toast('Error: '+e.message);}
 }
 
