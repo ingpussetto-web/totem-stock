@@ -190,6 +190,21 @@ textarea.form-input{resize:vertical;min-height:70px;}
 .empty{text-align:center;padding:40px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;}
 .empty-icon{font-size:32px;margin-bottom:8px;}
 
+/* Factura & Pago estado */
+.factura-zone{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap;}
+.pago-check{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);transition:all 0.15s;font-size:11px;font-family:'DM Mono',monospace;}
+.pago-check:hover{border-color:var(--green-border);}
+.pago-check.pagada{border-color:var(--green-border);background:var(--green-dim);color:var(--green);}
+.pago-check.pendiente{color:var(--amber);border-color:var(--amber-border);background:var(--amber-dim);}
+.check-box{width:14px;height:14px;border-radius:3px;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;}
+.upload-label{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;height:26px;font-size:11px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;}
+.upload-label:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.upload-label input[type=file]{display:none;}
+.btn-factura-uploading{opacity:0.5;pointer-events:none;}
+
+/* Modal factura preview */
+#modal-factura-preview iframe{width:100%;height:70vh;border:none;border-radius:var(--radius);background:#fff;}
+
 /* Print */
 @media print{
   body *{visibility:hidden;}
@@ -500,6 +515,25 @@ textarea.form-input{resize:vertical;min-height:70px;}
   </div>
 </div>
 
+<!-- MODAL FACTURA PREVIEW -->
+<div class="modal-bg" id="modal-factura-preview">
+  <div class="modal" style="width:820px;">
+    <div class="modal-title">
+      <span id="factura-preview-titulo">Factura</span>
+      <button class="modal-close" onclick="closeModal('modal-factura-preview')">×</button>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div id="factura-preview-body" style="min-height:300px;display:flex;align-items:center;justify-content:center;">
+        <!-- iframe o img se insertan acá -->
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-factura-preview')">Cerrar</button>
+      <a id="factura-download-link" href="#" target="_blank" class="btn green">↓ Abrir en pestaña</a>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -565,6 +599,8 @@ async function loadData(){
 async function loadOCs(){
   try{
     ocs = await api('ordenes_compra?select=*,proveedores(razon_social,contacto,telefono,mail)&order=created_at.desc').catch(()=>[]);
+    // Asegurar campos nuevos con defaults si vienen null
+    ocs.forEach(o=>{ if(!o.pago_estado) o.pago_estado='pendiente'; });
     document.getElementById('m-borrador').textContent = ocs.filter(o=>o.estado==='borrador').length;
     document.getElementById('m-aprobada').textContent = ocs.filter(o=>o.estado==='aprobada').length;
     document.getElementById('m-parcial').textContent = ocs.filter(o=>o.estado==='recibida_parcial').length;
@@ -589,6 +625,8 @@ function renderOCs(){
     const estadoLabel={borrador:'Borrador',aprobada:'Aprobada',recibida_parcial:'Recep. parcial',cerrada:'Cerrada',cancelada:'Cancelada'};
     const fecha=new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
     const totalFmt=o.total_neto?(o.moneda==='USD'?'USD '+Number(o.total_neto).toLocaleString('es-AR'):'$'+Number(o.total_neto).toLocaleString('es-AR')):'—';
+    const pagada=o.pago_estado==='pagada';
+    const tieneFactura=!!o.factura_url;
     return `<div class="oc-card ${o.estado}">
       <div class="oc-header">
         <div>
@@ -600,6 +638,22 @@ function renderOCs(){
           <span class="badge ${o.estado}">${estadoLabel[o.estado]||o.estado}</span>
           <div class="oc-total" style="margin-top:6px;">${totalFmt}</div>
         </div>
+      </div>
+      <div class="factura-zone">
+        <!-- Check pagada/pendiente -->
+        <div class="pago-check ${pagada?'pagada':'pendiente'}" onclick="togglePago(${o.id},${pagada})" title="${pagada?'Marcar como pendiente':'Marcar como pagada'}">
+          <div class="check-box">${pagada?'✓':''}</div>
+          <span>${pagada?'Pagada':'Pendiente'}</span>
+        </div>
+        <!-- Subir factura -->
+        <label class="upload-label" id="upload-label-${o.id}" title="Adjuntar factura (PDF o imagen)">
+          <input type="file" accept=".pdf,image/*" onchange="subirFactura(${o.id}, this)">
+          📎 ${tieneFactura?'Cambiar factura':'Adjuntar factura'}
+        </label>
+        <!-- Ver factura (solo si hay) -->
+        ${tieneFactura?`<button class="btn sm" onclick="verFactura(${o.id},'${o.factura_url}')">📄 Ver factura</button>`:''}
+        <!-- WA encargado de pagos (solo si hay factura) -->
+        ${tieneFactura?`<button class="btn sm green" onclick="enviarFacturaPagos(${o.id})">💬 Enviar a pagos</button>`:''}
       </div>
       <div class="oc-actions">
         ${o.estado==='borrador'?`<button class="btn sm amber" onclick="editarOC(${o.id})">✏ Editar</button>`:''}
@@ -1096,6 +1150,104 @@ async function compartirOCId(ocId){
   if(tel) window.open(`https://wa.me/549${tel}?text=${msg}`,'_blank');
   else if(p?.mail) window.open(`mailto:${p.mail}?subject=${o.oc_numero} - Totem Nube&body=${decodeURIComponent(msg)}`,'_blank');
   else toast('Sin teléfono ni mail registrado para este proveedor');
+}
+
+// ─── FACTURA & PAGO ESTADO ───────────────────────────────────
+
+const WA_PAGOS = '3517022388'; // Encargado de pagos fijo
+
+async function togglePago(ocId, esPagada){
+  const nuevoEstado = esPagada ? 'pendiente' : 'pagada';
+  try{
+    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{pago_estado:nuevoEstado});
+    // Actualizar en memoria y re-render
+    const oc = ocs.find(o=>o.id===ocId);
+    if(oc) oc.pago_estado = nuevoEstado;
+    renderOCs();
+    toast(nuevoEstado==='pagada'?'Marcada como pagada ✓':'Marcada como pendiente');
+  }catch(e){toast('Error: '+e.message);}
+}
+
+async function subirFactura(ocId, input){
+  const file = input.files[0];
+  if(!file) return;
+  const label = document.getElementById('upload-label-'+ocId);
+  if(label) label.classList.add('btn-factura-uploading');
+  try{
+    // Subir a Supabase Storage
+    const ext = file.name.split('.').pop();
+    const fileName = `oc_${ocId}_${Date.now()}.${ext}`;
+    const uploadRes = await fetch(
+      `${SUPA_URL}/storage/v1/object/facturas/${fileName}`,
+      {
+        method:'POST',
+        headers:{
+          'apikey': SUPA_KEY,
+          'Authorization': 'Bearer '+SUPA_KEY,
+          'Content-Type': file.type,
+          'x-upsert': 'true'
+        },
+        body: file
+      }
+    );
+    if(!uploadRes.ok){
+      const err = await uploadRes.text();
+      throw new Error(err);
+    }
+    // Construir URL pública
+    const publicUrl = `${SUPA_URL}/storage/v1/object/public/facturas/${fileName}`;
+    // Guardar URL en la OC
+    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{factura_url: publicUrl});
+    // Actualizar en memoria
+    const oc = ocs.find(o=>o.id===ocId);
+    if(oc) oc.factura_url = publicUrl;
+    renderOCs();
+    toast('Factura adjuntada ✓');
+  }catch(e){
+    toast('Error al subir: '+e.message);
+    console.error(e);
+  }finally{
+    input.value='';
+    if(label) label.classList.remove('btn-factura-uploading');
+  }
+}
+
+function verFactura(ocId, url){
+  const oc = ocs.find(o=>o.id===ocId);
+  document.getElementById('factura-preview-titulo').textContent =
+    `Factura — ${oc?.oc_numero||'OC'} · ${oc?.proveedores?.razon_social||''}`;
+  document.getElementById('factura-download-link').href = url;
+  const body = document.getElementById('factura-preview-body');
+  const isPdf = url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('application/pdf');
+  if(isPdf){
+    body.innerHTML = `<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:#fff;"></iframe>`;
+  } else {
+    body.innerHTML = `<img src="${url}" style="max-width:100%;max-height:70vh;border-radius:8px;object-fit:contain;" onerror="this.alt='No se pudo cargar la imagen'">`;
+  }
+  openModal('modal-factura-preview');
+}
+
+async function enviarFacturaPagos(ocId){
+  const oc = ocs.find(o=>o.id===ocId);
+  if(!oc||!oc.factura_url){ toast('No hay factura adjunta'); return; }
+  const sym = oc.moneda==='USD'?'USD ':'$';
+  const total = sym + Number(oc.total_neto).toLocaleString('es-AR');
+  // Buscar items de la OC para el detalle
+  let detalle = '';
+  try{
+    const items = await api(`oc_items?oc_id=eq.${ocId}&select=nombre,cantidad&order=id.asc`);
+    detalle = (items||[]).map(i=>`• ${i.nombre} x${i.cantidad}`).join('\n');
+  }catch(e){ detalle = '(ver OC adjunta)'; }
+  const msg = encodeURIComponent(
+    `Hola! Te paso factura para gestionar el pago:\n\n`+
+    `📋 *${oc.oc_numero}*\n`+
+    `🏢 Proveedor: ${oc.proveedores?.razon_social||'—'}\n`+
+    `📦 Insumos:\n${detalle}\n\n`+
+    `💰 Total: ${total}\n`+
+    `📄 Factura: ${oc.factura_url}\n\n`+
+    `Saludos, Totem Nube.`
+  );
+  window.open(`https://wa.me/549${WA_PAGOS}?text=${msg}`,'_blank');
 }
 
 // ─── PROVEEDORES ─────────────────────────────────────────────
