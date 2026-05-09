@@ -501,7 +501,7 @@ function procesarRecepcion(){
     const qtyRec = parseFloat(document.getElementById(`qty-rec-${i}`)?.value)||0;
     const colorRec = document.getElementById(`color-rec-${i}`)?.value||item.color||'';
     const qtyDesvio = qtyRec < pendiente;
-    const colorDesvio = colorRec && item.color && colorRec !== item.color;
+    const colorDesvio = !!(colorRec && item.color && colorRec !== item.color);
     return {
       oc_item_id: item.id,
       sku_id: item.sku_id,
@@ -511,7 +511,7 @@ function procesarRecepcion(){
       cantidad_recibida: qtyRec,
       color_esperado: item.color||'',
       color_recibido: colorRec,
-      tiene_desvio: qtyDesvio || colorDesvio,
+      tiene_desvio: !!(qtyDesvio || colorDesvio),
       desvio_detalle: qtyDesvio
         ? `Recibido ${qtyRec} de ${pendiente} esperados${colorDesvio?' · color '+colorRec+' vs '+item.color:''}`
         : colorDesvio ? `Color recibido: ${colorRec} vs pedido: ${item.color}` : '',
@@ -566,7 +566,7 @@ async function confirmarRecepcion(){
       recepcion_numero: recNum,
       tipo: esParcial?'parcial':'total',
       estado: 'confirmada',
-      tiene_desvios: hayDesvios,
+      tiene_desvios: hayDesvios ? true : false,
       observaciones: document.getElementById('rec-observaciones').value||null
     }]);
     const recId = recRes[0].id;
@@ -579,7 +579,7 @@ async function confirmarRecepcion(){
       cantidad_recibida: i.cantidad_recibida,
       color_esperado: i.color_esperado||null,
       color_recibido: i.color_recibido||null,
-      tiene_desvio: i.tiene_desvio,
+      tiene_desvio: i.tiene_desvio ? true : false,
       desvio_detalle: i.desvio_detalle||null,
       ingresado_a_stock: false
     })));
@@ -603,7 +603,7 @@ async function confirmarRecepcion(){
       await api('alertas_gerencia','POST',[{
         tipo: 'desvio_recepcion',
         mensaje: `Recepción ${recNum} (OC ${ocActual.oc_numero}) con desvíos: ${detalleAlerta}`,
-        leida: false
+        leida: false,
       }]);
     }
 
