@@ -350,7 +350,7 @@ async function checkConnection(){
 async function loadPendientes(){
   try{
     // OCs aprobadas o con recepción parcial — SIN datos de proveedor ni precio
-    const ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago&order=created_at.asc');
+    const ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago,proveedores(razon_social)&order=created_at.asc');
 
     // Contar items por OC
     for(let oc of ocs){
@@ -378,13 +378,14 @@ async function loadPendientes(){
       const fecha = new Date(oc.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
       const diasAtras = Math.floor((Date.now()-new Date(oc.created_at))/(1000*60*60*24));
       const esParcial = oc.estado==='recibida_parcial';
+      const insumosStr = oc._items.map(i=>`${i.nombre}${i.color?' ('+i.color+')':''} x${i.cantidad-(i.cantidad_recibida||0)}`).join(', ');
       return `<div class="oc-card ${esParcial?'parcial':''}" onclick="abrirRecepcion(${oc.id})">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <div class="oc-numero">${oc.oc_numero}</div>
-            <div class="oc-items-count">${oc._items.length} insumo${oc._items.length!==1?'s':''} · ${oc._pendientes} unid. pendientes</div>
-            <div class="oc-meta">${oc.condicion_pago||'—'}</div>
-            <div class="oc-fecha">${fecha} · hace ${diasAtras} día${diasAtras!==1?'s':''}</div>
+            <div class="oc-numero">${oc.oc_numero} · ${fecha}</div>
+            <div style="font-size:14px;font-weight:600;margin:2px 0;">${oc.proveedores?.razon_social||'—'}</div>
+            <div style="font-size:12px;color:var(--text2);margin:3px 0;">${insumosStr}</div>
+            <div class="oc-fecha">hace ${diasAtras} día${diasAtras!==1?'s':''} · ${oc.condicion_pago||'—'}</div>
           </div>
           <span class="badge ${esParcial?'blue':'amber'}">${esParcial?'Parcial pendiente':'En espera'}</span>
         </div>
@@ -398,6 +399,8 @@ async function loadPendientes(){
 // ─── ABRIR RECEPCIÓN ────────────────────────────────────────
 async function abrirRecepcion(ocId){
   try{
+    // Limpiar etiquetas de recepción anterior
+    etiquetasGeneradas = [];
     ocActual = await api(`ordenes_compra?id=eq.${ocId}&select=id,oc_numero,estado,created_at&limit=1`);
     ocActual = ocActual[0];
 
@@ -424,8 +427,10 @@ async function abrirRecepcion(ocId){
 
 function renderItemsRecepcion(){
   const el = document.getElementById('rec-items-list');
+  const esParcial = ocActual?.estado === 'recibida_parcial';
   el.innerHTML = itemsActual.map((item,i)=>{
-    const pendiente = item.cantidad - (item.cantidad_recibida||0);
+    const yaRecibido = item.cantidad_recibida||0;
+    const pendiente = item.cantidad - yaRecibido;
     const hasVariantes = item._variantes?.length > 0;
 
     const colorSelect = hasVariantes
@@ -437,17 +442,25 @@ function renderItemsRecepcion(){
         <div class="rec-esperado">Esperado: ${item.color||'Sin color'}</div>`
       : `<div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">Sin variante</div>`;
 
+    const historialBloque = (esParcial && yaRecibido > 0)
+      ? `<div style="display:flex;gap:16px;margin-bottom:10px;padding:8px 10px;background:var(--surface3);border-radius:6px;font-size:11px;font-family:'DM Mono',monospace;">
+          <span style="color:var(--text3);">Pedido original: <strong style="color:var(--text);">${item.cantidad}</strong></span>
+          <span style="color:var(--green);">Ya recibido: <strong>${yaRecibido}</strong></span>
+          <span style="color:var(--amber);">Pendiente hoy: <strong>${pendiente}</strong></span>
+        </div>` : '';
+
     return `<div class="rec-item" id="rec-item-${i}">
       <div class="rec-item-nombre">${item.nombre}
         ${item.skus?.tracking==='uid'?'<span style="font-size:10px;color:var(--blue);margin-left:6px;font-family:\'DM Mono\',monospace;">UID</span>':''}
       </div>
+      ${historialBloque}
       <div class="rec-item-grid">
         <div class="rec-field">
-          <div class="rec-label">Cantidad esperada</div>
+          <div class="rec-label">${esParcial?'Pendiente a recibir':'Cantidad esperada'}</div>
           <div style="font-size:16px;font-weight:600;font-family:'DM Mono',monospace;color:var(--text3);">${pendiente}</div>
         </div>
         <div class="rec-field">
-          <div class="rec-label">Cantidad recibida</div>
+          <div class="rec-label">Cantidad recibida hoy</div>
           <input class="rec-input" type="number" id="qty-rec-${i}" value="${pendiente}" min="0" max="${pendiente}"
             oninput="checkDesvio(${i})">
         </div>
@@ -581,7 +594,7 @@ async function confirmarRecepcion(){
       color_recibido: i.color_recibido||null,
       tiene_desvio: i.tiene_desvio ? true : false,
       desvio_detalle: i.desvio_detalle||null,
-      ingresado_a_stock: !!0
+      ingresado_a_stock: false
     })));
 
     // Actualizar cantidad_recibida en oc_items
@@ -714,7 +727,17 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
         <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);">${etiquetasGeneradas.length}</div>
       </div>
     </div>
-    ${esParcial?'<div style="font-size:12px;color:var(--amber);padding:8px 12px;background:var(--amber-dim);border-radius:6px;border:1px solid var(--amber-border);">⏳ La OC queda abierta — pendiente de saldo a recepcionar</div>':''}
+    ${esParcial ? (() => {
+      const pendientesDetalle = recepcionItems
+        .filter(i => i.cantidad_recibida < i.cantidad_esperada)
+        .map(i => `<div style="padding:3px 0;font-size:12px;">• <strong>${i.nombre}</strong>: recibido ${i.cantidad_recibida} de ${i.cantidad_esperada} — faltan <strong style="color:var(--amber);">${i.cantidad_esperada - i.cantidad_recibida}</strong></div>`)
+        .join('');
+      return `<div style="padding:12px 14px;background:var(--amber-dim);border-radius:6px;border:1px solid var(--amber-border);margin-top:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:8px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;">⏳ OC abierta — saldo pendiente de recepción</div>
+        ${pendientesDetalle}
+        <div style="font-size:10px;color:var(--text3);margin-top:8px;">La OC permanecerá abierta hasta recibir el saldo o ser cerrada por Compras con desvío autorizado.</div>
+      </div>`;
+    })() : ''}
   `;
 
   if(etiquetasGeneradas.length){

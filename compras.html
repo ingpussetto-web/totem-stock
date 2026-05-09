@@ -536,6 +536,27 @@ textarea.form-input{resize:vertical;min-height:70px;}
   </div>
 </div>
 
+
+<!-- MODAL CERRAR CON DESVÍO -->
+<div class="modal-bg" id="modal-desvio">
+  <div class="modal" style="width:560px;">
+    <div class="modal-title">
+      <span>Cerrar OC con desvío autorizado</span>
+      <button class="modal-close" onclick="closeModal('modal-desvio')">×</button>
+    </div>
+    <div class="modal-sub">Esta acción cierra la OC definitivamente aunque no se haya recibido todo lo pedido.</div>
+    <div id="desvio-pendientes-resumen" style="margin-bottom:14px;padding:12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);font-size:12px;"></div>
+    <div class="form-group">
+      <label class="form-label">Justificación <span style="color:var(--red);">*</span></label>
+      <textarea class="form-input" id="desvio-justificacion" placeholder="Ej: El proveedor confirmó que no enviará el saldo. Se acepta la entrega parcial como definitiva." style="min-height:80px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-desvio')">Cancelar</button>
+      <button class="btn amber" onclick="confirmarCierreDesvio()">⚠ Confirmar cierre con desvío</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -603,6 +624,27 @@ async function loadOCs(){
     ocs = await api('ordenes_compra?select=*,proveedores(razon_social,contacto,telefono,mail)&order=created_at.desc').catch(()=>[]);
     // Asegurar campos nuevos con defaults si vienen null
     ocs.forEach(o=>{ if(!o.pago_estado) o.pago_estado='pendiente'; });
+    // Cargar items para todas las OCs (resumen en card)
+    for(const o of ocs){
+      try{
+        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
+        o._itemsTodos = items||[];
+      }catch(e){ o._itemsTodos=[]; }
+    }
+    // Cargar pendientes y desvíos para OCs parciales
+    for(const o of ocs.filter(x=>x.estado==='recibida_parcial')){
+      try{
+        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
+        o._itemsTodos = items||[];
+        o._itemsPendientes = (items||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
+        // Buscar desvíos en recepcion_items
+        const ocItemIds = (items||[]).map(i=>i.id).join(',');
+        if(ocItemIds){
+          const recItems = await api(`recepcion_items?oc_item_id=in.(${ocItemIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+          o._desvios = recItems||[];
+        } else { o._desvios=[]; }
+      }catch(e){ o._itemsPendientes=[]; o._desvios=[]; }
+    }
     document.getElementById('m-borrador').textContent = ocs.filter(o=>o.estado==='borrador').length;
     document.getElementById('m-aprobada').textContent = ocs.filter(o=>o.estado==='aprobada').length;
     document.getElementById('m-parcial').textContent = ocs.filter(o=>o.estado==='recibida_parcial').length;
@@ -629,12 +671,33 @@ function renderOCs(){
     const totalFmt=o.total_neto?(o.moneda==='USD'?'USD '+Number(o.total_neto).toLocaleString('es-AR'):'$'+Number(o.total_neto).toLocaleString('es-AR')):'—';
     const pagada=o.pago_estado==='pagada';
     const tieneFactura=!!o.factura_url;
+    // Panel pendientes
+    const pendientesHtml = o.estado==='recibida_parcial' && o._itemsPendientes?.length
+      ? `<div style="margin-top:8px;padding:10px 12px;background:var(--blue-dim);border:1px solid var(--blue-border);border-radius:var(--radius);">
+          <div style="font-size:9px;color:var(--blue);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">⏳ Pendiente de recepción</div>
+          ${o._itemsPendientes.map(i=>`<div style="font-size:12px;padding:2px 0;">• ${i.nombre}${i.color?' ('+i.color+')':''}: faltan <strong>${i.cantidad-(i.cantidad_recibida||0)}</strong> de ${i.cantidad}</div>`).join('')}
+        </div>` : '';
+    // Panel desvíos
+    const desviosHtml = o._desvios?.length
+      ? `<div style="margin-top:6px;padding:10px 12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);">
+          <div style="font-size:9px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">⚠ Desvíos detectados en recepción</div>
+          ${o._desvios.map(d=>{
+            const parts=[];
+            if(d.cantidad_recibida<d.cantidad_esperada) parts.push(`cantidad: recibido ${d.cantidad_recibida} de ${d.cantidad_esperada}`);
+            if(d.color_recibido&&d.color_esperado&&d.color_recibido!==d.color_esperado) parts.push(`color: pedido ${d.color_esperado}, recibido ${d.color_recibido}`);
+            return `<div style="font-size:12px;padding:2px 0;">• ${d.nombre}: ${parts.join(' · ')}</div>`;
+          }).join('')}
+        </div>` : '';
+    // Insumos de la OC para mostrar en header
+    const insumosResumen = o._itemsTodos?.length
+      ? o._itemsTodos.map(i=>`${i.nombre}${i.color?' ('+i.color+')':''} x${i.cantidad}`).join(', ')
+      : '';
     return `<div class="oc-card ${o.estado}">
       <div class="oc-header">
         <div>
           <div class="oc-numero">${o.oc_numero} · ${fecha}</div>
           <div class="oc-proveedor">${o.proveedores?.razon_social||'—'}</div>
-          <div class="oc-meta">${o.proveedores?.contacto||''} ${o.condicion_pago?'· '+o.condicion_pago:''}</div>
+          <div class="oc-meta">${insumosResumen||o.proveedores?.contacto||''} ${o.condicion_pago?'· '+o.condicion_pago:''}</div>
         </div>
         <div style="text-align:right;">
           <span class="badge ${o.estado}">${estadoLabel[o.estado]||o.estado}</span>
@@ -662,8 +725,11 @@ function renderOCs(){
         <button class="btn sm" onclick="previsualizarOC(${o.id})">👁 Ver OC</button>
         ${o.estado==='borrador'?`<button class="btn sm solid-green" onclick="aprobarOCDirecto(${o.id})">✓ Aprobar</button>`:''}
         ${o.estado==='aprobada'||o.estado==='recibida_parcial'?`<button class="btn sm blue" onclick="compartirOCId(${o.id})">📱 Compartir</button>`:''}
+        ${o.estado==='recibida_parcial'?`<button class="btn sm amber" onclick="cerrarConDesvio(${o.id})">⚠ Cerrar con desvío</button>`:''}
         ${o.estado!=='cancelada'&&o.estado!=='cerrada'?`<button class="btn sm red" onclick="cancelarOC(${o.id})">✕ Cancelar</button>`:''}
       </div>
+      ${pendientesHtml}
+      ${desviosHtml}
     </div>`;
   }).join('');
 }
@@ -1250,6 +1316,43 @@ async function enviarFacturaPagos(ocId){
     `Saludos, Totem Nube.`
   );
   window.open(`https://wa.me/549${WA_PAGOS}?text=${msg}`,'_blank');
+}
+
+// ─── CERRAR CON DESVÍO ───────────────────────────────────────
+let ocCerrandoDesvioId = null;
+
+async function cerrarConDesvio(ocId){
+  ocCerrandoDesvioId = ocId;
+  const oc = ocs.find(o=>o.id===ocId);
+  // Mostrar resumen de pendientes
+  const items = oc?._itemsPendientes || [];
+  document.getElementById('desvio-pendientes-resumen').innerHTML = items.length
+    ? `<div style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:6px;">Insumos que quedarán sin recibir:</div>`+
+      items.map(i=>`<div style="padding:2px 0;">• ${i.nombre}: <strong>${i.cantidad-(i.cantidad_recibida||0)}</strong> unidades pendientes</div>`).join('')
+    : '<div>Sin detalle disponible.</div>';
+  document.getElementById('desvio-justificacion').value = '';
+  openModal('modal-desvio');
+}
+
+async function confirmarCierreDesvio(){
+  const justif = document.getElementById('desvio-justificacion').value.trim();
+  if(!justif){ toast('Ingresá una justificación'); return; }
+  try{
+    await api(`ordenes_compra?id=eq.${ocCerrandoDesvioId}`,'PATCH',{
+      estado:'cerrada',
+      observaciones: `[CERRADA CON DESVÍO AUTORIZADO] ${justif}`,
+      updated_at: new Date().toISOString()
+    });
+    // Registrar alerta en gerencia
+    await api('alertas_gerencia','POST',[{
+      tipo:'cierre_con_desvio',
+      mensaje:`OC cerrada con desvío autorizado por Compras. Justificación: ${justif}`,
+      leida: false
+    }]);
+    closeModal('modal-desvio');
+    toast('OC cerrada con desvío registrado ✓');
+    loadOCs();
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 // ─── PROVEEDORES ─────────────────────────────────────────────
