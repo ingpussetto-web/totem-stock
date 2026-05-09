@@ -581,7 +581,7 @@ async function confirmarRecepcion(){
       color_recibido: i.color_recibido||null,
       tiene_desvio: i.tiene_desvio ? true : false,
       desvio_detalle: i.desvio_detalle||null,
-      ingresado_a_stock: false
+      ingresado_a_stock: !!0
     })));
 
     // Actualizar cantidad_recibida en oc_items
