@@ -639,7 +639,7 @@ async function loadOCs(){
         // Desvíos de todas las recepciones de esta OC
         const recIds = (recs||[]).map(r=>r.id).join(',');
         if(recIds){
-          const desvios = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+          const desvios = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=is.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
           o._desvios = desvios||[];
         } else { o._desvios=[]; }
       }catch(e){ o._recepciones=[]; o._desvios=[]; }
@@ -654,7 +654,7 @@ async function loadOCs(){
         const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id`);
         const recIds = (recs||[]).map(r=>r.id).join(',');
         if(recIds){
-          const recItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+          const recItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=is.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
           o._desvios = recItems||[];
         } else { o._desvios=[]; }
       }catch(e){ o._itemsPendientes=[]; o._desvios=[]; }
