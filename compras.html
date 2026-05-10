@@ -539,15 +539,27 @@ textarea.form-input{resize:vertical;min-height:70px;}
 
 <!-- MODAL CERRAR CON DESVÍO -->
 <div class="modal-bg" id="modal-desvio">
-  <div class="modal" style="width:560px;">
+  <div class="modal" style="width:640px;max-height:90vh;overflow-y:auto;">
     <div class="modal-title">
       <span>Cerrar OC con desvío autorizado</span>
       <button class="modal-close" onclick="closeModal('modal-desvio')">×</button>
     </div>
-    <div class="modal-sub">Esta acción cierra la OC definitivamente aunque no se haya recibido todo lo pedido.</div>
-    <div id="desvio-pendientes-resumen" style="margin-bottom:14px;padding:12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);font-size:12px;"></div>
+    <div class="modal-sub">Esta acción cierra la OC definitivamente aunque no se haya recibido todo lo pedido. Revisá el detalle antes de confirmar.</div>
+
+    <!-- Insumos pendientes de recibir -->
+    <div id="desvio-pendientes-resumen" style="margin-bottom:10px;padding:12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);font-size:12px;"></div>
+
+    <!-- Desvíos detectados por depósito -->
+    <div id="desvio-desvios-detalle" style="margin-bottom:10px;display:none;padding:12px;background:var(--red-dim,#2a1515);border:1px solid var(--red-border,#6b2f2f);border-radius:var(--radius);font-size:12px;"></div>
+
+    <!-- Historial de recepciones -->
+    <div id="desvio-historial-recs" style="margin-bottom:10px;display:none;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;"></div>
+
+    <!-- Observaciones de depósito -->
+    <div id="desvio-obs-deposito" style="margin-bottom:14px;display:none;padding:12px;background:var(--blue-dim);border:1px solid var(--blue-border);border-radius:var(--radius);font-size:12px;"></div>
+
     <div class="form-group">
-      <label class="form-label">Justificación <span style="color:var(--red);">*</span></label>
+      <label class="form-label">Justificación del cierre <span style="color:var(--red);">*</span></label>
       <textarea class="form-input" id="desvio-justificacion" placeholder="Ej: El proveedor confirmó que no enviará el saldo. Se acepta la entrega parcial como definitiva." style="min-height:80px;"></textarea>
     </div>
     <div class="modal-actions">
@@ -715,6 +727,11 @@ function renderOCs(){
         return parts.length?'<div style="font-size:11px;padding:2px 0;color:var(--amber);">• '+d.nombre+': '+parts.join(' · ')+'</div>':'';
       }).filter(Boolean).join('');
       if(desviosLines) html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">'+desviosLines+'</div>';
+      // Mostrar justificación/observaciones del cierre si existe
+      if(o.observaciones){
+        const obsText = o.observaciones.replace(/\n/g,'<br>');
+        html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:11px;color:var(--amber);">'+obsText+'</div>';
+      }
       html += '</div>';
       return html;
     })() : '';
@@ -1366,12 +1383,87 @@ let ocCerrandoDesvioId = null;
 async function cerrarConDesvio(ocId){
   ocCerrandoDesvioId = ocId;
   const oc = ocs.find(o=>o.id===ocId);
-  // Mostrar resumen de pendientes
-  const items = oc?._itemsPendientes || [];
-  document.getElementById('desvio-pendientes-resumen').innerHTML = items.length
-    ? `<div style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:6px;">Insumos que quedarán sin recibir:</div>`+
-      items.map(i=>`<div style="padding:2px 0;">• ${i.nombre}: <strong>${i.cantidad-(i.cantidad_recibida||0)}</strong> unidades pendientes</div>`).join('')
-    : '<div>Sin detalle disponible.</div>';
+
+  // --- Panel 1: Insumos pedidos vs recibidos (pendientes) ---
+  const items = oc?._itemsTodos || [];
+  const elPend = document.getElementById('desvio-pendientes-resumen');
+  if(items.length){
+    let html = '<div style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">📦 Insumos: pedido vs recibido</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    html += '<tr style="color:var(--text3);font-size:10px;"><td style="padding:2px 4px;">Insumo</td><td style="padding:2px 4px;text-align:center;">Pedido</td><td style="padding:2px 4px;text-align:center;">Recibido</td><td style="padding:2px 4px;text-align:center;">Pendiente</td></tr>';
+    items.forEach(i=>{
+      const pend = i.cantidad - (i.cantidad_recibida||0);
+      const color = pend > 0 ? 'var(--amber)' : 'var(--green)';
+      html += `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:4px;">${i.nombre}${i.color?' <span style="color:var(--text3);">('+i.color+')</span>':''}</td>
+        <td style="padding:4px;text-align:center;">${i.cantidad}</td>
+        <td style="padding:4px;text-align:center;">${i.cantidad_recibida||0}</td>
+        <td style="padding:4px;text-align:center;color:${color};font-weight:600;">${pend > 0 ? pend+' ✗' : '✓'}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    elPend.innerHTML = html;
+  } else {
+    elPend.innerHTML = '<div style="color:var(--text3);">Sin detalle de insumos disponible.</div>';
+  }
+
+  // --- Panel 2: Desvíos detectados por depósito ---
+  const elDesv = document.getElementById('desvio-desvios-detalle');
+  const desvios = oc?._desvios || [];
+  if(desvios.length){
+    let html = '<div style="font-size:10px;color:var(--red,#e05);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">⚠ Desvíos detectados por depósito</div>';
+    desvios.forEach(d=>{
+      const parts = [];
+      if(d.cantidad_recibida !== d.cantidad_esperada) parts.push(`Cantidad: esperaba ${d.cantidad_esperada}, recibió ${d.cantidad_recibida}`);
+      if(d.color_recibido && d.color_esperado && d.color_recibido !== d.color_esperado) parts.push(`Color: pedido ${d.color_esperado} → recibido ${d.color_recibido}`);
+      if(d.desvio_detalle) parts.push(`Obs. depósito: "${d.desvio_detalle}"`);
+      if(parts.length) html += `<div style="padding:4px 0;border-top:1px solid var(--border);">${d.nombre ? '<strong>'+d.nombre+'</strong><br>' : ''}${parts.map(p=>'• '+p).join('<br>')}</div>`;
+    });
+    elDesv.innerHTML = html;
+    elDesv.style.display = 'block';
+  } else {
+    elDesv.style.display = 'none';
+  }
+
+  // --- Panel 3: Historial de recepciones parciales ---
+  const elHist = document.getElementById('desvio-historial-recs');
+  try{
+    const recs = await api(`recepciones?oc_id=eq.${ocId}&select=id,recepcion_numero,tipo,tiene_desvios,created_at,observaciones&order=created_at.asc`);
+    if(recs && recs.length){
+      let html = '<div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">📋 Historial de recepciones</div>';
+      recs.forEach(r=>{
+        const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+        html += `<div style="padding:4px 0;border-top:1px solid var(--border);font-size:12px;">`;
+        html += `${r.recepcion_numero} · ${fecha} · ${r.tipo==='parcial'?'Parcial':'Total'}${r.tiene_desvios?' <span style="color:var(--amber);">⚠ con desvíos</span>':''}`;
+        if(r.observaciones) html += `<br><span style="color:var(--text3);font-size:11px;">Obs: ${r.observaciones}</span>`;
+        html += '</div>';
+      });
+      elHist.innerHTML = html;
+      elHist.style.display = 'block';
+
+      // --- Panel 4: Observaciones de depósito en recepcion_items ---
+      const recIds = recs.map(r=>r.id).join(',');
+      if(recIds){
+        const obsItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&desvio_detalle=not.is.null&select=nombre,desvio_detalle,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+        const elObs = document.getElementById('desvio-obs-deposito');
+        if(obsItems && obsItems.length){
+          let html = '<div style="font-size:10px;color:var(--blue);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">💬 Observaciones registradas por depósito</div>';
+          obsItems.forEach(o=>{
+            html += `<div style="padding:4px 0;border-top:1px solid var(--border);font-size:12px;">`;
+            if(o.nombre) html += `<strong>${o.nombre}</strong>: `;
+            html += `"${o.desvio_detalle}"</div>`;
+          });
+          elObs.innerHTML = html;
+          elObs.style.display = 'block';
+        } else {
+          elObs.style.display = 'none';
+        }
+      }
+    } else {
+      elHist.style.display = 'none';
+    }
+  }catch(e){ elHist.style.display = 'none'; }
+
   document.getElementById('desvio-justificacion').value = '';
   openModal('modal-desvio');
 }
@@ -1380,15 +1472,34 @@ async function confirmarCierreDesvio(){
   const justif = document.getElementById('desvio-justificacion').value.trim();
   if(!justif){ toast('Ingresá una justificación'); return; }
   try{
+    const oc = ocs.find(o=>o.id===ocCerrandoDesvioId);
+    // Armar resumen de desvíos para guardar en observaciones
+    const items = oc?._itemsTodos || [];
+    const pendientes = items.filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
+    const desvios = oc?._desvios || [];
+    let resumen = `[CERRADA CON DESVÍO AUTORIZADO]\nFecha: ${new Date().toLocaleDateString('es-AR')}\nJustificación: ${justif}`;
+    if(pendientes.length){
+      resumen += `\nInsumos sin recibir: `+pendientes.map(i=>`${i.nombre} (falta ${i.cantidad-(i.cantidad_recibida||0)} de ${i.cantidad})`).join('; ');
+    }
+    if(desvios.length){
+      const detDesvios = desvios.map(d=>{
+        const parts=[];
+        if(d.cantidad_recibida!==d.cantidad_esperada) parts.push(`cant: ${d.cantidad_recibida}/${d.cantidad_esperada}`);
+        if(d.color_recibido&&d.color_esperado&&d.color_recibido!==d.color_esperado) parts.push(`color: ${d.color_esperado}→${d.color_recibido}`);
+        if(d.desvio_detalle) parts.push(d.desvio_detalle);
+        return d.nombre+': '+parts.join(', ');
+      }).join('; ');
+      resumen += `\nDesvíos detectados: ${detDesvios}`;
+    }
     await api(`ordenes_compra?id=eq.${ocCerrandoDesvioId}`,'PATCH',{
       estado:'cerrada',
-      observaciones: `[CERRADA CON DESVÍO AUTORIZADO] ${justif}`,
+      observaciones: resumen,
       updated_at: new Date().toISOString()
     });
-    // Registrar alerta en gerencia
+    // Registrar alerta en gerencia con detalle completo
     await api('alertas_gerencia','POST',[{
       tipo:'cierre_con_desvio',
-      mensaje:`OC cerrada con desvío autorizado por Compras. Justificación: ${justif}`,
+      mensaje: resumen,
       leida: false
     }]);
     closeModal('modal-desvio');
