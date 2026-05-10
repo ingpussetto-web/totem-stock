@@ -538,6 +538,20 @@ textarea.form-input{resize:vertical;min-height:70px;}
 
 
 <!-- MODAL CERRAR CON DESVÍO -->
+<div class="modal-bg" id="modal-ver-desvios">
+  <div class="modal" style="width:640px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span>⚠ Desvíos registrados</span>
+      <button class="modal-close" onclick="closeModal('modal-ver-desvios')">×</button>
+    </div>
+    <div class="modal-sub">Historial de desvíos detectados en recepciones de esta OC.</div>
+    <div id="ver-desvios-contenido"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-ver-desvios')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal-desvio">
   <div class="modal" style="width:640px;max-height:90vh;overflow-y:auto;">
     <div class="modal-title">
@@ -643,33 +657,23 @@ async function loadOCs(){
         o._itemsTodos = items||[];
       }catch(e){ o._itemsTodos=[]; }
     }
-    // Cargar historial de recepciones para OCs cerradas
-    for(const o of ocs.filter(x=>x.estado==='cerrada')){
+    // Cargar recepciones y desvíos para todas las OCs con alguna recepción posible
+    for(const o of ocs.filter(x=>x.estado!=='borrador'&&x.estado!=='cancelada')){
       try{
-        const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id,recepcion_numero,tipo,tiene_desvios,created_at&order=created_at.asc`);
+        const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id,recepcion_numero,tipo,tiene_desvios,created_at,observaciones&order=created_at.asc`);
         o._recepciones = recs||[];
-        // Desvíos de todas las recepciones de esta OC
+        o._tieneDesvios = (recs||[]).some(r=>r.tiene_desvios);
+        // Cargar detalle de desvíos si los hay
         const recIds = (recs||[]).map(r=>r.id).join(',');
-        if(recIds){
-          const desvios = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+        if(recIds && o._tieneDesvios){
+          const desvios = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,desvio_detalle`);
           o._desvios = desvios||[];
         } else { o._desvios=[]; }
-      }catch(e){ o._recepciones=[]; o._desvios=[]; }
-    }
-    // Cargar pendientes y desvíos para OCs parciales
-    for(const o of ocs.filter(x=>x.estado==='recibida_parcial')){
-      try{
-        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
-        o._itemsTodos = items||[];
-        o._itemsPendientes = (items||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
-        // Buscar desvíos via recepciones de esta OC
-        const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id`);
-        const recIds = (recs||[]).map(r=>r.id).join(',');
-        if(recIds){
-          const recItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
-          o._desvios = recItems||[];
-        } else { o._desvios=[]; }
-      }catch(e){ o._itemsPendientes=[]; o._desvios=[]; }
+        // Pendientes solo para parciales
+        if(o.estado==='recibida_parcial'){
+          o._itemsPendientes = (o._itemsTodos||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
+        }
+      }catch(e){ o._recepciones=[]; o._desvios=[]; o._tieneDesvios=false; }
     }
     document.getElementById('m-borrador').textContent = ocs.filter(o=>o.estado==='borrador').length;
     document.getElementById('m-aprobada').textContent = ocs.filter(o=>o.estado==='aprobada').length;
@@ -783,7 +787,7 @@ function renderOCs(){
         <button class="btn sm" onclick="previsualizarOC(${o.id})">👁 Ver OC</button>
         ${o.estado==='borrador'?`<button class="btn sm solid-green" onclick="aprobarOCDirecto(${o.id})">✓ Aprobar</button>`:''}
         ${o.estado==='aprobada'||o.estado==='recibida_parcial'?`<button class="btn sm blue" onclick="compartirOCId(${o.id})">📱 Compartir</button>`:''}
-        ${o.estado==='recibida_parcial'?`<button class="btn sm amber" onclick="cerrarConDesvio(${o.id})">⚠ Cerrar con desvío</button>`:''}
+        ${o._tieneDesvios?`<button class="btn sm amber" onclick="verDesvios(${o.id})">⚠ Ver desvíos</button>`:''}        ${o.estado==='recibida_parcial'?`<button class="btn sm amber" onclick="cerrarConDesvio(${o.id})">⚠ Cerrar con desvío</button>`:''}
         ${o.estado!=='cancelada'&&o.estado!=='cerrada'?`<button class="btn sm red" onclick="cancelarOC(${o.id})">✕ Cancelar</button>`:''}
       </div>
       ${pendientesHtml}
@@ -1379,6 +1383,61 @@ async function enviarFacturaPagos(ocId){
 
 // ─── CERRAR CON DESVÍO ───────────────────────────────────────
 let ocCerrandoDesvioId = null;
+
+async function verDesvios(ocId){
+  const oc = ocs.find(o=>o.id===ocId);
+  const el = document.getElementById('ver-desvios-contenido');
+  let html = '';
+
+  // Recepciones con desvíos
+  const recs = (oc._recepciones||[]).filter(r=>r.tiene_desvios);
+  if(recs.length){
+    html += '<div style="margin-bottom:10px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">';
+    html += '<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">📋 Recepciones con desvíos</div>';
+    recs.forEach(r=>{
+      const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+      html += `<div style="padding:3px 0;">${r.recepcion_numero} · ${fecha} · ${r.tipo==='parcial'?'Parcial':'Total'}`;
+      if(r.observaciones) html += ` <span style="color:var(--text3);">— ${r.observaciones}</span>`;
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Detalle de ítems con desvío
+  const desvios = oc._desvios||[];
+  if(desvios.length){
+    html += '<div style="margin-bottom:10px;padding:12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);font-size:12px;">';
+    html += '<div style="font-size:10px;color:var(--amber);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">⚠ Detalle de desvíos por ítem</div>';
+    html += '<table style="width:100%;border-collapse:collapse;">';
+    html += '<tr style="font-size:10px;color:var(--text3);"><td style="padding:2px 4px;">Insumo</td><td style="padding:2px 4px;text-align:center;">Esp.</td><td style="padding:2px 4px;text-align:center;">Rec.</td><td style="padding:2px 4px;">Color esp.</td><td style="padding:2px 4px;">Color rec.</td></tr>';
+    desvios.forEach(d=>{
+      const cantDesvio = d.cantidad_recibida !== d.cantidad_esperada;
+      const colorDesvio = d.color_recibido && d.color_esperado && d.color_recibido !== d.color_esperado;
+      html += `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:4px;">${d.nombre||'—'}</td>
+        <td style="padding:4px;text-align:center;">${d.cantidad_esperada}</td>
+        <td style="padding:4px;text-align:center;${cantDesvio?'color:var(--amber);font-weight:600;':''}">${d.cantidad_recibida}</td>
+        <td style="padding:4px;${colorDesvio?'color:var(--amber);':''}">${d.color_esperado||'—'}</td>
+        <td style="padding:4px;${colorDesvio?'color:var(--amber);font-weight:600;':''}">${d.color_recibido||'—'}</td>
+      </tr>`;
+      if(d.desvio_detalle) html += `<tr><td colspan="5" style="padding:2px 4px 6px;font-size:11px;color:var(--text3);">💬 ${d.desvio_detalle}</td></tr>`;
+    });
+    html += '</table></div>';
+  }
+
+  // Observaciones del cierre (si la OC fue cerrada con desvío)
+  if(oc.observaciones && oc.observaciones.includes('CERRADA CON DESVÍO')){
+    html += '<div style="margin-bottom:10px;padding:12px;background:var(--red-dim,#2a1515);border:1px solid var(--red-border,#6b2f2f);border-radius:var(--radius);font-size:12px;">';
+    html += '<div style="font-size:10px;color:var(--red,#e05555);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">🔒 Cierre con desvío autorizado</div>';
+    html += oc.observaciones.replace(/
+/g,'<br>');
+    html += '</div>';
+  }
+
+  if(!html) html = '<div style="color:var(--text3);padding:12px;">Sin detalle de desvíos disponible.</div>';
+  el.innerHTML = html;
+  openModal('modal-ver-desvios');
+}
 
 async function cerrarConDesvio(ocId){
   ocCerrandoDesvioId = ocId;
