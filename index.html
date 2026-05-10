@@ -365,6 +365,15 @@ function updateClock(){
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// Anti-caché: agregar timestamp a todos los links de módulos al hacer click
+document.querySelectorAll('a.mod-card').forEach(a => {
+  a.addEventListener('click', function(e) {
+    e.preventDefault();
+    const url = this.href.split('?')[0] + '?v=' + Date.now();
+    window.open(url, '_blank');
+  });
+});
 </script>
 </body>
 </html>
