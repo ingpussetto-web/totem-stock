@@ -1388,7 +1388,7 @@ async function cerrarConDesvio(ocId){
   const items = oc?._itemsTodos || [];
   const elPend = document.getElementById('desvio-pendientes-resumen');
   if(items.length){
-    let html = '<div style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">📦 Insumos: pedido vs recibido</div>';
+    let html = '<div style="font-size:10px;color:var(--amber);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">📦 Insumos: pedido vs recibido</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
     html += '<tr style="color:var(--text3);font-size:10px;"><td style="padding:2px 4px;">Insumo</td><td style="padding:2px 4px;text-align:center;">Pedido</td><td style="padding:2px 4px;text-align:center;">Recibido</td><td style="padding:2px 4px;text-align:center;">Pendiente</td></tr>';
     items.forEach(i=>{
@@ -1411,7 +1411,7 @@ async function cerrarConDesvio(ocId){
   const elDesv = document.getElementById('desvio-desvios-detalle');
   const desvios = oc?._desvios || [];
   if(desvios.length){
-    let html = '<div style="font-size:10px;color:var(--red,#e05);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">⚠ Desvíos detectados por depósito</div>';
+    let html = '<div style="font-size:10px;color:var(--red,#e05);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">⚠ Desvíos detectados por depósito</div>';
     desvios.forEach(d=>{
       const parts = [];
       if(d.cantidad_recibida !== d.cantidad_esperada) parts.push(`Cantidad: esperaba ${d.cantidad_esperada}, recibió ${d.cantidad_recibida}`);
@@ -1430,7 +1430,7 @@ async function cerrarConDesvio(ocId){
   try{
     const recs = await api(`recepciones?oc_id=eq.${ocId}&select=id,recepcion_numero,tipo,tiene_desvios,created_at,observaciones&order=created_at.asc`);
     if(recs && recs.length){
-      let html = '<div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">📋 Historial de recepciones</div>';
+      let html = '<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">📋 Historial de recepciones</div>';
       recs.forEach(r=>{
         const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
         html += `<div style="padding:4px 0;border-top:1px solid var(--border);font-size:12px;">`;
@@ -1447,7 +1447,7 @@ async function cerrarConDesvio(ocId){
         const obsItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&desvio_detalle=not.is.null&select=nombre,desvio_detalle,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
         const elObs = document.getElementById('desvio-obs-deposito');
         if(obsItems && obsItems.length){
-          let html = '<div style="font-size:10px;color:var(--blue);font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:8px;">💬 Observaciones registradas por depósito</div>';
+          let html = '<div style="font-size:10px;color:var(--blue);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">💬 Observaciones registradas por depósito</div>';
           obsItems.forEach(o=>{
             html += `<div style="padding:4px 0;border-top:1px solid var(--border);font-size:12px;">`;
             if(o.nombre) html += `<strong>${o.nombre}</strong>: `;
