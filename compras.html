@@ -657,23 +657,9 @@ async function loadOCs(){
         o._itemsTodos = items||[];
       }catch(e){ o._itemsTodos=[]; }
     }
-    // Cargar recepciones y desvíos para todas las OCs con alguna recepción posible
-    for(const o of ocs.filter(x=>x.estado!=='borrador'&&x.estado!=='cancelada')){
-      try{
-        const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id,recepcion_numero,tipo,tiene_desvios,created_at,observaciones&order=created_at.asc`);
-        o._recepciones = recs||[];
-        o._tieneDesvios = (recs||[]).some(r=>r.tiene_desvios);
-        // Cargar detalle de desvíos si los hay
-        const recIds = (recs||[]).map(r=>r.id).join(',');
-        if(recIds && o._tieneDesvios){
-          const allItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio,desvio_detalle`);
-          o._desvios = (allItems||[]).filter(i=>i.tiene_desvio);
-        } else { o._desvios=[]; }
-        // Pendientes solo para parciales
-        if(o.estado==='recibida_parcial'){
-          o._itemsPendientes = (o._itemsTodos||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
-        }
-      }catch(e){ o._recepciones=[]; o._desvios=[]; o._tieneDesvios=false; }
+    // Calcular pendientes para OCs parciales (sin queries extra)
+    for(const o of ocs.filter(x=>x.estado==='recibida_parcial')){
+      o._itemsPendientes = (o._itemsTodos||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
     }
     document.getElementById('m-borrador').textContent = ocs.filter(o=>o.estado==='borrador').length;
     document.getElementById('m-aprobada').textContent = ocs.filter(o=>o.estado==='aprobada').length;
@@ -787,7 +773,7 @@ function renderOCs(){
         <button class="btn sm" onclick="previsualizarOC(${o.id})">👁 Ver OC</button>
         ${o.estado==='borrador'?`<button class="btn sm solid-green" onclick="aprobarOCDirecto(${o.id})">✓ Aprobar</button>`:''}
         ${o.estado==='aprobada'||o.estado==='recibida_parcial'?`<button class="btn sm blue" onclick="compartirOCId(${o.id})">📱 Compartir</button>`:''}
-        ${o._tieneDesvios?`<button class="btn sm amber" onclick="verDesvios(${o.id})">⚠ Ver desvíos</button>`:''}        ${o.estado==='recibida_parcial'?`<button class="btn sm amber" onclick="cerrarConDesvio(${o.id})">⚠ Cerrar con desvío</button>`:''}
+        ${(o.estado==='cerrada'||o.estado==='recibida_parcial')?`<button class="btn sm amber" onclick="verDesvios(${o.id})">⚠ Ver desvíos</button>`:''}        ${o.estado==='recibida_parcial'?`<button class="btn sm amber" onclick="cerrarConDesvio(${o.id})">⚠ Cerrar con desvío</button>`:''}
         ${o.estado!=='cancelada'&&o.estado!=='cerrada'?`<button class="btn sm red" onclick="cancelarOC(${o.id})">✕ Cancelar</button>`:''}
       </div>
       ${pendientesHtml}
