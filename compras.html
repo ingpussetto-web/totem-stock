@@ -666,8 +666,8 @@ async function loadOCs(){
         // Cargar detalle de desvíos si los hay
         const recIds = (recs||[]).map(r=>r.id).join(',');
         if(recIds && o._tieneDesvios){
-          const desvios = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,desvio_detalle`);
-          o._desvios = desvios||[];
+          const allItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio,desvio_detalle`);
+          o._desvios = (allItems||[]).filter(i=>i.tiene_desvio);
         } else { o._desvios=[]; }
         // Pendientes solo para parciales
         if(o.estado==='recibida_parcial'){
@@ -1502,7 +1502,7 @@ async function cerrarConDesvio(ocId){
       // --- Panel 4: Observaciones de depósito en recepcion_items ---
       const recIds = recs.map(r=>r.id).join(',');
       if(recIds){
-        const obsItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&desvio_detalle=not.is.null&select=nombre,desvio_detalle,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+        const obsItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=nombre,desvio_detalle,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio`);
         const elObs = document.getElementById('desvio-obs-deposito');
         if(obsItems && obsItems.length){
           let html = '<div style="font-size:10px;color:var(--blue);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">💬 Observaciones registradas por depósito</div>';
