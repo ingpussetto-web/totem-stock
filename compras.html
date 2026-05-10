@@ -650,10 +650,11 @@ async function loadOCs(){
         const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
         o._itemsTodos = items||[];
         o._itemsPendientes = (items||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
-        // Buscar desvíos en recepcion_items
-        const ocItemIds = (items||[]).map(i=>i.id).join(',');
-        if(ocItemIds){
-          const recItems = await api(`recepcion_items?oc_item_id=in.(${ocItemIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+        // Buscar desvíos via recepciones de esta OC
+        const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id`);
+        const recIds = (recs||[]).map(r=>r.id).join(',');
+        if(recIds){
+          const recItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
           o._desvios = recItems||[];
         } else { o._desvios=[]; }
       }catch(e){ o._itemsPendientes=[]; o._desvios=[]; }
