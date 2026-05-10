@@ -631,6 +631,19 @@ async function loadOCs(){
         o._itemsTodos = items||[];
       }catch(e){ o._itemsTodos=[]; }
     }
+    // Cargar historial de recepciones para OCs cerradas
+    for(const o of ocs.filter(x=>x.estado==='cerrada')){
+      try{
+        const recs = await api(`recepciones?oc_id=eq.${o.id}&select=id,recepcion_numero,tipo,tiene_desvios,created_at&order=created_at.asc`);
+        o._recepciones = recs||[];
+        // Desvíos de todas las recepciones de esta OC
+        const recIds = (recs||[]).map(r=>r.id).join(',');
+        if(recIds){
+          const desvios = await api(`recepcion_items?recepcion_id=in.(${recIds})&tiene_desvio=eq.true&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida`);
+          o._desvios = desvios||[];
+        } else { o._desvios=[]; }
+      }catch(e){ o._recepciones=[]; o._desvios=[]; }
+    }
     // Cargar pendientes y desvíos para OCs parciales
     for(const o of ocs.filter(x=>x.estado==='recibida_parcial')){
       try{
@@ -677,7 +690,34 @@ function renderOCs(){
           <div style="font-size:9px;color:var(--blue);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">⏳ Pendiente de recepción</div>
           ${o._itemsPendientes.map(i=>`<div style="font-size:12px;padding:2px 0;">• ${i.nombre}${i.color?' ('+i.color+')':''}: faltan <strong>${i.cantidad-(i.cantidad_recibida||0)}</strong> de ${i.cantidad}</div>`).join('')}
         </div>` : '';
-    // Panel desvíos
+    // Panel historial cierre (para OCs cerradas)
+    const historialCierreHtml = o.estado==='cerrada' ? (() => {
+      const recs = o._recepciones||[];
+      const desvios = o._desvios||[];
+      if(!recs.length) return '';
+      const tuvoParcialesCount = recs.filter(r=>r.tipo==='parcial').length;
+      const tuvoDesvios = desvios.length > 0;
+      let html = '<div style="margin-top:8px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);">';
+      html += '<div style="font-size:9px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">';
+      html += '📋 Historial';
+      if(tuvoParcialesCount>0) html += ' · '+tuvoParcialesCount+' entrega'+(tuvoParcialesCount>1?'s':'')+' parcial'+(tuvoParcialesCount>1?'es':'');
+      if(tuvoDesvios) html += ' · Con desvíos';
+      html += '</div>';
+      recs.forEach(r=>{
+        const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+        html += '<div style="font-size:11px;padding:2px 0;">• '+r.recepcion_numero+' · '+fecha+' · '+(r.tipo==='parcial'?'Parcial':'Total')+(r.tiene_desvios?' ⚠':'')+'</div>';
+      });
+      const desviosLines = desvios.map(d=>{
+        const parts=[];
+        if(d.cantidad_recibida<d.cantidad_esperada) parts.push('cantidad: recibido '+d.cantidad_recibida+' de '+d.cantidad_esperada);
+        if(d.color_recibido&&d.color_esperado&&d.color_recibido!==d.color_esperado) parts.push('color: pedido '+d.color_esperado+' → recibido '+d.color_recibido);
+        return parts.length?'<div style="font-size:11px;padding:2px 0;color:var(--amber);">• '+d.nombre+': '+parts.join(' · ')+'</div>':'';
+      }).filter(Boolean).join('');
+      if(desviosLines) html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);">'+desviosLines+'</div>';
+      html += '</div>';
+      return html;
+    })() : '';
+    // Panel desvíos (solo para parciales activas)
     const desviosHtml = o._desvios?.length
       ? `<div style="margin-top:6px;padding:10px 12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);">
           <div style="font-size:9px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">⚠ Desvíos detectados en recepción</div>
@@ -730,6 +770,7 @@ function renderOCs(){
       </div>
       ${pendientesHtml}
       ${desviosHtml}
+      ${historialCierreHtml}
     </div>`;
   }).join('');
 }
