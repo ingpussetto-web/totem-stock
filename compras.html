@@ -1373,24 +1373,34 @@ let ocCerrandoDesvioId = null;
 async function verDesvios(ocId){
   const oc = ocs.find(o=>o.id===ocId);
   const el = document.getElementById('ver-desvios-contenido');
+  el.innerHTML = '<div style="color:var(--text3);padding:12px;">Cargando...</div>';
+  openModal('modal-ver-desvios');
   let html = '';
 
-  // Recepciones con desvíos
-  const recs = (oc._recepciones||[]).filter(r=>r.tiene_desvios);
-  if(recs.length){
-    html += '<div style="margin-bottom:10px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">';
-    html += '<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">📋 Recepciones con desvíos</div>';
-    recs.forEach(r=>{
-      const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-      html += `<div style="padding:3px 0;">${r.recepcion_numero} · ${fecha} · ${r.tipo==='parcial'?'Parcial':'Total'}`;
-      if(r.observaciones) html += ` <span style="color:var(--text3);">— ${r.observaciones}</span>`;
-      html += '</div>';
-    });
-    html += '</div>';
-  }
+  try{
+    // Buscar recepciones directo en Supabase
+    const todasRecs = await api(`recepciones?oc_id=eq.${ocId}&select=id,recepcion_numero,tipo,tiene_desvios,created_at,observaciones&order=created_at.asc`);
+    const recs = (todasRecs||[]).filter(r=>r.tiene_desvios);
 
-  // Detalle de ítems con desvío
-  const desvios = oc._desvios||[];
+    if(recs.length){
+      html += '<div style="margin-bottom:10px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">';
+      html += '<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">📋 Recepciones con desvíos</div>';
+      recs.forEach(r=>{
+        const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+        html += `<div style="padding:3px 0;">${r.recepcion_numero} · ${fecha} · ${r.tipo==='parcial'?'Parcial':'Total'}`;
+        if(r.observaciones) html += ` <span style="color:var(--text3);">— ${r.observaciones}</span>`;
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Buscar items con desvío
+    const recIds = (todasRecs||[]).map(r=>r.id).join(',');
+    let desvios = [];
+    if(recIds){
+      const allItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio,desvio_detalle`);
+      desvios = (allItems||[]).filter(i=>i.tiene_desvio);
+    }
   if(desvios.length){
     html += '<div style="margin-bottom:10px;padding:12px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);font-size:12px;">';
     html += '<div style="font-size:10px;color:var(--amber);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">⚠ Detalle de desvíos por ítem</div>';
@@ -1419,9 +1429,10 @@ async function verDesvios(ocId){
     html += '</div>';
   }
 
-  if(!html) html = '<div style="color:var(--text3);padding:12px;">Sin detalle de desvíos disponible.</div>';
+  }catch(e){ html = '<div style="color:var(--text3);padding:12px;">Error al cargar desvíos: '+e.message+'</div>'; }
+
+  if(!html) html = '<div style="color:var(--text3);padding:12px;">Sin desvíos registrados para esta OC.</div>';
   el.innerHTML = html;
-  openModal('modal-ver-desvios');
 }
 
 async function cerrarConDesvio(ocId){
