@@ -1429,8 +1429,7 @@ async function verDesvios(ocId){
   if(oc.observaciones && oc.observaciones.includes('CERRADA CON DESVÍO')){
     html += '<div style="margin-bottom:10px;padding:12px;background:var(--red-dim,#2a1515);border:1px solid var(--red-border,#6b2f2f);border-radius:var(--radius);font-size:12px;">';
     html += '<div style="font-size:10px;color:var(--red,#e05555);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">🔒 Cierre con desvío autorizado</div>';
-    html += oc.observaciones.replace(/
-/g,'<br>');
+    html += oc.observaciones.split('\n').join('<br>');
     html += '</div>';
   }
 
