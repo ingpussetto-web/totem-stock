@@ -1398,7 +1398,7 @@ async function verDesvios(ocId){
     const recIds = (todasRecs||[]).map(r=>r.id).join(',');
     let desvios = [];
     if(recIds){
-      const allItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=nombre,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio,desvio_detalle`);
+      const allItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=oc_item_id,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio,desvio_detalle,oc_items(nombre)`);
       desvios = (allItems||[]).filter(i=>i.tiene_desvio);
     }
   if(desvios.length){
@@ -1410,7 +1410,7 @@ async function verDesvios(ocId){
       const cantDesvio = d.cantidad_recibida !== d.cantidad_esperada;
       const colorDesvio = d.color_recibido && d.color_esperado && d.color_recibido !== d.color_esperado;
       html += `<tr style="border-top:1px solid var(--border);">
-        <td style="padding:4px;">${d.nombre||'—'}</td>
+        <td style="padding:4px;">${(d.oc_items&&d.oc_items.nombre)||'—'}</td>
         <td style="padding:4px;text-align:center;">${d.cantidad_esperada}</td>
         <td style="padding:4px;text-align:center;${cantDesvio?'color:var(--amber);font-weight:600;':''}">${d.cantidad_recibida}</td>
         <td style="padding:4px;${colorDesvio?'color:var(--amber);':''}">${d.color_esperado||'—'}</td>
@@ -1499,13 +1499,14 @@ async function cerrarConDesvio(ocId){
       // --- Panel 4: Observaciones de depósito en recepcion_items ---
       const recIds = recs.map(r=>r.id).join(',');
       if(recIds){
-        const obsItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=nombre,desvio_detalle,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio`);
+        const obsItems = await api(`recepcion_items?recepcion_id=in.(${recIds})&select=oc_item_id,desvio_detalle,color_esperado,color_recibido,cantidad_esperada,cantidad_recibida,tiene_desvio,oc_items(nombre)`);
         const elObs = document.getElementById('desvio-obs-deposito');
         if(obsItems && obsItems.length){
           let html = '<div style="font-size:10px;color:var(--blue);font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:8px;">💬 Observaciones registradas por depósito</div>';
           obsItems.forEach(o=>{
             html += `<div style="padding:4px 0;border-top:1px solid var(--border);font-size:12px;">`;
-            if(o.nombre) html += `<strong>${o.nombre}</strong>: `;
+            const obsNombre = (o.oc_items&&o.oc_items.nombre)||'';
+            if(obsNombre) html += `<strong>${obsNombre}</strong>: `;
             html += `"${o.desvio_detalle}"</div>`;
           });
           elObs.innerHTML = html;
@@ -1542,7 +1543,7 @@ async function confirmarCierreDesvio(){
         if(d.cantidad_recibida!==d.cantidad_esperada) parts.push(`cant: ${d.cantidad_recibida}/${d.cantidad_esperada}`);
         if(d.color_recibido&&d.color_esperado&&d.color_recibido!==d.color_esperado) parts.push(`color: ${d.color_esperado}→${d.color_recibido}`);
         if(d.desvio_detalle) parts.push(d.desvio_detalle);
-        return d.nombre+': '+parts.join(', ');
+        return ((d.oc_items&&d.oc_items.nombre)||'ítem')+': '+parts.join(', ');
       }).join('; ');
       resumen += `\nDesvíos detectados: ${detDesvios}`;
     }
