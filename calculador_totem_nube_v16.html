@@ -2301,6 +2301,7 @@ function renderInsumosMgmt(){
         +'onchange="updateInsumoFromNeto(\''+key+'\',parseFloat(this.value))" /></td>'
       +'<td style="text-align:center;"><span class="var-badge '+badgeClass+'">'+badgeText+'</span></td>'
       +'<td style="text-align:center;display:flex;gap:4px;justify-content:center;">'
+              +'<button class="btn" title="Historial de precios" onclick="verHistorialInsumo(\\'+key+\'\\",\\\''+ins.name+\'\\\')" style="height:26px;padding:0 8px;font-size:11px;">📈</button>'\
         +'<button class="btn" title="Editar nombre" onclick="editarNombreInsumo(\''+key+'\')" '
           +'style="height:26px;padding:0 8px;font-size:11px;">✏</button>'
         +'<button class="btn red" title="Eliminar insumo" onclick="confirmarEliminarInsumo(\''+key+'\')" '
@@ -5912,6 +5913,8 @@ sincronizarTodoElHistorial();
 // Then load from Sheets (authoritative, may override localStorage)
 setSyncStatus('Conectando...', '#f5a623');
 loadFromSheets();
+// Verificar precios actualizados desde OCs aprobadas
+setTimeout(verificarPreciosActualizados, 2000);
 
 
 // ─── CARGAR INFO OP DESDE SUPABASE ───────────────────────────────────────────
@@ -6002,6 +6005,186 @@ async function stockAPI(path, method='GET', body=null){
   if(!res.ok) throw new Error(await res.text());
   if(res.status === 204) return null;
   return res.json();
+}
+
+async function verHistorialInsumo(key, nombre){
+  // Crear modal con historial de precios del insumo
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = '<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto;">'
+    + '<div style="font-size:10px;color:#3a4055;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Historial de precios</div>'
+    + '<div style="font-size:16px;font-weight:600;color:#e8eaf0;margin-bottom:16px;">'+nombre+'</div>'
+    + '<div id="historial-tabla-contenido" style="font-size:13px;color:#7a8099;">Cargando...</div>'
+    + '<div style="margin-top:16px;text-align:right;">'
+    + '<button onclick="this.closest('div[style*=fixed]').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Cerrar</button>'
+    + '</div></div>';
+  document.body.appendChild(modal);
+
+  try{
+    const url = localStorage.getItem('supa_url');
+    const key2 = localStorage.getItem('supa_key');
+    if(!url || !key2){
+      document.getElementById('historial-tabla-contenido').innerHTML = '<div style="color:#ff4d6a;">Sin conexión a Supabase.</div>';
+      return;
+    }
+    // Buscar historial por v14_key con datos de proveedor
+    const registros = await stockAPI(
+      'historial_precios?v14_key=eq.'+encodeURIComponent(key)
+      +'&select=precio_neto,moneda,fecha,created_at,proveedores(razon_social)'
+      +'&order=fecha.desc'
+    );
+
+    const el = document.getElementById('historial-tabla-contenido');
+    if(!registros || !registros.length){
+      el.innerHTML = '<div style="color:#3a4055;padding:12px 0;">Sin registros de compras para este insumo todavía.</div>';
+      return;
+    }
+
+    let html = '<table style="width:100%;border-collapse:collapse;">';
+    html += '<tr style="font-size:10px;color:#3a4055;font-family:DM Mono,monospace;text-transform:uppercase;">'
+      + '<td style="padding:6px 8px;">Fecha</td>'
+      + '<td style="padding:6px 8px;text-align:right;">Precio neto</td>'
+      + '<td style="padding:6px 8px;text-align:center;">Moneda</td>'
+      + '<td style="padding:6px 8px;">Proveedor</td>'
+      + '</tr>';
+
+    registros.forEach(function(r, i){
+      const prev = registros[i+1];
+      const fecha = r.fecha ? new Date(r.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+      const proveedor = r.proveedores ? r.proveedores.razon_social : '—';
+      let diffHtml = '';
+      if(prev && prev.precio_neto > 0){
+        const diff = ((r.precio_neto - prev.precio_neto) / prev.precio_neto * 100).toFixed(1);
+        const color = diff > 0 ? '#ff4d6a' : '#00e5a0';
+        diffHtml = ' <span style="font-size:10px;color:'+color+';">'+(diff>0?'+':'')+diff+'%</span>';
+      }
+      const rowBg = i === 0 ? 'background:rgba(255,179,64,0.05);' : '';
+      html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);'+rowBg+'">'
+        + '<td style="padding:8px;">'+(i===0?'<strong style="color:#ffb340;">':'')+fecha+(i===0?'</strong>':'')+'</td>'
+        + '<td style="padding:8px;text-align:right;font-weight:'+(i===0?'600':'400')+';color:'+(i===0?'#e8eaf0':'#7a8099')+';">$'+r.precio_neto.toLocaleString('es-AR')+diffHtml+'</td>'
+        + '<td style="padding:8px;text-align:center;color:#7a8099;font-size:11px;">'+r.moneda+'</td>'
+        + '<td style="padding:8px;color:#7a8099;">'+proveedor+'</td>'
+        + '</tr>';
+    });
+    html += '</table>';
+
+    // Precio actual en el cotizador
+    const insumo = INSUMOS[key] || INSUMOS_BASE[key];
+    if(insumo){
+      html += '<div style="margin-top:12px;padding:10px;background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:6px;font-size:12px;color:#7a8099;">'
+        + '💡 Precio actual en cotizador: <strong style="color:#e8eaf0;">$'+insumo.costoBase.toLocaleString('es-AR')+'</strong>'
+        + '</div>';
+    }
+
+    el.innerHTML = html;
+  }catch(e){
+    const el = document.getElementById('historial-tabla-contenido');
+    if(el) el.innerHTML = '<div style="color:#ff4d6a;">Error: '+e.message+'</div>';
+  }
+}
+
+async function verificarPreciosActualizados(){
+  try{
+    const url = localStorage.getItem('supa_url');
+    const key = localStorage.getItem('supa_key');
+    if(!url || !key) return;
+    // Traer el último precio registrado por v14_key
+    const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,iva_pct,fecha&order=fecha.desc');
+    if(!historial || !historial.length) return;
+    // Tomar el precio más reciente por v14_key
+    const ultimosPorKey = {};
+    historial.forEach(h=>{
+      if(!ultimosPorKey[h.v14_key]) ultimosPorKey[h.v14_key] = h;
+    });
+    // Comparar con INSUMOS_BASE actual
+    const actualizaciones = [];
+    Object.entries(ultimosPorKey).forEach(([key, h])=>{
+      const insumo = INSUMOS[key] || INSUMOS_BASE[key];
+      if(!insumo) return;
+      const precioActual = insumo.costoBase || 0;
+      const precioNuevo = h.precio_neto;
+      // Solo mostrar si difiere más de 1%
+      if(Math.abs(precioNuevo - precioActual) / (precioActual||1) > 0.01){
+        actualizaciones.push({
+          key,
+          nombre: insumo.name,
+          precioActual,
+          precioNuevo,
+          fecha: h.fecha,
+          iva_pct: h.iva_pct
+        });
+      }
+    });
+    if(!actualizaciones.length) return;
+    // Mostrar banner
+    const banner = document.createElement('div');
+    banner.id = 'banner-precios';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1200;border-bottom:2px solid #ffb340;padding:12px 20px;display:flex;align-items:center;gap:12px;font-family:DM Sans,sans-serif;font-size:13px;';
+    banner.innerHTML = `
+      <span style="color:#ffb340;font-size:16px;">⚠</span>
+      <span style="color:#e8eaf0;flex:1;">Hay <strong style="color:#ffb340;">${actualizaciones.length} insumo${actualizaciones.length>1?'s':''}</strong> con precios actualizados desde la última OC aprobada.</span>
+      <button onclick="mostrarDetallePrecios()" style="background:#ffb340;color:#000;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Ver detalle</button>
+      <button onclick="aplicarPreciosActualizados()" style="background:#00e5a0;color:#000;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Aplicar todos</button>
+      <button onclick="document.getElementById('banner-precios').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Ignorar</button>
+    `;
+    document.body.prepend(banner);
+    // Guardar actualizaciones para usar en los botones
+    window._preciosActualizados = actualizaciones;
+  }catch(e){ console.warn('verificarPrecios:', e.message); }
+}
+
+function mostrarDetallePrecios(){
+  const lista = (window._preciosActualizados||[]);
+  if(!lista.length) return;
+  let html = '<div style="font-size:11px;color:#7a8099;font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:10px;">Precios actualizados desde OCs aprobadas</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<tr style="color:#7a8099;font-size:10px;"><td style="padding:4px;">Insumo</td><td style="padding:4px;text-align:right;">Actual</td><td style="padding:4px;text-align:right;">Nuevo</td><td style="padding:4px;text-align:right;">Diferencia</td><td style="padding:4px;text-align:center;">Fecha OC</td><td style="padding:4px;"></td></tr>';
+  lista.forEach(u=>{
+    const diff = u.precioNuevo - u.precioActual;
+    const pct = ((diff/u.precioActual)*100).toFixed(1);
+    const color = diff > 0 ? '#ff4d6a' : '#00e5a0';
+    html += `<tr style="border-top:1px solid rgba(255,255,255,0.06);">
+      <td style="padding:6px 4px;">${u.nombre}</td>
+      <td style="padding:6px 4px;text-align:right;color:#7a8099;">$${u.precioActual.toLocaleString('es-AR')}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:600;">$${u.precioNuevo.toLocaleString('es-AR')}</td>
+      <td style="padding:6px 4px;text-align:right;color:${color};">${diff>0?'+':''}${pct}%</td>
+      <td style="padding:6px 4px;text-align:center;color:#7a8099;">${u.fecha}</td>
+      <td style="padding:6px 4px;"><button onclick="aplicarUnPrecio('${u.key}',${u.precioNuevo})" style="background:#ffb340;color:#000;border:none;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;">Aplicar</button></td>
+    </tr>`;
+  });
+  html += '</table>';
+  // Reutilizar modal existente si hay uno, sino crear uno simple
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;">
+    ${html}
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:8px 16px;border-radius:6px;cursor:pointer;">Cerrar</button>
+      <button onclick="aplicarPreciosActualizados();this.closest('div[style*=fixed]').remove()" style="background:#00e5a0;color:#000;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;">Aplicar todos</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function aplicarUnPrecio(key, precioNuevo){
+  if(INSUMOS[key]) INSUMOS[key].costoBase = precioNuevo;
+  else if(INSUMOS_BASE[key]) INSUMOS_BASE[key].costoBase = precioNuevo;
+  // Remover de la lista de pendientes
+  window._preciosActualizados = (window._preciosActualizados||[]).filter(u=>u.key!==key);
+  if(!window._preciosActualizados.length) document.getElementById('banner-precios')?.remove();
+  recalcCotizador();
+  renderInsumosTbody();
+}
+
+function aplicarPreciosActualizados(){
+  (window._preciosActualizados||[]).forEach(u=>{
+    if(INSUMOS[u.key]) INSUMOS[u.key].costoBase = u.precioNuevo;
+    else if(INSUMOS_BASE[u.key]) INSUMOS_BASE[u.key].costoBase = u.precioNuevo;
+  });
+  window._preciosActualizados = [];
+  document.getElementById('banner-precios')?.remove();
+  recalcCotizador();
+  renderInsumosTbody();
 }
 
 async function crearOP(proyId){

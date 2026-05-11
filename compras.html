@@ -1159,11 +1159,45 @@ async function previsualizarOC(ocId){
   }catch(e){toast('Error: '+e.message);}
 }
 
+async function registrarHistorialPrecios(ocId){
+  // Al aprobar una OC, guarda precios en historial_precios para los insumos mapeados al cotizador
+  try{
+    const items = await api(`oc_items?oc_id=eq.${ocId}&select=sku_id,nombre,precio_unitario_neto,iva_pct,cantidad`);
+    if(!items||!items.length) return;
+    const skuIds = items.map(i=>i.sku_id).filter(Boolean).join(',');
+    if(!skuIds) return;
+    const mapeos = await api(`v14_sku_map?sku_id=in.(${skuIds})&select=sku_id,v14_key`);
+    if(!mapeos||!mapeos.length) return;
+    const mapeoDict = {};
+    mapeos.forEach(m=>{ mapeoDict[m.sku_id] = m.v14_key; });
+    // Traer moneda y proveedor_id de la OC
+    const ocData = await api(`ordenes_compra?id=eq.${ocId}&select=moneda,proveedor_id`);
+    const moneda = ocData&&ocData[0]?ocData[0].moneda:'ARS';
+    const proveedorId = ocData&&ocData[0]?ocData[0].proveedor_id:null;
+    const registros = items
+      .filter(i=>i.sku_id && mapeoDict[i.sku_id] && i.precio_unitario_neto>0)
+      .map(i=>({
+        sku_id: i.sku_id,
+        v14_key: mapeoDict[i.sku_id],
+        precio_neto: i.precio_unitario_neto,
+        moneda: moneda,
+        oc_id: ocId,
+        proveedor_id: proveedorId,
+        fecha: new Date().toISOString().split('T')[0]
+      }));
+    if(registros.length){
+      await api('historial_precios','POST',registros);
+      console.log(`Historial precios actualizado: ${registros.length} insumos`);
+    }
+  }catch(e){ console.warn('historial_precios:', e.message); }
+}
+
 async function aprobarOC(){
   if(!ocAprobandoId) return;
   if(!confirm('¿Confirmar aprobación de esta OC? Pasará a estado "Aprobada" y quedará en espera de recepción.')) return;
   try{
     await api(`ordenes_compra?id=eq.${ocAprobandoId}`,'PATCH',{estado:'aprobada',updated_at:new Date().toISOString()});
+    await registrarHistorialPrecios(ocAprobandoId);
     closeModal('modal-preview');
     toast('OC aprobada ✓');
     loadOCs();
@@ -1174,6 +1208,7 @@ async function aprobarOCDirecto(ocId){
   if(!confirm('¿Aprobar esta OC?')) return;
   try{
     await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{estado:'aprobada',updated_at:new Date().toISOString()});
+    await registrarHistorialPrecios(ocId);
     toast('OC aprobada ✓');
     loadOCs();
   }catch(e){toast('Error: '+e.message);}
