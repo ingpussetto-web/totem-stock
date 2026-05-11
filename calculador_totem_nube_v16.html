@@ -2301,7 +2301,7 @@ function renderInsumosMgmt(){
         +'onchange="updateInsumoFromNeto(\''+key+'\',parseFloat(this.value))" /></td>'
       +'<td style="text-align:center;"><span class="var-badge '+badgeClass+'">'+badgeText+'</span></td>'
       +'<td style="text-align:center;display:flex;gap:4px;justify-content:center;">'
-              +'<button class="btn" title="Historial de precios" onclick="verHistorialInsumo(\\'+key+\'\\",\\\''+ins.name+\'\\\')" style="height:26px;padding:0 8px;font-size:11px;">📈</button>'\
+        +'<button class="btn" title="Historial de precios" onclick="verHistorialInsumo(\''+key+'\')" style="height:26px;padding:0 8px;font-size:11px;">📈</button>'\
         +'<button class="btn" title="Editar nombre" onclick="editarNombreInsumo(\''+key+'\')" '
           +'style="height:26px;padding:0 8px;font-size:11px;">✏</button>'
         +'<button class="btn red" title="Eliminar insumo" onclick="confirmarEliminarInsumo(\''+key+'\')" '
@@ -6007,7 +6007,8 @@ async function stockAPI(path, method='GET', body=null){
   return res.json();
 }
 
-async function verHistorialInsumo(key, nombre){
+async function verHistorialInsumo(key){
+  const nombre = (INSUMOS[key]||INSUMOS_BASE[key]||{}).name || key;
   // Crear modal con historial de precios del insumo
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
