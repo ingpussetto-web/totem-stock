@@ -1669,12 +1669,27 @@ async function saveProveedor(){
       await api(`proveedores?id=eq.${editandoProvId}`,'PATCH',payload);
       toast('Proveedor actualizado ✓');
     } else {
-      const res=await api('proveedores','POST',[payload]);
-      if(regresarAOC && res?.[0]){
-        proveedores.push(res[0]);
-        seleccionarProveedorOC(res[0].id);
+      // Verificar si ya existe por CUIT antes de insertar
+      let provExistente = null;
+      if(payload.cuit){
+        const existentes = await api(`proveedores?cuit=eq.${encodeURIComponent(payload.cuit)}&select=id,razon_social`);
+        if(existentes && existentes.length) provExistente = existentes[0];
       }
-      toast('Proveedor registrado ✓');
+      if(provExistente){
+        // Ya existe — simplemente lo seleccionamos
+        if(regresarAOC){
+          if(!proveedores.find(p=>p.id===provExistente.id)) proveedores.push(provExistente);
+          seleccionarProveedorOC(provExistente.id);
+        }
+        toast('Proveedor ya existente — seleccionado ✓');
+      } else {
+        const res=await api('proveedores','POST',[payload]);
+        if(regresarAOC && res?.[0]){
+          proveedores.push(res[0]);
+          seleccionarProveedorOC(res[0].id);
+        }
+        toast('Proveedor registrado ✓');
+      }
     }
     await loadData();
     closeModal('modal-prov');
