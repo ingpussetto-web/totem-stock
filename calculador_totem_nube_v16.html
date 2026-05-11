@@ -5360,16 +5360,8 @@ async function loadFromSheets(){
       });
     }
 
-    // Load insumos overrides
-    const insumosData = await sheetsRead('insumos');
-    if(insumosData.rows && insumosData.rows.length > 0){
-      insumosData.rows.forEach(function(r){
-        if(r.key){
-          if(r.costoReal) costosOverride[r.key] = parseFloat(r.costoReal);
-          if(r.ivaRate !== undefined && r.ivaRate !== '') ivaOverride[r.key] = parseFloat(r.ivaRate);
-        }
-      });
-    }
+    // Precios de insumos: se toman de INSUMOS_BASE y se actualizan desde historial_precios de Supabase
+    // (no se cargan más desde Google Sheets)
 
     // Load config
     const configData = await sheetsRead('config');
@@ -5417,6 +5409,8 @@ async function loadFromSheets(){
 
     setSyncStatus('Sincronizado ✓', '#00c896', true);
     saveData(); // also update localStorage
+    // Aplicar precios desde historial de OCs (después de que Sheets pise los valores)
+    verificarPreciosActualizados();
   } catch(err){
     setSyncStatus('Error al cargar', '#ff5e5e');
     console.error('Sheets load error:', err);
@@ -5432,17 +5426,14 @@ async function saveToSheets(){
     // Save fijos
     await sheetsWrite('fijos', fijos);
 
-    // Save insumos overrides
-    const insumosRows = Object.keys(costosOverride).map(function(key){
-      return { key, costoReal: costosOverride[key], ivaRate: ivaOverride[key] !== undefined ? ivaOverride[key] : '' };
-    });
+    // Precios de insumos ya no se guardan en Sheets - se manejan via Supabase
     // Also include ivaOverride keys not in costosOverride
     Object.keys(ivaOverride).forEach(function(key){
       if(!costosOverride[key]){
         insumosRows.push({ key, costoReal: '', ivaRate: ivaOverride[key] });
       }
     });
-    await sheetsWrite('insumos', insumosRows);
+    // precios insumos no se sincronizan con Sheets
 
     // Save proyectos
     await sheetsWrite('proyectos', proyectos.map(function(p){ return { id:p.id, orden:p.orden, cliente:p.cliente, mes:p.mes, anio:p.anio, estado:p.estado, notas:p.notas||'', items:JSON.stringify(p.items) }; }));
@@ -5913,8 +5904,7 @@ sincronizarTodoElHistorial();
 // Then load from Sheets (authoritative, may override localStorage)
 setSyncStatus('Conectando...', '#f5a623');
 loadFromSheets();
-// Verificar precios actualizados desde OCs aprobadas
-setTimeout(verificarPreciosActualizados, 2000);
+// Precios actualizados se aplican al final de loadFromSheets
 
 
 // ─── CARGAR INFO OP DESDE SUPABASE ───────────────────────────────────────────
