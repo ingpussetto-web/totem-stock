@@ -6090,172 +6090,33 @@ async function verificarPreciosActualizados(){
     const url = localStorage.getItem('supa_url');
     const key = localStorage.getItem('supa_key');
     if(!url || !key) return;
-    // Traer el último precio registrado por v14_key
+    // Traer el último precio por v14_key
     const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,moneda,tipo_cambio,fecha&order=fecha.desc');
     if(!historial || !historial.length) return;
     // Tomar el precio más reciente por v14_key
     const ultimosPorKey = {};
-    historial.forEach(h=>{
+    historial.forEach(function(h){
       if(!ultimosPorKey[h.v14_key]) ultimosPorKey[h.v14_key] = h;
     });
-    // Comparar con INSUMOS_BASE actual
-    // costoBase está en ARS bruto con IVA a BASE_DOLAR=1420
-    // precio_neto del historial es ARS neto al dólar del momento
-    // Convertimos precio_neto a costoBase equivalente: precio_neto * (1+iva) * BASE_DOLAR / dolar_actual
-    const actualizaciones = [];
-    Object.entries(ultimosPorKey).forEach(([key, h])=>{
+    // Aplicar directamente al costoBase sin comparar
+    var actualizados = 0;
+    Object.entries(ultimosPorKey).forEach(function([key, h]){
       const insumo = INSUMOS_BASE[key];
-      if(!insumo) return;
+      if(!insumo || !h.precio_neto) return;
       const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
-      // Precio actual neto en ARS al dólar actual
-      const precioActualNeto = Math.round((insumo.costoBase / BASE_DOLAR) * dolar / (1 + ivaRate));
-      // Convertir precio de la OC a ARS neto para comparar homogéneamente
-      const precioNuevo = h.moneda === 'USD' && h.tipo_cambio
+      // Convertir precio neto ARS a costoBase (con IVA, a dólar base)
+      const precioNetoARS = h.moneda === 'USD' && h.tipo_cambio
         ? Math.round(h.precio_neto * h.tipo_cambio)
         : h.precio_neto;
-      // Solo mostrar si difiere más de 1%
-      if(Math.abs(precioNuevo - precioActualNeto) / (precioActualNeto||1) > 0.01){
-        actualizaciones.push({
-          key,
-          nombre: insumo.name,
-          precioActualNeto,
-          precioNuevo,
-          fecha: h.fecha
-        });
-      }
+      insumo.costoBase = Math.round(precioNetoARS * (1 + ivaRate) * BASE_DOLAR / dolar);
+      actualizados++;
     });
-    if(!actualizaciones.length) return;
-    // Mostrar banner
-    const banner = document.createElement('div');
-    banner.id = 'banner-precios';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a1200;border-bottom:2px solid #ffb340;padding:12px 20px;display:flex;align-items:center;gap:12px;font-family:DM Sans,sans-serif;font-size:13px;';
-    banner.innerHTML = `
-      <span style="color:#ffb340;font-size:16px;">⚠</span>
-      <span style="color:#e8eaf0;flex:1;">Hay <strong style="color:#ffb340;">${actualizaciones.length} insumo${actualizaciones.length>1?'s':''}</strong> con precios actualizados desde la última OC aprobada.</span>
-      <button onclick="mostrarDetallePrecios()" style="background:#ffb340;color:#000;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Ver detalle</button>
-      <button onclick="aplicarPreciosActualizados()" style="background:#00e5a0;color:#000;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Aplicar todos</button>
-      <button onclick="document.getElementById('banner-precios').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Ignorar</button>
-    `;
-    document.body.prepend(banner);
-    // Guardar actualizaciones para usar en los botones
-    window._preciosActualizados = actualizaciones;
-  }catch(e){ console.warn('verificarPrecios:', e.message); }
-}
-
-function mostrarDetallePrecios(){
-  var lista = (window._preciosActualizados||[]);
-  if(!lista.length) return;
-
-  // Crear modal via DOM para evitar problemas de escape
-  var overlay = document.createElement('div');
-  overlay.id = 'modal-precios-detalle';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
-
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;';
-
-  var titulo = document.createElement('div');
-  titulo.style.cssText = 'font-size:11px;color:#7a8099;font-family:DM Mono,monospace;text-transform:uppercase;margin-bottom:10px;';
-  titulo.textContent = 'Precios actualizados desde OCs aprobadas';
-  box.appendChild(titulo);
-
-  var tabla = document.createElement('table');
-  tabla.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
-
-  var thead = document.createElement('tr');
-  thead.style.cssText = 'color:#7a8099;font-size:10px;';
-  ['Insumo','Actual','Nuevo','Diferencia','Fecha OC',''].forEach(function(h){
-    var td = document.createElement('td');
-    td.style.padding = '4px';
-    td.textContent = h;
-    thead.appendChild(td);
-  });
-  tabla.appendChild(thead);
-
-  lista.forEach(function(u){
-    var diff = u.precioNuevo - u.precioActualNeto;
-    var pct = ((diff/(u.precioActualNeto||1))*100).toFixed(1);
-    var color = diff > 0 ? '#ff4d6a' : '#00e5a0';
-    var tr = document.createElement('tr');
-    tr.style.cssText = 'border-top:1px solid rgba(255,255,255,0.06);';
-
-    var cells = [
-      {text: u.nombre, style: 'padding:6px 4px;'},
-      {text: '$'+u.precioActualNeto.toLocaleString('es-AR'), style: 'padding:6px 4px;text-align:right;color:#7a8099;'},
-      {text: '$'+u.precioNuevo.toLocaleString('es-AR'), style: 'padding:6px 4px;text-align:right;font-weight:600;'},
-      {text: (diff>0?'+':'')+pct+'%', style: 'padding:6px 4px;text-align:right;color:'+color+';'},
-      {text: u.fecha||'—', style: 'padding:6px 4px;text-align:center;color:#7a8099;'}
-    ];
-    cells.forEach(function(c){
-      var td = document.createElement('td');
-      td.style.cssText = c.style;
-      td.textContent = c.text;
-      tr.appendChild(td);
-    });
-
-    // Botón aplicar
-    var tdBtn = document.createElement('td');
-    tdBtn.style.padding = '6px 4px';
-    var btn = document.createElement('button');
-    btn.style.cssText = 'background:#ffb340;color:#000;border:none;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;';
-    btn.textContent = 'Aplicar';
-    (function(key, precio){
-      btn.onclick = function(){ aplicarUnPrecio(key, precio); };
-    })(u.key, u.precioNuevo);
-    tdBtn.appendChild(btn);
-    tr.appendChild(tdBtn);
-    tabla.appendChild(tr);
-  });
-  box.appendChild(tabla);
-
-  // Botones de acción
-  var actions = document.createElement('div');
-  actions.style.cssText = 'margin-top:16px;display:flex;gap:8px;justify-content:flex-end;';
-
-  var btnCerrar = document.createElement('button');
-  btnCerrar.style.cssText = 'background:transparent;color:#7a8099;border:1px solid #3a4055;padding:8px 16px;border-radius:6px;cursor:pointer;';
-  btnCerrar.textContent = 'Cerrar';
-  btnCerrar.onclick = function(){ document.getElementById('modal-precios-detalle').remove(); };
-
-  var btnAplicar = document.createElement('button');
-  btnAplicar.style.cssText = 'background:#00e5a0;color:#000;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;';
-  btnAplicar.textContent = 'Aplicar todos';
-  btnAplicar.onclick = function(){
-    aplicarPreciosActualizados();
-    document.getElementById('modal-precios-detalle').remove();
-  };
-
-  actions.appendChild(btnCerrar);
-  actions.appendChild(btnAplicar);
-  box.appendChild(actions);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
-}
-
-function aplicarUnPrecio(key, precioNuevo){
-  // Convertir precio neto ARS al costoBase (bruto con IVA a dólar base)
-  if(INSUMOS_BASE[key]){
-    const ivaRate = INSUMOS_BASE[key].iva !== undefined ? INSUMOS_BASE[key].iva : 0.21;
-    INSUMOS_BASE[key].costoBase = Math.round(precioNuevo * (1 + ivaRate) * BASE_DOLAR / dolar);
-  }
-  // Remover de la lista de pendientes
-  window._preciosActualizados = (window._preciosActualizados||[]).filter(u=>u.key!==key);
-  if(!window._preciosActualizados.length) document.getElementById('banner-precios')?.remove();
-  recalcCotizador();
-  renderInsumosTbody();
-}
-
-function aplicarPreciosActualizados(){
-  (window._preciosActualizados||[]).forEach(u=>{
-    if(INSUMOS_BASE[u.key]){
-      const ivaRate = INSUMOS_BASE[u.key].iva !== undefined ? INSUMOS_BASE[u.key].iva : 0.21;
-      INSUMOS_BASE[u.key].costoBase = Math.round(u.precioNuevo * (1 + ivaRate) * BASE_DOLAR / dolar);
+    if(actualizados > 0){
+      recalcCotizador();
+      renderInsumosTbody();
+      console.log('Precios actualizados desde historial:', actualizados, 'insumos');
     }
-  });
-  window._preciosActualizados = [];
-  document.getElementById('banner-precios')?.remove();
-  recalcCotizador();
-  renderInsumosTbody();
+  }catch(e){ console.warn('verificarPrecios:', e.message); }
 }
 
 async function crearOP(proyId){
