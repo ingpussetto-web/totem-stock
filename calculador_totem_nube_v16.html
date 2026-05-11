@@ -6008,7 +6008,7 @@ async function stockAPI(path, method='GET', body=null){
 }
 
 async function verHistorialInsumo(key){
-  const nombre = (INSUMOS[key]||INSUMOS_BASE[key]||{}).name || key;
+  const nombre = (INSUMOS_BASE[key]||{}).name || key;
   // Crear modal con historial de precios del insumo
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
@@ -6071,7 +6071,7 @@ async function verHistorialInsumo(key){
     html += '</table>';
 
     // Precio actual en el cotizador
-    const insumo = INSUMOS[key] || INSUMOS_BASE[key];
+    const insumo = INSUMOS_BASE[key];
     if(insumo){
       html += '<div style="margin-top:12px;padding:10px;background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:6px;font-size:12px;color:#7a8099;">'
         + '💡 Precio actual en cotizador: <strong style="color:#e8eaf0;">$'+insumo.costoBase.toLocaleString('es-AR')+'</strong>'
@@ -6091,7 +6091,7 @@ async function verificarPreciosActualizados(){
     const key = localStorage.getItem('supa_key');
     if(!url || !key) return;
     // Traer el último precio registrado por v14_key
-    const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,iva_pct,fecha&order=fecha.desc');
+    const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,fecha&order=fecha.desc');
     if(!historial || !historial.length) return;
     // Tomar el precio más reciente por v14_key
     const ultimosPorKey = {};
@@ -6101,7 +6101,7 @@ async function verificarPreciosActualizados(){
     // Comparar con INSUMOS_BASE actual
     const actualizaciones = [];
     Object.entries(ultimosPorKey).forEach(([key, h])=>{
-      const insumo = INSUMOS[key] || INSUMOS_BASE[key];
+      const insumo = INSUMOS_BASE[key];
       if(!insumo) return;
       const precioActual = insumo.costoBase || 0;
       const precioNuevo = h.precio_neto;
@@ -6226,8 +6226,7 @@ function mostrarDetallePrecios(){
 }
 
 function aplicarUnPrecio(key, precioNuevo){
-  if(INSUMOS[key]) INSUMOS[key].costoBase = precioNuevo;
-  else if(INSUMOS_BASE[key]) INSUMOS_BASE[key].costoBase = precioNuevo;
+  if(INSUMOS_BASE[key]) INSUMOS_BASE[key].costoBase = precioNuevo;
   // Remover de la lista de pendientes
   window._preciosActualizados = (window._preciosActualizados||[]).filter(u=>u.key!==key);
   if(!window._preciosActualizados.length) document.getElementById('banner-precios')?.remove();
@@ -6237,8 +6236,7 @@ function aplicarUnPrecio(key, precioNuevo){
 
 function aplicarPreciosActualizados(){
   (window._preciosActualizados||[]).forEach(u=>{
-    if(INSUMOS[u.key]) INSUMOS[u.key].costoBase = u.precioNuevo;
-    else if(INSUMOS_BASE[u.key]) INSUMOS_BASE[u.key].costoBase = u.precioNuevo;
+    if(INSUMOS_BASE[u.key]) INSUMOS_BASE[u.key].costoBase = u.precioNuevo;
   });
   window._preciosActualizados = [];
   document.getElementById('banner-precios')?.remove();
