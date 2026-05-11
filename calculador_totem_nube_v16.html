@@ -6032,7 +6032,7 @@ async function verHistorialInsumo(key){
     // Buscar historial por v14_key con datos de proveedor
     const registros = await stockAPI(
       'historial_precios?v14_key=eq.'+encodeURIComponent(key)
-      +'&select=precio_neto,moneda,fecha,created_at,proveedores(razon_social)'
+      +'&select=precio_neto,moneda,tipo_cambio,fecha,created_at,proveedores(razon_social)'
       +'&order=fecha.desc'
     );
 
@@ -6091,7 +6091,7 @@ async function verificarPreciosActualizados(){
     const key = localStorage.getItem('supa_key');
     if(!url || !key) return;
     // Traer el último precio registrado por v14_key
-    const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,fecha&order=fecha.desc');
+    const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,moneda,tipo_cambio,fecha&order=fecha.desc');
     if(!historial || !historial.length) return;
     // Tomar el precio más reciente por v14_key
     const ultimosPorKey = {};
@@ -6099,21 +6099,28 @@ async function verificarPreciosActualizados(){
       if(!ultimosPorKey[h.v14_key]) ultimosPorKey[h.v14_key] = h;
     });
     // Comparar con INSUMOS_BASE actual
+    // costoBase está en ARS bruto con IVA a BASE_DOLAR=1420
+    // precio_neto del historial es ARS neto al dólar del momento
+    // Convertimos precio_neto a costoBase equivalente: precio_neto * (1+iva) * BASE_DOLAR / dolar_actual
     const actualizaciones = [];
     Object.entries(ultimosPorKey).forEach(([key, h])=>{
       const insumo = INSUMOS_BASE[key];
       if(!insumo) return;
-      const precioActual = insumo.costoBase || 0;
-      const precioNuevo = h.precio_neto;
+      const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
+      // Precio actual neto en ARS al dólar actual
+      const precioActualNeto = Math.round((insumo.costoBase / BASE_DOLAR) * dolar / (1 + ivaRate));
+      // Convertir precio de la OC a ARS neto para comparar homogéneamente
+      const precioNuevo = h.moneda === 'USD' && h.tipo_cambio
+        ? Math.round(h.precio_neto * h.tipo_cambio)
+        : h.precio_neto;
       // Solo mostrar si difiere más de 1%
-      if(Math.abs(precioNuevo - precioActual) / (precioActual||1) > 0.01){
+      if(Math.abs(precioNuevo - precioActualNeto) / (precioActualNeto||1) > 0.01){
         actualizaciones.push({
           key,
           nombre: insumo.name,
-          precioActual,
+          precioActualNeto,
           precioNuevo,
-          fecha: h.fecha,
-          iva_pct: h.iva_pct
+          fecha: h.fecha
         });
       }
     });
@@ -6166,15 +6173,15 @@ function mostrarDetallePrecios(){
   tabla.appendChild(thead);
 
   lista.forEach(function(u){
-    var diff = u.precioNuevo - u.precioActual;
-    var pct = ((diff/(u.precioActual||1))*100).toFixed(1);
+    var diff = u.precioNuevo - u.precioActualNeto;
+    var pct = ((diff/(u.precioActualNeto||1))*100).toFixed(1);
     var color = diff > 0 ? '#ff4d6a' : '#00e5a0';
     var tr = document.createElement('tr');
     tr.style.cssText = 'border-top:1px solid rgba(255,255,255,0.06);';
 
     var cells = [
       {text: u.nombre, style: 'padding:6px 4px;'},
-      {text: '$'+u.precioActual.toLocaleString('es-AR'), style: 'padding:6px 4px;text-align:right;color:#7a8099;'},
+      {text: '$'+u.precioActualNeto.toLocaleString('es-AR'), style: 'padding:6px 4px;text-align:right;color:#7a8099;'},
       {text: '$'+u.precioNuevo.toLocaleString('es-AR'), style: 'padding:6px 4px;text-align:right;font-weight:600;'},
       {text: (diff>0?'+':'')+pct+'%', style: 'padding:6px 4px;text-align:right;color:'+color+';'},
       {text: u.fecha||'—', style: 'padding:6px 4px;text-align:center;color:#7a8099;'}
@@ -6226,7 +6233,11 @@ function mostrarDetallePrecios(){
 }
 
 function aplicarUnPrecio(key, precioNuevo){
-  if(INSUMOS_BASE[key]) INSUMOS_BASE[key].costoBase = precioNuevo;
+  // Convertir precio neto ARS al costoBase (bruto con IVA a dólar base)
+  if(INSUMOS_BASE[key]){
+    const ivaRate = INSUMOS_BASE[key].iva !== undefined ? INSUMOS_BASE[key].iva : 0.21;
+    INSUMOS_BASE[key].costoBase = Math.round(precioNuevo * (1 + ivaRate) * BASE_DOLAR / dolar);
+  }
   // Remover de la lista de pendientes
   window._preciosActualizados = (window._preciosActualizados||[]).filter(u=>u.key!==key);
   if(!window._preciosActualizados.length) document.getElementById('banner-precios')?.remove();
@@ -6236,7 +6247,10 @@ function aplicarUnPrecio(key, precioNuevo){
 
 function aplicarPreciosActualizados(){
   (window._preciosActualizados||[]).forEach(u=>{
-    if(INSUMOS_BASE[u.key]) INSUMOS_BASE[u.key].costoBase = u.precioNuevo;
+    if(INSUMOS_BASE[u.key]){
+      const ivaRate = INSUMOS_BASE[u.key].iva !== undefined ? INSUMOS_BASE[u.key].iva : 0.21;
+      INSUMOS_BASE[u.key].costoBase = Math.round(u.precioNuevo * (1 + ivaRate) * BASE_DOLAR / dolar);
+    }
   });
   window._preciosActualizados = [];
   document.getElementById('banner-precios')?.remove();

@@ -512,7 +512,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <button class="btn" onclick="closeModal('modal-preview')">Cerrar</button>
       <button class="btn" onclick="imprimirOC()">🖨 Imprimir / PDF</button>
       <button class="btn blue" onclick="compartirOC()">📱 Compartir por WA/Mail</button>
-      <button class="btn solid-green" onclick="aprobarOC()">✓ Aprobar OC</button>
+      <button class="btn solid-green" id="btn-aprobar-oc" onclick="aprobarOC()">✓ Aprobar OC</button>
     </div>
   </div>
 </div>
@@ -1047,10 +1047,12 @@ async function guardarOC(estado, previsualizar=false){
       // Borrar líneas existentes y re-insertar
       await api(`oc_items?oc_id=eq.${ocEditandoId}`,'DELETE');
     } else {
+      const tcVal = parseFloat(document.getElementById('oc-tipo-cambio')?.value)||null;
       const res=await api('ordenes_compra','POST',[{
         oc_numero:ocNumero,
         proveedor_id:provSeleccionado.id,
         estado,condicion_pago:condicion,moneda,
+        tipo_cambio: moneda==='USD' ? tcVal : null,
         total_neto:totalNeto,total_bruto:totalBruto,
         observaciones:document.getElementById('oc-observaciones').value
       }]);
@@ -1091,6 +1093,9 @@ async function previsualizarOC(ocId){
     const sym=o.moneda==='USD'?'USD ':'$';
 
     ocAprobandoId=ocId;
+    // Mostrar botón aprobar solo si está en borrador
+    const btnAprobar = document.getElementById('btn-aprobar-oc');
+    if(btnAprobar) btnAprobar.style.display = o.estado==='borrador' ? '' : 'none';
 
     document.getElementById('oc-preview-content').innerHTML=`
       <div style="border:1px solid var(--border2);border-radius:var(--radius-lg);padding:20px;">
@@ -1171,9 +1176,10 @@ async function registrarHistorialPrecios(ocId){
     const mapeoDict = {};
     mapeos.forEach(m=>{ mapeoDict[m.sku_id] = m.v14_key; });
     // Traer moneda y proveedor_id de la OC
-    const ocData = await api(`ordenes_compra?id=eq.${ocId}&select=moneda,proveedor_id`);
+    const ocData = await api(`ordenes_compra?id=eq.${ocId}&select=moneda,proveedor_id,tipo_cambio`);
     const moneda = ocData&&ocData[0]?ocData[0].moneda:'ARS';
     const proveedorId = ocData&&ocData[0]?ocData[0].proveedor_id:null;
+    const tipoCambio = ocData&&ocData[0]?ocData[0].tipo_cambio:null;
     const registros = items
       .filter(i=>i.sku_id && mapeoDict[i.sku_id] && i.precio_unitario_neto>0)
       .map(i=>({
@@ -1181,6 +1187,7 @@ async function registrarHistorialPrecios(ocId){
         v14_key: mapeoDict[i.sku_id],
         precio_neto: i.precio_unitario_neto,
         moneda: moneda,
+        tipo_cambio: moneda==='USD' ? tipoCambio : null,
         oc_id: ocId,
         proveedor_id: proveedorId,
         fecha: new Date().toISOString().split('T')[0]
