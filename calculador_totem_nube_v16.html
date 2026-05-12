@@ -6125,12 +6125,12 @@ async function verificarPreciosActualizados(){
     Object.entries(ultimosPorKey).forEach(function([key, h]){
       const insumo = INSUMOS_BASE[key];
       if(!insumo || !h.precio_neto) return;
-      const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
-      // Convertir precio neto ARS a costoBase (con IVA, a dólar base)
+      // costoBase se guarda SIN IVA (igual que el resto del sistema)
+      // renderInsumosMgmt aplica IVA al mostrar — no hay que duplicarlo acá
       const precioNetoARS = h.moneda === 'USD' && h.tipo_cambio
         ? Math.round(h.precio_neto * h.tipo_cambio)
         : h.precio_neto;
-      insumo.costoBase = Math.round(precioNetoARS * (1 + ivaRate) * BASE_DOLAR / dolar);
+      insumo.costoBase = Math.round(precioNetoARS * BASE_DOLAR / dolar);
       // Sincronizar costosOverride para que renderInsumosMgmt muestre el precio nuevo
       costosOverride[key] = insumo.costoBase;
       if(costosOverride[key+'_usd'] !== undefined){
