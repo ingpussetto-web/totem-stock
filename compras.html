@@ -1199,11 +1199,26 @@ async function registrarHistorialPrecios(ocId){
   }catch(e){ console.warn('historial_precios:', e.message); }
 }
 
+async function getDolarActual(){
+  // Lee el dólar configurado en config_cotizador
+  try{
+    const cfg = await api('config_cotizador?select=valor&clave=eq.dolar');
+    return cfg && cfg[0] ? parseFloat(cfg[0].valor) : null;
+  }catch(e){ return null; }
+}
+
 async function aprobarOC(){
   if(!ocAprobandoId) return;
   if(!confirm('¿Confirmar aprobación de esta OC? Pasará a estado "Aprobada" y quedará en espera de recepción.')) return;
   try{
-    await api(`ordenes_compra?id=eq.${ocAprobandoId}`,'PATCH',{estado:'aprobada',updated_at:new Date().toISOString()});
+    // Si la OC es en ARS, guardar el dólar del día para referencia histórica
+    const ocData = await api(`ordenes_compra?id=eq.${ocAprobandoId}&select=moneda,tipo_cambio`);
+    const patch = {estado:'aprobada', updated_at:new Date().toISOString()};
+    if(ocData && ocData[0] && ocData[0].moneda === 'ARS' && !ocData[0].tipo_cambio){
+      const tc = await getDolarActual();
+      if(tc) patch.tipo_cambio = tc;
+    }
+    await api(`ordenes_compra?id=eq.${ocAprobandoId}`,'PATCH', patch);
     await registrarHistorialPrecios(ocAprobandoId);
     closeModal('modal-preview');
     toast('OC aprobada ✓');
@@ -1214,7 +1229,13 @@ async function aprobarOC(){
 async function aprobarOCDirecto(ocId){
   if(!confirm('¿Aprobar esta OC?')) return;
   try{
-    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{estado:'aprobada',updated_at:new Date().toISOString()});
+    const ocData = await api(`ordenes_compra?id=eq.${ocId}&select=moneda,tipo_cambio`);
+    const patch = {estado:'aprobada', updated_at:new Date().toISOString()};
+    if(ocData && ocData[0] && ocData[0].moneda === 'ARS' && !ocData[0].tipo_cambio){
+      const tc = await getDolarActual();
+      if(tc) patch.tipo_cambio = tc;
+    }
+    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH', patch);
     await registrarHistorialPrecios(ocId);
     toast('OC aprobada ✓');
     loadOCs();

@@ -6067,8 +6067,9 @@ async function verHistorialInsumo(key){
     let html = '<table style="width:100%;border-collapse:collapse;">';
     html += '<tr style="font-size:10px;color:#3a4055;font-family:DM Mono,monospace;text-transform:uppercase;">'
       + '<td style="padding:6px 8px;">Fecha</td>'
-      + '<td style="padding:6px 8px;text-align:right;">Precio neto</td>'
-      + '<td style="padding:6px 8px;text-align:center;">Moneda</td>'
+      + '<td style="padding:6px 8px;text-align:right;">Precio neto ARS</td>'
+      + '<td style="padding:6px 8px;text-align:right;">Equiv. USD</td>'
+      + '<td style="padding:6px 8px;text-align:center;">TC usado</td>'
       + '<td style="padding:6px 8px;">Proveedor</td>'
       + '</tr>';
 
@@ -6076,17 +6077,37 @@ async function verHistorialInsumo(key){
       const prev = registros[i+1];
       const fecha = r.fecha ? new Date(r.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
       const proveedor = r.proveedores ? r.proveedores.razon_social : '—';
+      const tc = r.tipo_cambio || null;
+
+      // Calcular precio en ARS y USD siempre con el TC fijo de la OC
+      let precioARS, precioUSD, tcLabel;
+      if(r.moneda === 'USD'){
+        precioUSD = r.precio_neto;
+        precioARS = tc ? Math.round(r.precio_neto * tc) : null;
+        tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
+      } else {
+        precioARS = r.precio_neto;
+        precioUSD = tc ? (r.precio_neto / tc) : null;
+        tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
+      }
+
       let diffHtml = '';
       if(prev && prev.precio_neto > 0){
-        const diff = ((r.precio_neto - prev.precio_neto) / prev.precio_neto * 100).toFixed(1);
+        const prevARS = prev.moneda === 'USD' && prev.tipo_cambio ? Math.round(prev.precio_neto * prev.tipo_cambio) : prev.precio_neto;
+        const curARS = precioARS || r.precio_neto;
+        const diff = ((curARS - prevARS) / prevARS * 100).toFixed(1);
         const color = diff > 0 ? '#ff4d6a' : '#00e5a0';
         diffHtml = ' <span style="font-size:10px;color:'+color+';">'+(diff>0?'+':'')+diff+'%</span>';
       }
+
       const rowBg = i === 0 ? 'background:rgba(255,179,64,0.05);' : '';
+      const colVal = i === 0 ? '#e8eaf0' : '#7a8099';
+      const fw = i === 0 ? '600' : '400';
       html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);'+rowBg+'">'
         + '<td style="padding:8px;">'+(i===0?'<strong style="color:#ffb340;">':'')+fecha+(i===0?'</strong>':'')+'</td>'
-        + '<td style="padding:8px;text-align:right;font-weight:'+(i===0?'600':'400')+';color:'+(i===0?'#e8eaf0':'#7a8099')+';">$'+r.precio_neto.toLocaleString('es-AR')+diffHtml+'</td>'
-        + '<td style="padding:8px;text-align:center;color:#7a8099;font-size:11px;">'+r.moneda+'</td>'
+        + '<td style="padding:8px;text-align:right;font-weight:'+fw+';color:'+colVal+';">'+(precioARS!==null?'$'+Math.round(precioARS).toLocaleString('es-AR'):'—')+diffHtml+'</td>'
+        + '<td style="padding:8px;text-align:right;color:#7a8099;font-size:12px;">'+(precioUSD!==null?'u$s '+precioUSD.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}):'—')+'</td>'
+        + '<td style="padding:8px;text-align:center;color:#3a4055;font-size:11px;">'+tcLabel+'</td>'
         + '<td style="padding:8px;color:#7a8099;">'+proveedor+'</td>'
         + '</tr>';
     });
@@ -6125,12 +6146,11 @@ async function verificarPreciosActualizados(){
     Object.entries(ultimosPorKey).forEach(function([key, h]){
       const insumo = INSUMOS_BASE[key];
       if(!insumo || !h.precio_neto) return;
-      // costoBase se guarda SIN IVA (igual que el resto del sistema)
-      // renderInsumosMgmt aplica IVA al mostrar — no hay que duplicarlo acá
+      // costoBase = precio neto ARS (sin IVA). Si OC en USD, convertir primero.
       const precioNetoARS = h.moneda === 'USD' && h.tipo_cambio
         ? Math.round(h.precio_neto * h.tipo_cambio)
         : h.precio_neto;
-      insumo.costoBase = Math.round(precioNetoARS * BASE_DOLAR / dolar);
+      insumo.costoBase = precioNetoARS;
       // Sincronizar costosOverride para que renderInsumosMgmt muestre el precio nuevo
       costosOverride[key] = insumo.costoBase;
       if(costosOverride[key+'_usd'] !== undefined){
