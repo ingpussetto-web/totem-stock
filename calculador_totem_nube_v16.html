@@ -6079,7 +6079,7 @@ async function verHistorialInsumo(key){
       const proveedor = r.proveedores ? r.proveedores.razon_social : '—';
       const tc = r.tipo_cambio || null;
 
-      // Calcular precio en ARS y USD siempre con el TC fijo de la OC
+      // Precio ARS y USD usando SOLO el TC fijo de la OC — si no hay TC, USD queda vacío
       let precioARS, precioUSD, tcLabel;
       if(r.moneda === 'USD'){
         precioUSD = r.precio_neto;
@@ -6087,7 +6087,7 @@ async function verHistorialInsumo(key){
         tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
       } else {
         precioARS = r.precio_neto;
-        precioUSD = tc ? (r.precio_neto / tc) : null;
+        precioUSD = tc ? Math.round(r.precio_neto / tc) : null;
         tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
       }
 
@@ -6146,15 +6146,16 @@ async function verificarPreciosActualizados(){
     Object.entries(ultimosPorKey).forEach(function([key, h]){
       const insumo = INSUMOS_BASE[key];
       if(!insumo || !h.precio_neto) return;
-      // costoBase = precio neto ARS (sin IVA). Si OC en USD, convertir primero.
+      // precioNetoARS = precio sin IVA en pesos. Si OC en USD, convertir primero.
       const precioNetoARS = h.moneda === 'USD' && h.tipo_cambio
         ? Math.round(h.precio_neto * h.tipo_cambio)
         : h.precio_neto;
+      const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
       insumo.costoBase = precioNetoARS;
-      // Sincronizar costosOverride para que renderInsumosMgmt muestre el precio nuevo
-      costosOverride[key] = insumo.costoBase;
+      // costosOverride[key] debe ser precio CON IVA (renderInsumosMgmt lo divide por 1+iva para mostrar neto)
+      costosOverride[key] = Math.round(precioNetoARS * (1 + ivaRate));
       if(costosOverride[key+'_usd'] !== undefined){
-        costosOverride[key+'_usd'] = Math.round(insumo.costoBase / dolar * 100) / 100;
+        costosOverride[key+'_usd'] = Math.round(costosOverride[key] / dolar * 100) / 100;
       }
       actualizados++;
     });
