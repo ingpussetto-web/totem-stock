@@ -5336,44 +5336,39 @@ async function sheetsAppend(sheet, row){
 async function loadFromSheets(){
   setSyncStatus('Cargando...', '#f5a623');
   try {
-    // Load historial
-    const histData = await sheetsRead('historial');
-    if(histData.rows && histData.rows.length > 0){
-      historial = histData.rows.map(function(r){
+    // ── Historial mensual ──────────────────────────────────────────────────
+    const histRows = await stockAPI('historial_mensual?select=mes,anio,unidades,fact_equipos,fact_insumos,licencias&order=anio.desc,mes.desc');
+    if(histRows && histRows.length > 0){
+      historial = histRows.map(function(r){
         return {
           mes: parseInt(r.mes),
           anio: parseInt(r.anio),
           unidades: parseFloat(r.unidades)||0,
-          factEquipos: parseFloat(r.factEquipos)||0,
-          factInsumos: parseFloat(r.factInsumos)||0,
+          factEquipos: parseFloat(r.fact_equipos)||0,
+          factInsumos: parseFloat(r.fact_insumos)||0,
           licencias: parseFloat(r.licencias)||0,
         };
       });
-      historial.sort(function(a,b){ return (b.anio*12+b.mes)-(a.anio*12+a.mes); });
     }
 
-    // Load fijos
-    const fijosData = await sheetsRead('fijos');
-    if(fijosData.rows && fijosData.rows.length > 0){
-      fijos = fijosData.rows.map(function(r){
+    // ── Costos fijos ───────────────────────────────────────────────────────
+    const fijosRows = await stockAPI('fijos_cotizador?select=name,monto&order=id.asc');
+    if(fijosRows && fijosRows.length > 0){
+      fijos = fijosRows.map(function(r){
         return { name: r.name, monto: parseFloat(r.monto)||0 };
       });
     }
 
-    // Precios de insumos: se toman de INSUMOS_BASE y se actualizan desde historial_precios de Supabase
-    // (no se cargan más desde Google Sheets)
-
-    // Load config
-    const configData = await sheetsRead('config');
-    if(configData.rows && configData.rows.length > 0){
-      configData.rows.forEach(function(r){
+    // ── Config (dólar, período) ────────────────────────────────────────────
+    const configRows = await stockAPI('config_cotizador?select=key,value');
+    if(configRows && configRows.length > 0){
+      configRows.forEach(function(r){
         if(r.key === 'dolar' && r.value){
           dolar = parseFloat(r.value)||1420;
           const dd = document.getElementById('dolar-display');
           const dm = document.getElementById('dolar-manual');
           if(dd) dd.textContent = Math.round(dolar).toLocaleString('es-AR');
           if(dm) dm.value = Math.round(dolar);
-          // Recalcular precios de lista con nuevo TC
           PRODUCTOS.forEach(function(p){
             p.precioLista = Math.round(p._usd * dolar);
             if(p._usdConMini) p.precioListaConMiniPC = Math.round(p._usdConMini * dolar);
@@ -5387,17 +5382,23 @@ async function loadFromSheets(){
       });
     }
 
-    // Load proyectos
-    const proyData = await sheetsRead('proyectos');
-    if(proyData.rows && proyData.rows.length>0){
-      proyectos = proyData.rows.map(function(r){ return { id:r.id, orden:r.orden, cliente:r.cliente, mes:parseInt(r.mes), anio:parseInt(r.anio), estado:r.estado, notas:r.notas||'', items: r.items ? JSON.parse(r.items) : [] }; });
+    // ── Proyectos ──────────────────────────────────────────────────────────
+    const proyRows = await stockAPI('proyectos_cotizador?select=*&order=id.asc');
+    if(proyRows && proyRows.length > 0){
+      proyectos = proyRows.map(function(r){
+        return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', mes:parseInt(r.mes)||0, anio:parseInt(r.anio)||0, estado:r.estado||'', notas:r.notas||'', items: r.items ? JSON.parse(r.items) : [] };
+      });
     }
-    // Load licencias
-    const licData = await sheetsRead('licencias');
-    if(licData.rows && licData.rows.length>0){
-      licencias = licData.rows.map(function(r){ return { id:r.id, orden:r.orden||'', cliente:r.cliente, desc:r.desc, totems:parseInt(r.totems)||1, monto:parseFloat(r.monto)||0, estado:r.estado, mesInicio:r.mesInicio||'', anioInicio:r.anioInicio||'', notas:r.notas||'' }; });
+
+    // ── Licencias ──────────────────────────────────────────────────────────
+    const licRows = await stockAPI('licencias_cotizador?select=*&order=id.asc');
+    if(licRows && licRows.length > 0){
+      licencias = licRows.map(function(r){
+        return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', desc:r.descripcion||'', totems:parseInt(r.totems)||1, monto:parseFloat(r.monto)||0, estado:r.estado||'', mesInicio:r.mes_inicio||'', anioInicio:r.anio_inicio||'', notas:r.notas||'' };
+      });
     }
-    // Refresh UI
+
+    // ── Refresh UI ─────────────────────────────────────────────────────────
     renderFijos();
     recalcFijos();
     recalcHistorial();
@@ -5408,55 +5409,84 @@ async function loadFromSheets(){
     if(productoActual) recalcCotizador();
 
     setSyncStatus('Sincronizado ✓', '#00c896', true);
-    saveData(); // also update localStorage
-    // Aplicar precios desde historial de OCs (después de que Sheets pise los valores)
+    saveData();
     verificarPreciosActualizados();
   } catch(err){
     setSyncStatus('Error al cargar', '#ff5e5e');
-    console.error('Sheets load error:', err);
+    console.error('Supabase load error:', err);
   }
 }
 
 async function saveToSheets(){
   setSyncStatus('Guardando...', '#f5a623');
   try {
-    // Save historial
-    await sheetsWrite('historial', historial);
+    // ── Historial mensual ──────────────────────────────────────────────────
+    for(const h of historial){
+      await stockAPI('historial_mensual?mes=eq.'+h.mes+'&anio=eq.'+h.anio, 'PATCH', {
+        unidades: h.unidades,
+        fact_equipos: h.factEquipos,
+        fact_insumos: h.factInsumos,
+        licencias: h.licencias
+      });
+    }
 
-    // Save fijos
-    await sheetsWrite('fijos', fijos);
+    // ── Costos fijos ───────────────────────────────────────────────────────
+    // Borrar y reinsertar (más simple que hacer upsert por nombre)
+    await stockAPI('fijos_cotizador?id=gt.0', 'DELETE');
+    if(fijos.length > 0){
+      await stockAPI('fijos_cotizador', 'POST', fijos.map(function(f){ return { name: f.name, monto: f.monto }; }));
+    }
 
-    // Precios de insumos ya no se guardan en Sheets - se manejan via Supabase
-    // Also include ivaOverride keys not in costosOverride
-    Object.keys(ivaOverride).forEach(function(key){
-      if(!costosOverride[key]){
-        insumosRows.push({ key, costoReal: '', ivaRate: ivaOverride[key] });
+    // ── Config ─────────────────────────────────────────────────────────────
+    const periodoVal = document.getElementById('periodo-analisis')?.value || 6;
+    await stockAPI('config_cotizador?key=eq.dolar', 'PATCH', { value: dolar });
+    await stockAPI('config_cotizador?key=eq.periodo', 'PATCH', { value: periodoVal });
+
+    // ── Proyectos ──────────────────────────────────────────────────────────
+    for(const p of proyectos){
+      if(p.id){
+        await stockAPI('proyectos_cotizador?id=eq.'+p.id, 'PATCH', {
+          orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio,
+          estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items)
+        });
+      } else {
+        const res = await stockAPI('proyectos_cotizador', 'POST', [{
+          orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio,
+          estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items)
+        }]);
+        if(res && res[0]) p.id = res[0].id;
       }
-    });
-    // precios insumos no se sincronizan con Sheets
+    }
 
-    // Save proyectos
-    await sheetsWrite('proyectos', proyectos.map(function(p){ return { id:p.id, orden:p.orden, cliente:p.cliente, mes:p.mes, anio:p.anio, estado:p.estado, notas:p.notas||'', items:JSON.stringify(p.items) }; }));
-    // Save licencias
-    await sheetsWrite('licencias', licencias.map(function(l){ return { id:l.id, orden:l.orden||'', cliente:l.cliente, desc:l.desc, totems:l.totems, monto:l.monto, estado:l.estado, mesInicio:l.mesInicio||'', anioInicio:l.anioInicio||'', notas:l.notas||'' }; }));
-    // Save config
-    const configRows = [
-      { key: 'dolar', value: dolar },
-      { key: 'periodo', value: document.getElementById('periodo-analisis')?.value || 6 },
-    ];
-    await sheetsWrite('config', configRows);
+    // ── Licencias ──────────────────────────────────────────────────────────
+    for(const l of licencias){
+      if(l.id){
+        await stockAPI('licencias_cotizador?id=eq.'+l.id, 'PATCH', {
+          orden: l.orden||'', cliente: l.cliente, descripcion: l.desc,
+          totems: l.totems, monto: l.monto, estado: l.estado,
+          mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||''
+        });
+      } else {
+        const res = await stockAPI('licencias_cotizador', 'POST', [{
+          orden: l.orden||'', cliente: l.cliente, descripcion: l.desc,
+          totems: l.totems, monto: l.monto, estado: l.estado,
+          mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||''
+        }]);
+        if(res && res[0]) l.id = res[0].id;
+      }
+    }
 
     setSyncStatus('Guardado ✓', '#00c896', true);
-    saveData(); // also update localStorage
+    saveData();
   } catch(err){
     setSyncStatus('Error al guardar', '#ff5e5e');
-    console.error('Sheets save error:', err);
+    console.error('Supabase save error:', err);
   }
 }
 
 async function syncAll(){
-  // Save local data to sheets, then reload to confirm
   await saveToSheets();
+  await loadFromSheets();
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
