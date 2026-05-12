@@ -6131,6 +6131,11 @@ async function verificarPreciosActualizados(){
         ? Math.round(h.precio_neto * h.tipo_cambio)
         : h.precio_neto;
       insumo.costoBase = Math.round(precioNetoARS * (1 + ivaRate) * BASE_DOLAR / dolar);
+      // Sincronizar costosOverride para que renderInsumosMgmt muestre el precio nuevo
+      costosOverride[key] = insumo.costoBase;
+      if(costosOverride[key+'_usd'] !== undefined){
+        costosOverride[key+'_usd'] = Math.round(insumo.costoBase / dolar * 100) / 100;
+      }
       actualizados++;
     });
     if(actualizados > 0){
