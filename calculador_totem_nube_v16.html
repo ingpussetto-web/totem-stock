@@ -5444,7 +5444,8 @@ async function saveToSheets(){
 
     // ── Proyectos ──────────────────────────────────────────────────────────
     for(const p of proyectos){
-      if(p.id){
+      const idNumerico = p.id && Number.isInteger(Number(p.id)) && !String(p.id).includes('-');
+      if(idNumerico){
         await stockAPI('proyectos_cotizador?id=eq.'+p.id, 'PATCH', {
           orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio,
           estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items)
@@ -5460,13 +5461,14 @@ async function saveToSheets(){
 
     // ── Licencias ──────────────────────────────────────────────────────────
     for(const l of licencias){
-      if(l.id){
+      const licIdNum = l.id && Number.isInteger(Number(l.id)) && !String(l.id).includes('-');
+      if(licIdNum){
         await stockAPI('licencias_cotizador?id=eq.'+l.id, 'PATCH', {
           orden: l.orden||'', cliente: l.cliente, descripcion: l.desc,
           totems: l.totems, monto: l.monto, estado: l.estado,
           mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||''
         });
-      } else {
+      } else if(!licIdNum) {
         const res = await stockAPI('licencias_cotizador', 'POST', [{
           orden: l.orden||'', cliente: l.cliente, descripcion: l.desc,
           totems: l.totems, monto: l.monto, estado: l.estado,
@@ -6133,6 +6135,7 @@ async function verificarPreciosActualizados(){
     });
     if(actualizados > 0){
       recalcCotizador();
+      renderInsumosMgmt();
       renderInsumosTbody();
       console.log('Precios actualizados desde historial:', actualizados, 'insumos');
     }
