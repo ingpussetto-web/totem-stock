@@ -2041,6 +2041,7 @@ function actualizarChipUsuario(){
 
 // ─── HISTORIAL DE PRECIOS ────────────────────────────────────────────────────
 let preciosHistorial = {}; // {key: [{fecha, bruto, neto, usd, usuario}]}
+let historialSupabase = {}; // {v14_key: {fecha, proveedor, moneda}} — cargado desde historial_precios
 
 function registrarCambioprecio(key, bruto, neto, usdVal){
   if(!preciosHistorial[key]) preciosHistorial[key] = [];
@@ -2309,15 +2310,34 @@ function renderInsumosMgmt(){
     const sel105=ivaRate===0.105?'selected':'';
     const sel0=ivaRate===0?'selected':'';
     const ultimaCambio = getUltimaActualizacion(key);
-    const fechaLabel = ultimaCambio
-      ? new Date(ultimaCambio.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})
-      : '—';
+    const histSupa = historialSupabase[key] || null;
     const sinValor = !costoReal || costoReal===0;
     const sinDatoBadge = sinValor ? '<span class="badge-sin-dato" title="Sin valor">⚠</span>' : '';
+
+    // Determinar etiqueta de estado debajo del nombre
+    let fechaLabel = '';
+    let fechaColor = '#3a4055';
+    if(histSupa && histSupa.fecha){
+      // Precio de OC real
+      const f = new Date(histSupa.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      const prov = histSupa.proveedores ? histSupa.proveedores.razon_social : '';
+      fechaLabel = f + (prov ? ' · '+prov : '');
+      fechaColor = '#3a4055';
+    } else if(ultimaCambio){
+      // Precio cargado manualmente
+      const f = new Date(ultimaCambio.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      fechaLabel = 'Manual · '+f;
+      fechaColor = '#7a8099';
+    } else {
+      // Sin datos
+      fechaLabel = sinValor ? 'Sin datos de compra' : '';
+      fechaColor = '#ff4d6a44';
+    }
+
     return '<tr>'
       +'<td class="td-name" id="td-name-'+key+'" style="min-width:180px;">'
         +'<div style="font-weight:500;color:var(--text);">'+ins.name+' '+sinDatoBadge+'</div>'
-        +'<div class="fecha-update">'+fechaLabel+(ultimaCambio?' · '+ultimaCambio.usuario:'')+'</div>'
+        +'<div class="fecha-update" style="color:'+fechaColor+';">'+fechaLabel+'</div>'
       +'</td>'
       +'<td style="text-align:right;">'
         +'<input type="number" value="'+Math.round(usdBase*100)/100+'" step="0.01" '
@@ -6235,6 +6255,8 @@ async function verificarPreciosActualizados(){
     historial.forEach(function(h){
       if(!ultimosPorKey[h.v14_key]) ultimosPorKey[h.v14_key] = h;
     });
+    // Guardar en variable global para usar en renderInsumosMgmt
+    historialSupabase = ultimosPorKey;
     // Aplicar directamente al costoBase sin comparar
     var actualizados = 0;
     Object.entries(ultimosPorKey).forEach(function([key, h]){
