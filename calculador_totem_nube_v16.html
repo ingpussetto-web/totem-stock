@@ -6180,17 +6180,24 @@ async function verificarPreciosActualizados(){
     Object.entries(ultimosPorKey).forEach(function([key, h]){
       const insumo = INSUMOS_BASE[key];
       if(!insumo || !h.precio_neto) return;
-      // precioNetoARS = precio sin IVA en pesos. Si OC en USD, convertir primero.
-      const precioNetoARS = h.moneda === 'USD' && h.tipo_cambio
-        ? Math.round(h.precio_neto * h.tipo_cambio)
-        : h.precio_neto;
       const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
-      insumo.costoBase = precioNetoARS;
-      // costosOverride[key] debe ser precio CON IVA (renderInsumosMgmt lo divide por 1+iva para mostrar neto)
-      costosOverride[key] = Math.round(precioNetoARS * (1 + ivaRate));
-      if(costosOverride[key+'_usd'] !== undefined){
-        costosOverride[key+'_usd'] = Math.round(costosOverride[key] / dolar * 100) / 100;
+      let precioNetoARS, precioNetoUSD;
+      if(h.moneda === 'USD'){
+        // OC en USD: guardar USD y convertir a ARS con el TC de la OC (o el actual si no hay)
+        precioNetoUSD = h.precio_neto;
+        const tc = h.tipo_cambio || dolar; // usa TC de OC si existe, sino el actual
+        precioNetoARS = Math.round(h.precio_neto * tc);
+      } else {
+        // OC en ARS: precio directo, USD calculado con TC de OC o actual
+        precioNetoARS = h.precio_neto;
+        const tc = h.tipo_cambio || dolar;
+        precioNetoUSD = Math.round(h.precio_neto / tc * 100) / 100;
       }
+      insumo.costoBase = precioNetoARS;
+      // costosOverride[key] = precio CON IVA en ARS (renderInsumosMgmt lo divide por 1+iva para mostrar neto)
+      costosOverride[key] = Math.round(precioNetoARS * (1 + ivaRate));
+      // costosOverride[key+'_usd'] = precio neto en USD (para mostrar columna USD base)
+      costosOverride[key+'_usd'] = precioNetoUSD;
       actualizados++;
     });
     if(actualizados > 0){
