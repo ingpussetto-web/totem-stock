@@ -5419,21 +5419,21 @@ async function loadFromSheets(){
         });
         if(keyExistente){
           // Ya existe — actualizar nombre si cambió
-          INSUMOS_BASE[keyExistente].nombre = sku.nombre;
+          INSUMOS_BASE[keyExistente].name = sku.nombre;
           INSUMOS_BASE[keyExistente].sku_id = sku.id;
         } else {
           // Nuevo SKU — agregar con precio 0, se actualizará con historial_precios
           const keyNuevo = 'sku_'+sku.id;
           if(!INSUMOS_BASE[keyNuevo]){
             INSUMOS_BASE[keyNuevo] = {
-              nombre: sku.nombre,
+              name: sku.nombre,
               costoBase: 0,
               iva: ivaDefecto[sku.categoria_id] !== undefined ? ivaDefecto[sku.categoria_id] : 0.21,
               sku_id: sku.id,
               fromSupabase: true
             };
           } else {
-            INSUMOS_BASE[keyNuevo].nombre = sku.nombre;
+            INSUMOS_BASE[keyNuevo].name = sku.nombre;
             INSUMOS_BASE[keyNuevo].sku_id = sku.id;
           }
         }
