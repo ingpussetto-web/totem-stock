@@ -5398,6 +5398,49 @@ async function loadFromSheets(){
       });
     }
 
+    // ── SKUs desde Supabase → sincronizar con INSUMOS_BASE ───────────────
+    // Primero cargar el mapeo v14_key → sku_id para los insumos existentes
+    const mapeoRows = await stockAPI('v14_sku_map?select=v14_key,sku_id');
+    if(mapeoRows && mapeoRows.length > 0){
+      mapeoRows.forEach(function(m){
+        if(INSUMOS_BASE[m.v14_key]) INSUMOS_BASE[m.v14_key].sku_id = m.sku_id;
+      });
+    }
+    // Categorías relevantes para costeo: Gabinetes(8), Pantallas(9), MiniPCs(10), Periféricos(11), Vidrios(12), Electricidad(13)
+    const skuRows = await stockAPI('skus?select=id,nombre,codigo,categoria_id&categoria_id=in.(8,9,10,11,12,13)&activo=eq.true&limit=200');
+    if(skuRows && skuRows.length > 0){
+      // Mapeo categoria_id → IVA por defecto
+      const ivaDefecto = {8:0.21, 9:0.21, 10:0.21, 11:0.21, 12:0.105, 13:0.21};
+      skuRows.forEach(function(sku){
+        // Buscar si ya existe en INSUMOS_BASE por v14_sku_map (via sku_id)
+        // Si no existe, agregarlo dinámicamente con precio 0
+        const keyExistente = Object.keys(INSUMOS_BASE).find(function(k){
+          return INSUMOS_BASE[k].sku_id === sku.id;
+        });
+        if(keyExistente){
+          // Ya existe — actualizar nombre si cambió
+          INSUMOS_BASE[keyExistente].nombre = sku.nombre;
+          INSUMOS_BASE[keyExistente].sku_id = sku.id;
+        } else {
+          // Nuevo SKU — agregar con precio 0, se actualizará con historial_precios
+          const keyNuevo = 'sku_'+sku.id;
+          if(!INSUMOS_BASE[keyNuevo]){
+            INSUMOS_BASE[keyNuevo] = {
+              nombre: sku.nombre,
+              costoBase: 0,
+              iva: ivaDefecto[sku.categoria_id] !== undefined ? ivaDefecto[sku.categoria_id] : 0.21,
+              sku_id: sku.id,
+              fromSupabase: true
+            };
+          } else {
+            INSUMOS_BASE[keyNuevo].nombre = sku.nombre;
+            INSUMOS_BASE[keyNuevo].sku_id = sku.id;
+          }
+        }
+      });
+      console.log('SKUs sincronizados desde Supabase:', skuRows.length);
+    }
+
     // ── Refresh UI ─────────────────────────────────────────────────────────
     renderFijos();
     recalcFijos();
