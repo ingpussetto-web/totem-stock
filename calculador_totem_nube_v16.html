@@ -6071,7 +6071,8 @@ async function verHistorialInsumo(key){
   modal.id = 'modal-hist-insumo';
   modal.innerHTML = '<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto;">'
     + '<div style="font-size:10px;color:#3a4055;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Historial de precios</div>'
-    + '<div style="font-size:16px;font-weight:600;color:#e8eaf0;margin-bottom:16px;">'+nombre+'</div>'
+    + '<div style="font-size:16px;font-weight:600;color:#e8eaf0;margin-bottom:4px;">'+nombre+'</div>'
+    + '<div id="hist-ultima-actualizacion" style="font-size:11px;color:#3a4055;margin-bottom:16px;">Cargando...</div>'
     + '<div id="historial-tabla-contenido" style="font-size:13px;color:#7a8099;">Cargando...</div>'
     + '<div style="margin-top:16px;text-align:right;">'
     + '<button onclick="document.getElementById(\'modal-hist-insumo\').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Cerrar</button>'
@@ -6093,9 +6094,17 @@ async function verHistorialInsumo(key){
     );
 
     const el = document.getElementById('historial-tabla-contenido');
+    const elSub = document.getElementById('hist-ultima-actualizacion');
     if(!registros || !registros.length){
       el.innerHTML = '<div style="color:#3a4055;padding:12px 0;">Sin registros de compras para este insumo todavía.</div>';
+      if(elSub) elSub.textContent = '';
       return;
+    }
+    // Mostrar fecha de última actualización
+    if(elSub && registros[0].fecha){
+      const fechaUlt = new Date(registros[0].fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+      const prov = registros[0].proveedores ? ' · '+registros[0].proveedores.razon_social : '';
+      elSub.textContent = 'Última actualización: '+fechaUlt+prov;
     }
 
     let html = '<table style="width:100%;border-collapse:collapse;">';
