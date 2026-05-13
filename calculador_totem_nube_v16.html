@@ -429,6 +429,27 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
       </div>
     </div>
 
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <select id="filtro-categoria" onchange="renderInsumosMgmt()" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);cursor:pointer;">
+        <option value="">Todas las categorías</option>
+        <option value="8">Gabinetes</option>
+        <option value="9">Pantallas y monitores</option>
+        <option value="10">Mini PCs</option>
+        <option value="11">Periféricos</option>
+        <option value="12">Vidrios y marcos</option>
+        <option value="13">Electricidad</option>
+        <option value="14">Otros</option>
+        <option value="sin_categoria">Sin categoría</option>
+      </select>
+      <select id="filtro-antiguedad" onchange="renderInsumosMgmt()" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);cursor:pointer;">
+        <option value="">Sin filtro de actualización</option>
+        <option value="30">Pendiente +30 días</option>
+        <option value="60">Pendiente +60 días</option>
+        <option value="90">Pendiente +90 días o nunca</option>
+      </select>
+      <span id="filtro-count" style="font-size:11px;color:var(--text3);"></span>
+    </div>
+
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="overflow-x:auto;">
         <table class="insumos-table" style="width:100%;min-width:900px;">
@@ -2241,7 +2262,34 @@ function confirmarEliminarInsumo(key){
 // ─────────────────────────────────────────────────────────────────────────────
 
 function renderInsumosMgmt(){
-  const sorted=Object.entries(INSUMOS_BASE).sort(function(a,b){return a[1].name.localeCompare(b[1].name);});
+  const filtroCat = (document.getElementById('filtro-categoria')||{}).value || '';
+  const filtroAntig = parseInt((document.getElementById('filtro-antiguedad')||{}).value || '0');
+  const hoy = new Date();
+
+  let sorted=Object.entries(INSUMOS_BASE).sort(function(a,b){return a[1].name.localeCompare(b[1].name);});
+
+  // Filtro por categoría
+  if(filtroCat){
+    sorted = sorted.filter(function([k,v]){
+      if(filtroCat === 'sin_categoria') return !v.sku_id && !v.fromSupabase;
+      return v.categoria_id == filtroCat;
+    });
+  }
+
+  // Filtro por antigüedad
+  if(filtroAntig > 0){
+    sorted = sorted.filter(function([k,v]){
+      const ult = getUltimaActualizacion(k);
+      if(!ult) return true; // nunca actualizado → siempre incluir
+      const diasDesde = (hoy - new Date(ult.fecha+'T00:00:00')) / (1000*60*60*24);
+      return diasDesde >= filtroAntig;
+    });
+  }
+
+  // Actualizar contador
+  const countEl = document.getElementById('filtro-count');
+  if(countEl) countEl.textContent = sorted.length + ' insumo' + (sorted.length !== 1 ? 's' : '');
+
   const tbody=document.getElementById('insumos-mgmt-tbody');
   if(!tbody) return;
   const rows=sorted.map(function(entry){
@@ -5412,6 +5460,7 @@ async function loadFromSheets(){
           // Ya existe — actualizar nombre si cambió
           INSUMOS_BASE[keyExistente].name = sku.nombre;
           INSUMOS_BASE[keyExistente].sku_id = sku.id;
+          INSUMOS_BASE[keyExistente].categoria_id = sku.categoria_id;
         } else {
           // Nuevo SKU — agregar con precio 0, se actualizará con historial_precios
           const keyNuevo = 'sku_'+sku.id;
@@ -5421,11 +5470,13 @@ async function loadFromSheets(){
               costoBase: 0,
               iva: ivaDefecto[sku.categoria_id] !== undefined ? ivaDefecto[sku.categoria_id] : 0.21,
               sku_id: sku.id,
+              categoria_id: sku.categoria_id,
               fromSupabase: true
             };
           } else {
             INSUMOS_BASE[keyNuevo].name = sku.nombre;
             INSUMOS_BASE[keyNuevo].sku_id = sku.id;
+            INSUMOS_BASE[keyNuevo].categoria_id = sku.categoria_id;
           }
         }
       });
