@@ -680,48 +680,77 @@ async function loadDesvios(){
       return;
     }
 
-    // Stats
+    // ── Alertas tempranas: OPs abiertas con stock 0 ────────────────────────
+    let alertasHTML = '';
+    try{
+      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,skus(id,nombre,codigo),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
+      const alertas = (opsAbiertas||[]).filter(i => i.ordenes_produccion && ['pendiente','en_proceso'].includes(i.ordenes_produccion.estado));
+      if(alertas.length){
+        const skuIds = [...new Set(alertas.map(i=>i.sku_id))].join(',');
+        const stockItems = await api('stock_disponible?sku_id=in.('+skuIds+')&select=sku_id,disponible').catch(()=>[]);
+        const stockMap = {};
+        (stockItems||[]).forEach(s=>{ stockMap[s.sku_id] = s.disponible; });
+        const conStock0 = alertas.filter(i => (stockMap[i.sku_id]||0) <= 0);
+        if(conStock0.length){
+          alertasHTML = '<div style="margin-bottom:20px;">'
+            +'<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:8px;letter-spacing:0.05em;">⚡ ALERTAS TEMPRANAS — Stock 0 comprometido en OPs abiertas</div>'
+            +'<table style="width:100%;border-collapse:collapse;border:1px solid rgba(255,179,64,0.2);border-radius:8px;overflow:hidden;"><thead>'
+            +'<tr style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;border-bottom:1px solid rgba(255,179,64,0.15);">'
+            +'<th style="padding:8px 16px;text-align:left;">Insumo</th><th style="padding:8px;text-align:left;">OP</th>'
+            +'<th style="padding:8px;text-align:left;">Cliente</th><th style="padding:8px;"></th></tr></thead><tbody>'
+            + conStock0.map(item => {
+                const sku = item.skus||{};
+                const op = item.ordenes_produccion||{};
+                const variante = item.variantes ? item.variantes.valor : '';
+                const nombre = sku.nombre||item.nombre||'—';
+                return '<tr style="border-top:1px solid rgba(255,179,64,0.1);">'
+                  +'<td style="padding:10px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'+(variante?'<div style="font-size:11px;color:var(--text3);">'+variante+'</div>':'')+'</td>'
+                  +'<td style="padding:10px;font-family:DM Mono,monospace;font-size:12px;color:#ffb340;">'+(op.op_numero||'—')+'</td>'
+                  +'<td style="padding:10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
+                  +'<td style="padding:10px;text-align:right;"><button class="btn" onclick="generarOCDesdeDesvio('+sku.id+',''+nombre.replace(/'/g,"\'")+'',''+variante+'')" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;">🛒 Comprar</button></td>'
+                  +'</tr>';
+              }).join('')
+            +'</tbody></table></div>';
+          statsEl.innerHTML += '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">'
+            +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+conStock0.length+'</div>'
+            +'<div style="font-size:11px;color:var(--text3);">Alertas tempranas</div></div>';
+        }
+      }
+    }catch(e){ console.warn('Alertas tempranas:', e.message); }
+
+    // ── Stats desvíos cerrados ───────────────────────────────────────────────
     const ops = [...new Set(cerrados.map(i=>i.ordenes_produccion.op_numero))];
-    statsEl.innerHTML = `
-      <div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">
-        <div style="font-size:22px;font-weight:700;color:#ff4d6a;">${cerrados.length}</div>
-        <div style="font-size:11px;color:var(--text3);">Insumos con desvío</div>
-      </div>
-      <div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">
-        <div style="font-size:22px;font-weight:700;color:#ffb340;">${ops.length}</div>
-        <div style="font-size:11px;color:var(--text3);">OPs afectadas</div>
-      </div>`;
+    statsEl.innerHTML = '<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
+      +'<div style="font-size:22px;font-weight:700;color:#ff4d6a;">'+cerrados.length+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);">Desvíos cerrados</div></div>'
+      +'<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
+      +'<div style="font-size:22px;font-weight:700;color:#ff4d6a;">'+ops.length+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);">OPs afectadas</div></div>';
 
-    // Tabla
-    tbody.innerHTML = cerrados.map(item => {
-      const sku = item.skus || {};
-      const op = item.ordenes_produccion || {};
-      const variante = item.variantes ? item.variantes.valor : '—';
-      const nombre = sku.nombre || '—';
-      const cantFaltante = item.cantidad_requerida || 1;
-
-      return `<tr style="border-top:1px solid var(--border2);">
-        <td style="padding:12px 16px;">
-          <div style="font-weight:500;color:var(--text);">${nombre}</div>
-          ${variante !== '—' ? `<div style="font-size:11px;color:var(--text3);">${variante}</div>` : ''}
-          <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">${sku.codigo||''}</div>
-        </td>
-        <td style="padding:12px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">${op.op_numero||'—'}</td>
-        <td style="padding:12px 10px;color:var(--text2);">${op.cliente||'—'}</td>
-        <td style="padding:12px 10px;text-align:center;">
-          <span style="background:rgba(255,77,106,0.12);color:#ff4d6a;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">${cantFaltante}</span>
-        </td>
-        <td style="padding:12px 10px;">
-          <span style="background:rgba(255,179,64,0.12);color:#ffb340;padding:2px 10px;border-radius:20px;font-size:11px;">Pendiente cierre</span>
-        </td>
-        <td style="padding:12px 10px;text-align:right;">
-          <button class="btn" onclick="generarOCDesdeDesvio(${sku.id},'${nombre.replace(/'/g,"\'")}','${variante}')"
-            style="font-size:11px;padding:4px 12px;border-color:var(--green);color:var(--green);">
-            🛒 Generar OC
-          </button>
-        </td>
-      </tr>`;
-    }).join('');
+    // ── Tabla desvíos cerrados (solo insumos inventariables con sku_id) ────
+    const cerradosInventariables = cerrados.filter(i => !!i.sku_id);
+    let desviosCerradosHTML = '';
+    if(!cerradosInventariables.length){
+      desviosCerradosHTML = '<div style="padding:20px;text-align:center;color:var(--text3);">✓ Sin desvíos en OPs cerradas</div>';
+    } else {
+      desviosCerradosHTML = '<table style="width:100%;border-collapse:collapse;"><tbody>'
+        + cerradosInventariables.map(item => {
+          const sku = item.skus || {};
+          const op = item.ordenes_produccion || {};
+          const variante = item.variantes ? item.variantes.valor : '';
+          const nombre = sku.nombre || item.nombre || '—';
+          return '<tr style="border-top:1px solid var(--border2);">'
+            +'<td style="padding:12px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'
+            +(variante?'<div style="font-size:11px;color:var(--text3);">'+variante+'</div>':'')
+            +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+(sku.codigo||'')+'</div></td>'
+            +'<td style="padding:12px 10px;font-family:DM Mono,monospace;font-size:12px;color:var(--text2);">'+(op.op_numero||'—')+'</td>'
+            +'<td style="padding:12px 10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
+            +'<td style="padding:12px 10px;text-align:center;"><span style="background:rgba(255,77,106,0.12);color:#ff4d6a;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;">'+(item.qty||1)+'</span></td>'
+            +'<td style="padding:12px 10px;text-align:right;"><button class="btn" onclick="generarOCDesdeDesvio('+sku.id+',''+nombre.replace(/'/g,"\'")+'',''+variante+'')" style="font-size:11px;padding:4px 12px;border-color:var(--green);color:var(--green);">🛒 Generar OC</button></td>'
+            +'</tr>';
+        }).join('') + '</tbody></table>';
+    }
+    tbody.innerHTML = alertasHTML + desviosCerradosHTML;
 
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#ff4d6a;">Error: ${e.message}</td></tr>`;
