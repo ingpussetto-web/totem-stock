@@ -238,6 +238,9 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <div class="nav-item" onclick="showPage('proveedores')" id="nav-proveedores">
         <span>▤</span> Proveedores
       </div>
+      <div class="nav-item" onclick="showPage('desvios')" id="nav-desvios">
+        <span>⚠</span> Desvíos de producción
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')" id="nav-config">
         <span>⚙</span> Configuración
@@ -285,6 +288,38 @@ textarea.form-input{resize:vertical;min-height:70px;}
     </div>
 
     <!-- PROVEEDORES -->
+    <div class="page" id="page-desvios">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Desvíos de producción</div>
+          <div class="page-sub">Insumos usados sin stock en OPs cerradas — requieren seguimiento y eventual compra.</div>
+        </div>
+        <button class="btn" onclick="loadDesvios()" style="border-color:var(--border2);color:var(--text2);">↺ Actualizar</button>
+      </div>
+
+      <div id="desvios-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;"></div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;min-width:700px;">
+            <thead>
+              <tr style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;border-bottom:1px solid var(--border2);">
+                <th style="padding:10px 16px;text-align:left;">Insumo</th>
+                <th style="padding:10px;text-align:left;">OP</th>
+                <th style="padding:10px;text-align:left;">Cliente</th>
+                <th style="padding:10px;text-align:center;">Cant. faltante</th>
+                <th style="padding:10px;text-align:left;">Estado</th>
+                <th style="padding:10px;text-align:right;"></th>
+              </tr>
+            </thead>
+            <tbody id="desvios-tbody">
+              <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-proveedores">
       <div class="page-header">
         <div>
@@ -376,6 +411,9 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <div class="step" id="oc-step2"><span class="step-num">02</span>Insumos</div>
       <div class="step" id="oc-step3"><span class="step-num">03</span>Pago y condiciones</div>
     </div>
+
+    <!-- Banner insumo pre-cargado desde desvío -->
+    <div id="oc-precargado-banner" style="display:none;"></div>
 
     <!-- PASO 1: Proveedor -->
     <div id="oc-panel1">
@@ -622,6 +660,78 @@ function showPage(id){
   if(id==='ocs') loadOCs();
   if(id==='proveedores') loadProveedores();
   if(id==='config') loadConfig();
+  if(id==='desvios') loadDesvios();
+}
+
+// ─── DESVÍOS DE PRODUCCIÓN ─────────────────────────────────
+async function loadDesvios(){
+  const tbody = document.getElementById('desvios-tbody');
+  const statsEl = document.getElementById('desvios-stats');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Cargando...</td></tr>';
+  try{
+    // Traer op_bom_items pendientes de OPs cerradas
+    const items = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&select=*,skus(id,nombre,codigo),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)&order=id.desc');
+    const cerrados = items ? items.filter(i => i.ordenes_produccion && i.ordenes_produccion.estado === 'cerrada') : [];
+
+    if(!cerrados.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin desvíos pendientes</td></tr>';
+      statsEl.innerHTML = '';
+      return;
+    }
+
+    // Stats
+    const ops = [...new Set(cerrados.map(i=>i.ordenes_produccion.op_numero))];
+    statsEl.innerHTML = `
+      <div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">
+        <div style="font-size:22px;font-weight:700;color:#ff4d6a;">${cerrados.length}</div>
+        <div style="font-size:11px;color:var(--text3);">Insumos con desvío</div>
+      </div>
+      <div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">
+        <div style="font-size:22px;font-weight:700;color:#ffb340;">${ops.length}</div>
+        <div style="font-size:11px;color:var(--text3);">OPs afectadas</div>
+      </div>`;
+
+    // Tabla
+    tbody.innerHTML = cerrados.map(item => {
+      const sku = item.skus || {};
+      const op = item.ordenes_produccion || {};
+      const variante = item.variantes ? item.variantes.valor : '—';
+      const nombre = sku.nombre || '—';
+      const cantFaltante = item.cantidad_requerida || 1;
+
+      return `<tr style="border-top:1px solid var(--border2);">
+        <td style="padding:12px 16px;">
+          <div style="font-weight:500;color:var(--text);">${nombre}</div>
+          ${variante !== '—' ? `<div style="font-size:11px;color:var(--text3);">${variante}</div>` : ''}
+          <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">${sku.codigo||''}</div>
+        </td>
+        <td style="padding:12px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">${op.op_numero||'—'}</td>
+        <td style="padding:12px 10px;color:var(--text2);">${op.cliente||'—'}</td>
+        <td style="padding:12px 10px;text-align:center;">
+          <span style="background:rgba(255,77,106,0.12);color:#ff4d6a;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">${cantFaltante}</span>
+        </td>
+        <td style="padding:12px 10px;">
+          <span style="background:rgba(255,179,64,0.12);color:#ffb340;padding:2px 10px;border-radius:20px;font-size:11px;">Pendiente cierre</span>
+        </td>
+        <td style="padding:12px 10px;text-align:right;">
+          <button class="btn" onclick="generarOCDesdeDesvio(${sku.id},'${nombre.replace(/'/g,"\'")}','${variante}')"
+            style="font-size:11px;padding:4px 12px;border-color:var(--green);color:var(--green);">
+            🛒 Generar OC
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#ff4d6a;">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function generarOCDesdeDesvio(skuId, nombre, variante){
+  // Ir a OCs con el insumo pre-seleccionado
+  showPage('ocs');
+  nuevaOC(skuId, nombre, variante);
 }
 
 // ─── CONNECTION ─────────────────────────────────────────────
@@ -784,7 +894,9 @@ function renderOCs(){
 }
 
 // ─── NUEVA OC ────────────────────────────────────────────────
-function nuevaOC(){
+let ocInsumoPreCargado = null; // {skuId, nombre, variante}
+
+function nuevaOC(skuIdPreCargado, nombrePreCargado, variantePreCargada){
   ocEditandoId=null;
   lineas=[];
   provSeleccionado=null;
@@ -801,7 +913,22 @@ function nuevaOC(){
   // Fill categorias
   const catSel=document.getElementById('add-cat-sel');
   catSel.innerHTML='<option value="">— Categoría —</option>'+categorias.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  // Pre-cargar insumo si viene de desvío
+  ocInsumoPreCargado = skuIdPreCargado ? {skuId: skuIdPreCargado, nombre: nombrePreCargado, variante: variantePreCargada} : null;
   openModal('modal-oc');
+  // Si hay insumo pre-cargado, mostrar banner informativo en paso 1
+  const bannerEl = document.getElementById('oc-precargado-banner');
+  if(bannerEl){
+    if(ocInsumoPreCargado){
+      bannerEl.style.display='block';
+      bannerEl.innerHTML = `<div style="background:rgba(255,179,64,0.1);border:1px solid rgba(255,179,64,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ffb340;">
+        ⚠ Insumo pre-cargado desde desvío: <strong>${nombrePreCargado}</strong>${variantePreCargada && variantePreCargada!=='—' ? ' · '+variantePreCargada : ''}
+        <br><span style="color:var(--text3);">Se agregará automáticamente al paso 2.</span>
+      </div>`;
+    } else {
+      bannerEl.style.display='none';
+    }
+  }
 }
 
 function ocPaso1(){ ocPaso1UI(); }
@@ -819,6 +946,22 @@ function ocPaso2UI(){
   document.getElementById('oc-panel1').style.display='none';
   document.getElementById('oc-panel2').style.display='block';
   document.getElementById('oc-panel3').style.display='none';
+  // Si hay insumo pre-cargado desde desvío, agregarlo como primera línea
+  if(ocInsumoPreCargado && !lineas.length){
+    const sku = skus.find(s=>s.id === ocInsumoPreCargado.skuId);
+    if(sku){
+      lineas.push({
+        sku_id: sku.id,
+        nombre: sku.nombre,
+        cantidad: 1,
+        precio_neto: 0,
+        iva: 0.21,
+        color: ocInsumoPreCargado.variante && ocInsumoPreCargado.variante !== '—' ? ocInsumoPreCargado.variante : ''
+      });
+      toast('Insumo pre-cargado desde desvío ✓');
+    }
+    ocInsumoPreCargado = null;
+  }
   renderLineas();
   calcularTotales();
   setOCStep(2);
