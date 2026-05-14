@@ -264,8 +264,11 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       </div>
       <div class="toolbar">
         <input class="search-input" type="text" placeholder="Buscar..." id="stock-search" oninput="renderStock()">
-        <select class="filter" id="stock-cat" onchange="renderStock()">
+        <select class="filter" id="stock-cat" onchange="actualizarFiltroVariante();renderStock()">
           <option value="">Todas las categorías</option>
+        </select>
+        <select class="filter" id="stock-variante" onchange="renderStock()" style="display:none;">
+          <option value="">Todas las variantes</option>
         </select>
         <select class="filter" id="stock-alerta" onchange="renderStock()">
           <option value="">Todos los estados</option>
@@ -311,6 +314,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <span class="scan-icon">⌗</span>
           <input class="search-input scan-input" type="text" placeholder="Escanear o buscar UID..." id="uid-search" oninput="renderUnidades()">
         </div>
+        <select class="filter" id="uid-cat" onchange="actualizarFiltroSKUPorCat();renderUnidades()">
+          <option value="">Todas las categorías</option>
+        </select>
         <select class="filter" id="uid-sku" onchange="renderUnidades()">
           <option value="">Todos los SKUs</option>
         </select>
@@ -674,13 +680,38 @@ async function loadStock(){
   } catch(e){ console.error(e); renderStock([]); }
 }
 
+function actualizarFiltroVariante(){
+  const catFil = document.getElementById('stock-cat')?.value||'';
+  const varSel = document.getElementById('stock-variante');
+  if(!varSel) return;
+  if(!catFil){
+    varSel.style.display='none';
+    varSel.value='';
+    return;
+  }
+  // Obtener variantes disponibles para esa categoría
+  const variantes = [...new Set(
+    [...(stockData||[])].filter(d=>d.categoria_id==catFil && d.variante && d.variante!=='—').map(d=>d.variante)
+  )].sort();
+  if(!variantes.length){
+    varSel.style.display='none';
+    varSel.value='';
+    return;
+  }
+  varSel.innerHTML = '<option value="">Todas las variantes</option>' + variantes.map(v=>`<option value="${v}">${v}</option>`).join('');
+  varSel.style.display='block';
+}
+
 function renderStock(qtyData=stockData, uidData=[]){
   const search = document.getElementById('stock-search')?.value.toLowerCase()||'';
   const catFil = document.getElementById('stock-cat')?.value||'';
+  const varianteFil = document.getElementById('stock-variante')?.value||'';
   const alertFil = document.getElementById('stock-alerta')?.value||'';
 
   let rows = [...(qtyData||[]), ...(uidData||[])].filter(d=>{
     if(search && !d.codigo?.toLowerCase().includes(search) && !d.nombre?.toLowerCase().includes(search)) return false;
+    if(catFil && String(d.categoria_id)!==catFil) return false;
+    if(varianteFil && d.variante!==varianteFil) return false;
     if(alertFil && d.alerta!==alertFil) return false;
     return true;
   });
@@ -711,22 +742,36 @@ function renderStock(qtyData=stockData, uidData=[]){
 // ─── UNIDADES ───────────────────────────────────────────────────────────────
 async function loadUnidades(){
   try {
-    unidades = await api('unidades?select=*,skus(codigo,nombre),variantes(valor)&order=created_at.desc');
-    // Fill SKU filter
-    if(!skus.length) skus = await api('skus?select=*&tracking=eq.uid&activo=eq.true');
-    const sel = document.getElementById('uid-sku');
-    if(sel) sel.innerHTML = '<option value="">Todos los SKUs</option>' + 
-      skus.filter(s=>s.tracking==='uid').map(s=>`<option value="${s.id}">${s.codigo} — ${s.nombre}</option>`).join('');
+    unidades = await api('unidades?select=*,skus(codigo,nombre,categoria_id,categorias(nombre)),variantes(valor)&order=created_at.desc');
+    if(!skus.length) skus = await api('skus?select=*,categorias(nombre)&tracking=eq.uid&activo=eq.true');
+    // Poblar categorías
+    const catSel = document.getElementById('uid-cat');
+    if(catSel){
+      const cats = [...new Map(skus.filter(s=>s.categorias).map(s=>[s.categoria_id,s.categorias.nombre])).entries()];
+      catSel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+    }
+    actualizarFiltroSKUPorCat();
     renderUnidades();
   } catch(e){ console.error(e); }
 }
 
+function actualizarFiltroSKUPorCat(){
+  const catFil = document.getElementById('uid-cat')?.value||'';
+  const skuSel = document.getElementById('uid-sku');
+  if(!skuSel) return;
+  const filtrados = catFil ? skus.filter(s=>s.tracking==='uid' && String(s.categoria_id)===catFil) : skus.filter(s=>s.tracking==='uid');
+  skuSel.innerHTML = '<option value="">Todos los SKUs</option>' + filtrados.map(s=>`<option value="${s.id}">${s.codigo} — ${s.nombre}</option>`).join('');
+  skuSel.value = '';
+}
+
 function renderUnidades(){
   const search = document.getElementById('uid-search')?.value.toLowerCase()||'';
+  const catFil = document.getElementById('uid-cat')?.value||'';
   const skuFil = document.getElementById('uid-sku')?.value||'';
   const estadoFil = document.getElementById('uid-estado')?.value||'';
   let rows = unidades.filter(u=>{
     if(search && !u.uid.toLowerCase().includes(search) && !(u.nro_serie||'').toLowerCase().includes(search)) return false;
+    if(catFil && String(u.skus?.categoria_id)!==catFil) return false;
     if(skuFil && String(u.sku_id)!==skuFil) return false;
     if(estadoFil && u.estado!==estadoFil) return false;
     return true;
