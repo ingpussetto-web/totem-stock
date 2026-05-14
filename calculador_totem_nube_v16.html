@@ -6247,8 +6247,8 @@ async function verificarPreciosActualizados(){
     const url = localStorage.getItem('supa_url');
     const key = localStorage.getItem('supa_key');
     if(!url || !key) return;
-    // Traer el último precio por v14_key
-    const historial = await stockAPI('historial_precios?select=v14_key,precio_neto,moneda,tipo_cambio,fecha&order=fecha.desc');
+    // Traer el último precio por v14_key, incluyendo sku_id para match alternativo
+    const historial = await stockAPI('historial_precios?select=v14_key,sku_id,precio_neto,moneda,tipo_cambio,fecha&order=fecha.desc');
     if(!historial || !historial.length) return;
     // Tomar el precio más reciente por v14_key
     const ultimosPorKey = {};
@@ -6257,10 +6257,23 @@ async function verificarPreciosActualizados(){
     });
     // Guardar en variable global para usar en renderInsumosMgmt
     historialSupabase = ultimosPorKey;
+    // Construir mapa sku_id → v14_key para match alternativo
+    const skuIdToKey = {};
+    Object.entries(INSUMOS_BASE).forEach(function([k, v]){
+      if(v.sku_id) skuIdToKey[v.sku_id] = k;
+    });
     // Aplicar directamente al costoBase sin comparar
     var actualizados = 0;
     Object.entries(ultimosPorKey).forEach(function([key, h]){
-      const insumo = INSUMOS_BASE[key];
+      // Buscar insumo por v14_key directo, o por sku_id si no hay match
+      let insumo = INSUMOS_BASE[key];
+      let insumoKey = key;
+      if(!insumo && h.sku_id && skuIdToKey[h.sku_id]){
+        insumoKey = skuIdToKey[h.sku_id];
+        insumo = INSUMOS_BASE[insumoKey];
+        // También actualizar historialSupabase con el key correcto
+        historialSupabase[insumoKey] = h;
+      }
       if(!insumo || !h.precio_neto) return;
       const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
       let precioNetoARS, precioNetoUSD;
@@ -6276,10 +6289,10 @@ async function verificarPreciosActualizados(){
         precioNetoUSD = Math.round(h.precio_neto / tc * 100) / 100;
       }
       insumo.costoBase = precioNetoARS;
-      // costosOverride[key] = precio CON IVA en ARS (renderInsumosMgmt lo divide por 1+iva para mostrar neto)
-      costosOverride[key] = Math.round(precioNetoARS * (1 + ivaRate));
-      // costosOverride[key+'_usd'] = precio neto en USD (para mostrar columna USD base)
-      costosOverride[key+'_usd'] = precioNetoUSD;
+      // costosOverride[insumoKey] = precio CON IVA en ARS (renderInsumosMgmt lo divide por 1+iva para mostrar neto)
+      costosOverride[insumoKey] = Math.round(precioNetoARS * (1 + ivaRate));
+      // costosOverride[insumoKey+'_usd'] = precio neto en USD (para mostrar columna USD base)
+      costosOverride[insumoKey+'_usd'] = precioNetoUSD;
       actualizados++;
     });
     if(actualizados > 0){
