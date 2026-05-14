@@ -707,7 +707,7 @@ async function loadDesvios(){
                   +'<td style="padding:10px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'+(variante?'<div style="font-size:11px;color:var(--text3);">'+variante+'</div>':'')+'</td>'
                   +'<td style="padding:10px;font-family:DM Mono,monospace;font-size:12px;color:#ffb340;">'+(op.op_numero||'—')+'</td>'
                   +'<td style="padding:10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
-                  +'<td style="padding:10px;text-align:right;"><button class="btn" onclick="generarOCDesdeDesvio('+sku.id+',''+nombre.replace(/'/g,"\'")+'',''+variante+'')" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;">🛒 Comprar</button></td>'
+                  +'<td style="padding:10px;text-align:right;"><button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="'+encodeURIComponent(variante)+'" onclick="generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;">🛒 Comprar</button></td>'
                   +'</tr>';
               }).join('')
             +'</tbody></table></div>';
@@ -746,7 +746,7 @@ async function loadDesvios(){
             +'<td style="padding:12px 10px;font-family:DM Mono,monospace;font-size:12px;color:var(--text2);">'+(op.op_numero||'—')+'</td>'
             +'<td style="padding:12px 10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
             +'<td style="padding:12px 10px;text-align:center;"><span style="background:rgba(255,77,106,0.12);color:#ff4d6a;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;">'+(item.qty||1)+'</span></td>'
-            +'<td style="padding:12px 10px;text-align:right;"><button class="btn" onclick="generarOCDesdeDesvio('+sku.id+',''+nombre.replace(/'/g,"\'")+'',''+variante+'')" style="font-size:11px;padding:4px 12px;border-color:var(--green);color:var(--green);">🛒 Generar OC</button></td>'
+            +'<td style="padding:12px 10px;text-align:right;"><button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="'+encodeURIComponent(variante)+'" onclick="generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:var(--green);color:var(--green);">🛒 Generar OC</button></td>'
             +'</tr>';
         }).join('') + '</tbody></table>';
     }
@@ -757,8 +757,14 @@ async function loadDesvios(){
   }
 }
 
+function generarOCDesdeDesvioBtn(btn){
+  const skuId = parseInt(btn.dataset.skuid);
+  const nombre = decodeURIComponent(btn.dataset.nombre||'');
+  const variante = decodeURIComponent(btn.dataset.variante||'');
+  generarOCDesdeDesvio(skuId, nombre, variante);
+}
+
 function generarOCDesdeDesvio(skuId, nombre, variante){
-  // Ir a OCs con el insumo pre-seleccionado
   showPage('ocs');
   nuevaOC(skuId, nombre, variante);
 }
