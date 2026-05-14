@@ -1058,9 +1058,13 @@ async function agregarLinea(){
   if(!skuId){toast('Seleccioná un insumo');return;}
   const sku=skus.find(s=>s.id===skuId);
   if(!sku) return;
-  if(lineas.find(l=>l.sku_id===skuId)){toast('Ese insumo ya está en la OC');return;}
   // Cargar variantes del SKU
   const variantes = await api(`variantes?sku_id=eq.${skuId}&select=*&order=valor.asc`).catch(()=>[]);
+  // Si no tiene variantes y ya está en la OC, rechazar duplicado
+  if(!variantes.length && lineas.find(l=>l.sku_id===skuId)){
+    toast('Ese insumo ya está en la OC');return;
+  }
+  // Si tiene variantes, permitir múltiples líneas (cada una con distinto color)
   lineas.push({
     id:'new-'+Date.now(),
     sku_id:skuId,
@@ -1115,6 +1119,10 @@ function renderLineas(){
       </select>
       <div class="linea-total" id="lt-${i}">$${formatNum((l.precio_unitario_neto||0)*l.cantidad)}</div>
       <button class="linea-del" onclick="quitarLinea(${i})">×</button>
+      ${l._variantes && l._variantes.length > 0
+        ? `<button onclick="agregarVariante(${i})" title="Agregar otra variante de este insumo"
+            style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;margin-left:2px;">+var</button>`
+        : ''}
     </div>`).join('');
 }
 
@@ -1138,6 +1146,25 @@ function calcularLineBruto(i){
 
 function quitarLinea(i){
   lineas.splice(i,1);
+  renderLineas();
+  calcularTotales();
+}
+
+function agregarVariante(i){
+  // Duplicar la línea con mismo SKU pero sin color seleccionado
+  const l = lineas[i];
+  lineas.splice(i+1, 0, {
+    id: 'new-'+Date.now(),
+    sku_id: l.sku_id,
+    nombre: l.nombre,
+    cantidad: 1,
+    precio_unitario_bruto: l.precio_unitario_bruto||0,
+    iva_pct: l.iva_pct||21,
+    precio_unitario_neto: l.precio_unitario_neto||0,
+    color: '',
+    _variantes: l._variantes,
+    _nuevo: true
+  });
   renderLineas();
   calcularTotales();
 }
