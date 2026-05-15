@@ -6093,11 +6093,16 @@ async function cargarInfoOP(proyId, orden){
     const color = op.color_gabinete || '';
     const estadoColor = estadoColors[op.estado] || 'var(--text3)';
     const estadoLabel = estadoLabels[op.estado] || op.estado;
+    const opUrl = 'https://ingpussetto-web.github.io/totem-stock/produccion.html?op='+encodeURIComponent(op.op_numero);
+    const esCompletada = op.estado === 'completada';
     el.innerHTML =
-      '<span style="color:var(--green);font-family:monospace;">⚙ '+op.op_numero+'</span>'
+      (esCompletada
+        ? '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.12);border:1px solid var(--green);border-radius:8px;display:flex;align-items:center;gap:10px;">'          +'<span style="font-size:15px;">✅</span>'          +'<span style="color:var(--green);font-weight:600;font-size:13px;">Lista para despacho!</span>'          +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);font-size:11px;text-decoration:none;border:1px solid var(--green);border-radius:4px;padding:2px 8px;">Ver OP →</a>'          +'</div>'
+        : '')
+      +'<span style="color:var(--green);font-family:monospace;">⚙ '+op.op_numero+'</span>'
       +(color ? ' &nbsp;·&nbsp; <span style="color:var(--amber);">● '+color+'</span>' : '')
       +' &nbsp;·&nbsp; <span style="color:'+estadoColor+';">'+estadoLabel+'</span>'
-      +' &nbsp;<a href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html" target="_blank" style="color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>';
+      +(esCompletada ? '' : ' &nbsp;<a href="'+opUrl+'" target="_blank" style="color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>');
     el.style.display = 'block';
   } catch(e){
     el.style.display='none';
