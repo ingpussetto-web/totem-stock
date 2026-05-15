@@ -113,8 +113,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 @media print{
   body *{visibility:hidden;}
   #print-etiquetas,#print-etiquetas *{visibility:visible;}
-  #print-etiquetas{position:fixed;inset:0;background:#fff;padding:8mm;}
-  @page{size:A4;margin:10mm 5mm 10mm 5mm;}
+  #print-etiquetas{position:fixed;inset:0;background:#fff;padding:0;}
+  @page{size:A4;margin:5mm;}
 }
 #print-etiquetas{display:none;}
 .label-sheet{width:200mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0mm;row-gap:0mm;}
