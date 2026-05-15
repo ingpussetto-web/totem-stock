@@ -895,10 +895,21 @@ async function verEtiquetasHistorial(recepcionId){
       return;
     }
     etiquetasSeleccionadas = new Set(etiquetasGeneradas.map(function(e){ return e.uid; }));
-    document.getElementById('etiquetas-preview-wrap').style.display='block';
+    // Mostrar modal de etiquetas en el historial sin cambiar de página
+    var modalHtml = '<div id="modal-etiq-historial" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;">'
+      +'<div style="background:var(--surface1);border-radius:12px;padding:20px;width:100%;max-width:900px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      +'<span style="font-size:16px;font-weight:600;">🏷 Etiquetas — '+etiquetasGeneradas.length+' unidades</span>'
+      +'<div style="display:flex;gap:8px;">'
+      +'<button class="btn sm" onclick="seleccionarTodasEtiquetas(true)">✓ Todas</button>'
+      +'<button class="btn sm" onclick="seleccionarTodasEtiquetas(false)">✗ Ninguna</button>'
+      +'<button id="btn-imprimir-etiq" class="btn solid-green sm" onclick="imprimirEtiquetas()">🖨 Imprimir ('+etiquetasGeneradas.length+')</button>'
+      +'<button class="btn sm" onclick="document.getElementById('modal-etiq-historial').remove()">✕ Cerrar</button>'
+      +'</div></div>'
+      +'<div id="etiquetas-preview" style="background:#f5f5f5;padding:12px;border-radius:8px;"></div>'
+      +'</div></div>';
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
     generarVistaEtiquetas();
-    showPage('recepcion');
-    setTimeout(function(){ setStep(3); }, 100);
   }catch(e){
     alert('Error cargando etiquetas: '+e.message);
   }
