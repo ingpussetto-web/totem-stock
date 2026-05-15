@@ -3501,7 +3501,15 @@ function renderPagoOpciones(){
     el.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text2);">'
       +'Seña '+inp('pago-senia-pct','% ej: 30')+'% al inicio &nbsp;·&nbsp; Saldo '+inp('pago-saldo-pct','% ej: 70')+'% previo al despacho'
       +'<select id="pago-saldo-forma" style="height:32px;font-size:12px;min-width:120px;"><option value="transferencia">Transferencia</option><option value="echeq">E-cheq al día</option><option value="efectivo">Efectivo</option></select>'
-    +'</div>';
+    +'</div>'
+    +'<div id="pago-montos-preview" style="margin-top:8px;font-size:12px;color:var(--text2);"></div>';
+    // Attach listeners after render
+    setTimeout(function(){
+      var inpS = document.getElementById('pago-senia-pct');
+      var inpSaldo = document.getElementById('pago-saldo-pct');
+      if(inpS) inpS.addEventListener('input', calcPagoMontos);
+      if(inpSaldo) inpSaldo.addEventListener('input', calcPagoMontos);
+    }, 50);
   } else if(tipo==='senia_cuota_saldo'){
     el.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text2);">'
       +'Seña '+inp('pago-senia-pct','%')+' · Cuota intermedia '+inp('pago-cuota-pct','%')+inp('pago-cuota-dias','días','60px')+' días · Saldo '+inp('pago-saldo-pct','%')
@@ -3518,6 +3526,30 @@ function renderPagoOpciones(){
     +'</div>';
   } else {
     el.innerHTML = '<textarea id="pago-personalizado" rows="2" style="width:100%;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;color:var(--text);resize:vertical;" placeholder="Describí las condiciones de pago..."></textarea>';
+  }
+}
+
+function calcPagoMontos(){
+  const el = document.getElementById('pago-montos-preview');
+  if(!el) return;
+  // Obtener total de la cotización activa
+  const cId = document.getElementById('cot-edit-id')?.value;
+  const c = cotizaciones.find(function(x){ return x.id === cId; });
+  if(!c){ el.innerHTML = ''; return; }
+  let subtotal = c.items.reduce(function(s,i){ return s+(i.precio||0)*(i.cant||1); }, 0);
+  if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
+  if(c.ploteo && c.ploteoMonto) subtotal += c.ploteoMonto;
+  if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotal += c.licMonto;
+  const totalConIva = subtotal + Math.round(subtotal * 0.105);
+  const pctSenia = parseFloat(document.getElementById('pago-senia-pct')?.value) || 0;
+  const pctSaldo = parseFloat(document.getElementById('pago-saldo-pct')?.value) || 0;
+  const fmt = function(n){ return '$'+Math.round(n).toLocaleString('es-AR'); };
+  if(pctSenia > 0 || pctSaldo > 0){
+    const montoSenia = totalConIva * pctSenia / 100;
+    const montoSaldo = totalConIva * pctSaldo / 100;
+    el.innerHTML = '<div style="display:flex;gap:24px;margin-top:4px;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:6px;">'      +'<span>💰 Seña: <strong style="color:var(--green);">'+fmt(montoSenia)+'</strong></span>'      +(pctSaldo > 0 ? '<span>💳 Saldo: <strong style="color:var(--amber);">'+fmt(montoSaldo)+'</strong></span>' : '')      +'<span style="color:var(--text3);">Total c/IVA: '+fmt(totalConIva)+'</span>'      +'</div>';
+  } else {
+    el.innerHTML = '';
   }
 }
 
