@@ -866,17 +866,21 @@ function crearEtiquetaPrint(et){
 // ─── HISTORIAL ───────────────────────────────────────────────
 async function verEtiquetasHistorial(recepcionId){
   try{
-    // Traer unidades generadas en esta recepción
-    const items = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)');
+    // Traer items de recepción sin join a skus
+    const items = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*');
     etiquetasGeneradas = [];
     for(const ri of (items||[])){
-      if(ri.skus?.tracking !== 'uid') continue;
-      // Traer unidades físicas generadas para este item
+      if(!ri.sku_id) continue;
+      // Traer SKU por separado
+      const skuArr = await api('skus?id=eq.'+ri.sku_id+'&select=id,nombre,tracking');
+      const sku = skuArr?.[0];
+      if(!sku || sku.tracking !== 'uid') continue;
+      // Traer unidades físicas generadas para este sku en esta recepción
       const unidades = await api('unidades?sku_id=eq.'+ri.sku_id+'&select=uid,variantes(valor)&order=uid.asc&limit='+ri.cantidad_recibida);
       (unidades||[]).forEach(function(u){
         etiquetasGeneradas.push({
           uid: u.uid,
-          nombre: ri.skus?.nombre||'—',
+          nombre: sku.nombre||'—',
           variante: u.variantes?.valor||ri.color_recibido||'',
           num: parseInt(u.uid.match(/-(\d+)$/)?.[1]||'0')
         });
