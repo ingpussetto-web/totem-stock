@@ -510,7 +510,16 @@ function onScanInput(val){
 }
 
 async function procesarScan(){
-  const uid = document.getElementById('scan-input').value.trim().toUpperCase();
+  let raw = document.getElementById('scan-input').value.trim();
+  // Si viene la URL completa, extraer solo el UID
+  let uid;
+  if(raw.includes('uid=') || raw.includes('uid¿') || raw.includes('UID=') || raw.includes('UID¿')){
+    // Extraer lo que viene después de uid= o uid¿
+    const match = raw.match(/uid[=¿]([^&\s]+)/i);
+    uid = match ? match[1].toUpperCase() : raw.toUpperCase();
+  } else {
+    uid = raw.toUpperCase();
+  }
   if(!uid){ return; }
 
   const scanArea = document.getElementById('scan-area');
