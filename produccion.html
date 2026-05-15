@@ -520,6 +520,8 @@ async function procesarScan(){
   } else {
     uid = raw.toUpperCase();
   }
+  // Limpiar caracteres mal interpretados por pistola QR
+  uid = uid.replace(/'/g, '-').replace(/¿/g, '?').replace(/Ñ/g, '').replace(/-+/g, '-');
   if(!uid){ return; }
 
   const scanArea = document.getElementById('scan-area');
