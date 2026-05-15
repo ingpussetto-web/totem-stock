@@ -6367,6 +6367,7 @@ async function verificarPreciosActualizados(){
 }
 
 async function crearOP(proyId){
+  proyId = typeof proyId === 'string' ? parseInt(proyId) : proyId;
   const p = proyectos.find(function(x){ return x.id === proyId; });
   if(!p){ alert('Proyecto no encontrado.'); return; }
 
