@@ -744,6 +744,17 @@ async function loadUnidades(){
   try {
     unidades = await api('unidades?select=*,skus(codigo,nombre,categoria_id,categorias(nombre)),variantes(valor)&order=created_at.desc');
     if(!skus.length) skus = await api('skus?select=*,categorias(nombre)&tracking=eq.uid&activo=eq.true');
+    // Traer OPs asignadas a unidades reservadas
+    try {
+      const bomAsignados = await api('op_bom_items?uid_asignado=not.is.null&select=uid_asignado,op_id,ordenes_produccion(op_numero)');
+      const opMap = {};
+      (bomAsignados||[]).forEach(function(b){
+        if(b.uid_asignado && b.ordenes_produccion?.op_numero){
+          opMap[b.uid_asignado] = b.ordenes_produccion.op_numero;
+        }
+      });
+      unidades.forEach(function(u){ u._op_numero = opMap[u.uid] || null; });
+    } catch(e){ console.warn('No se pudo cargar OPs reservadas:', e); }
     // Poblar categorías
     const catSel = document.getElementById('uid-cat');
     if(catSel){
@@ -787,7 +798,7 @@ function renderUnidades(){
     <td>${u.skus?.nombre||'—'}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.variantes?.valor||'—'}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.nro_serie||'—'}</td>
-    <td>${badgeEstado(u.estado)}</td>
+    <td>${badgeEstado(u.estado)}${u.estado==='reservado'&&u._op_numero?`<div style="font-size:10px;margin-top:3px;"><a href="produccion.html?op=${encodeURIComponent(u._op_numero)}" target="_blank" style="color:var(--accent);text-decoration:none;font-family:monospace;" title="Ver OP en producción">📋 ${u._op_numero}</a></div>`:''}</td>
     <td style="font-size:11px;color:var(--text3)">${formatDate(u.created_at)}</td>
     <td class="td-actions">
       <button class="btn sm red" onclick="deleteUid(${u.id})">Baja</button>
