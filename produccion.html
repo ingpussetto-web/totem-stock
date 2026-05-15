@@ -460,7 +460,7 @@ function actualizarProgreso(){
 function renderChecklist(){
   const items = verSoloFaltantes
     ? bomItems.filter(i=>i.estado!=='asignado')
-    : bomItems;
+    : bomItems.slice().sort(function(a,b){ return (a.estado==='asignado'?1:0)-(b.estado==='asignado'?1:0); });
 
   const el = document.getElementById('checklist');
   if(!items.length && verSoloFaltantes){
@@ -480,7 +480,7 @@ function renderChecklist(){
       </div>
       <div class="check-qty">×${item.qty}</div>
       ${estado==='asignado'
-        ? `<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 6px;" onclick="desasignarItem(${item.id})" title="Desasignar">↩</button>`
+        ? `<span style="background:var(--green);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✓ Asignado</span>`
         : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="asignarManual(${item.id})">Asignar</button>`
       }
     </div>`;
