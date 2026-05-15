@@ -252,9 +252,13 @@ textarea.form-input{resize:vertical;min-height:70px;}
         </div>
         <div id="etiquetas-preview-wrap" style="display:none;">
           <div class="card">
-            <div class="card-title" style="display:flex;justify-content:space-between;">
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
               <span>Etiquetas generadas</span>
-              <button class="btn solid-green sm" onclick="imprimirEtiquetas()">🖨 Imprimir</button>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn sm" onclick="seleccionarTodasEtiquetas(true)" style="font-size:11px;">✓ Todas</button>
+                <button class="btn sm" onclick="seleccionarTodasEtiquetas(false)" style="font-size:11px;">✗ Ninguna</button>
+                <button id="btn-imprimir-etiq" class="btn solid-green sm" onclick="imprimirEtiquetas()">🖨 Imprimir</button>
+              </div>
             </div>
             <div id="etiquetas-preview" style="background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto;"></div>
           </div>
@@ -315,6 +319,7 @@ let itemsActual = [];
 let recepcionItems = []; // {oc_item_id, nombre, cantidad_esperada, cantidad_recibida, color_esperado, color_recibido, sku_id, tracking, variantes}
 let desviosDetectados = [];
 let etiquetasGeneradas = [];
+let etiquetasSeleccionadas = new Set();
 
 // ─── API ───────────────────────────────────────────────────
 async function api(path, method='GET', body=null){
@@ -742,6 +747,7 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
 
   if(etiquetasGeneradas.length){
     document.getElementById('etiquetas-preview-wrap').style.display='block';
+    etiquetasSeleccionadas = new Set(etiquetasGeneradas.map(function(e){ return e.uid; }));
     generarVistaEtiquetas();
   }
 }
@@ -766,11 +772,19 @@ function crearEtiqueta(et){
   const fecha=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
   const label=document.createElement('div');
   label.className='label';
+  label.dataset.labelUid = et.uid;
+  label.style.position='relative';
+  label.style.cursor='pointer';
+  label.style.opacity= etiquetasSeleccionadas.has(et.uid) ? '1' : '0.35';
+  label.onclick=function(){ toggleEtiqueta(et.uid, label); };
   label.innerHTML=`
     <div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="label-brand">Totem Nube</div>
-        <div class="label-estado">EN STOCK</div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <input type="checkbox" data-uid="${et.uid}" ${etiquetasSeleccionadas.has(et.uid)?'checked':''} onclick="event.stopPropagation();toggleEtiqueta('${et.uid}',document.querySelector('[data-label-uid=\'${et.uid}\']'))" style="width:14px;height:14px;cursor:pointer;">
+          <div class="label-estado">EN STOCK</div>
+        </div>
       </div>
       <div class="label-nombre">${et.nombre}</div>
       ${et.variante?`<div class="label-variante">Color: ${et.variante}</div>`:''}
@@ -798,15 +812,88 @@ function crearEtiqueta(et){
   return label;
 }
 
+function toggleEtiqueta(uid, labelEl){
+  if(etiquetasSeleccionadas.has(uid)){
+    etiquetasSeleccionadas.delete(uid);
+  } else {
+    etiquetasSeleccionadas.add(uid);
+  }
+  if(labelEl){
+    labelEl.style.opacity = etiquetasSeleccionadas.has(uid) ? '1' : '0.35';
+    var cb = labelEl.querySelector('input[type=checkbox]');
+    if(cb) cb.checked = etiquetasSeleccionadas.has(uid);
+  }
+  document.getElementById('btn-imprimir-etiq').textContent = '🖨 Imprimir (' + etiquetasSeleccionadas.size + ')';
+}
+
+function seleccionarTodasEtiquetas(sel){
+  etiquetasGeneradas.forEach(function(et){
+    if(sel) etiquetasSeleccionadas.add(et.uid);
+    else etiquetasSeleccionadas.delete(et.uid);
+  });
+  generarVistaEtiquetas();
+  document.getElementById('btn-imprimir-etiq').textContent = '🖨 Imprimir (' + etiquetasSeleccionadas.size + ')';
+}
+
 function imprimirEtiquetas(){
+  const seleccionadas = etiquetasGeneradas.filter(function(e){ return etiquetasSeleccionadas.has(e.uid); });
+  if(!seleccionadas.length){ alert('Seleccioná al menos una etiqueta para imprimir.'); return; }
   const printEl=document.getElementById('print-etiquetas');
+  printEl.innerHTML='';
+  const hojas=[];
+  for(let i=0;i<seleccionadas.length;i+=8) hojas.push(seleccionadas.slice(i,i+8));
+  const sheet=document.createElement('div');
+  sheet.className='label-sheet';
+  hojas.forEach(function(hoja){ hoja.forEach(function(et){ sheet.appendChild(crearEtiquetaPrint(et)); }); });
+  printEl.appendChild(sheet);
   printEl.style.display='block';
-  printEl.innerHTML=document.getElementById('etiquetas-preview').innerHTML;
   window.print();
-  setTimeout(()=>{printEl.style.display='none';},1000);
+  setTimeout(function(){printEl.style.display='none';},1000);
+}
+
+function crearEtiquetaPrint(et){
+  const fecha=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const label=document.createElement('div');
+  label.className='label';
+  label.innerHTML='<div><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div class="label-brand">Totem Nube</div><div class="label-estado">EN STOCK</div></div><div class="label-nombre">'+et.nombre+'</div>'+(et.variante?'<div class="label-variante">Color: '+et.variante+'</div>':'')+'</div><div class="label-body"><div class="label-qr" id="qrprint-'+et.uid.replace(/[^a-z0-9]/gi,'_')+'"></div><div style="flex:1;"><div class="label-uid-label">UID</div><div class="label-uid">'+et.uid+'</div></div></div><div class="label-footer"><span>Ingresado: '+fecha+'</span><span>#'+String(et.num).padStart(4,'0')+'</span></div>';
+  setTimeout(function(){
+    const qrEl=label.querySelector('#qrprint-'+et.uid.replace(/[^a-z0-9]/gi,'_'));
+    if(qrEl&&window.QRCode){ new QRCode(qrEl,{text:'https://ingpussetto-web.github.io/totem-stock/scan.html?uid='+et.uid,width:80,height:80,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M}); }
+  },100);
+  return label;
 }
 
 // ─── HISTORIAL ───────────────────────────────────────────────
+async function verEtiquetasHistorial(recepcionId){
+  try{
+    // Traer unidades generadas en esta recepción
+    const items = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)');
+    etiquetasGeneradas = [];
+    for(const ri of (items||[])){
+      if(ri.skus?.tracking !== 'uid') continue;
+      // Traer unidades físicas generadas para este item
+      const unidades = await api('unidades?sku_id=eq.'+ri.sku_id+'&select=uid,variantes(valor)&order=uid.asc&limit='+ri.cantidad_recibida);
+      (unidades||[]).forEach(function(u){
+        etiquetasGeneradas.push({
+          uid: u.uid,
+          nombre: ri.skus?.nombre||'—',
+          variante: u.variantes?.valor||ri.color_recibido||'',
+          num: parseInt(u.uid.match(/-(\d+)$/)?.[1]||'0')
+        });
+      });
+    }
+    if(!etiquetasGeneradas.length){
+      alert('No hay etiquetas UID para esta recepción.');
+      return;
+    }
+    renderEtiquetas();
+    showPage('recepcion');
+    setTimeout(function(){ setStep(3); }, 100);
+  }catch(e){
+    alert('Error cargando etiquetas: '+e.message);
+  }
+}
+
 async function loadHistorial(){
   try{
     const recs = await api('recepciones?select=*,ordenes_compra(oc_numero,proveedores(razon_social))&order=created_at.desc&limit=30');
@@ -847,6 +934,7 @@ async function loadHistorial(){
         +'<div style="text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:12px;">'
         +'<span class="badge '+(r.tipo==='total'?'green':'blue')+'">'+(r.tipo==='total'?'✓ Total':'⏳ Parcial')+'</span>'
         +(r.tiene_desvios?'<span class="badge amber">⚠ Con desvíos</span>':'')
+        +'<button class="btn" style="margin-top:8px;font-size:11px;padding:5px 10px;" onclick="verEtiquetasHistorial('+r.id+')">🏷 Ver etiquetas</button>'
         +'</div>'
         +'</div>'
         +'</div>';
