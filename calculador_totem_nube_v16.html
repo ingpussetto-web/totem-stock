@@ -2062,8 +2062,33 @@ function registrarCambioprecio(key, bruto, neto, usdVal){
 }
 
 function getUltimaActualizacion(key){
-  if(!preciosHistorial[key] || preciosHistorial[key].length === 0) return null;
-  return preciosHistorial[key][0];
+  // Fecha desde historial manual (preciosHistorial)
+  const manual = (preciosHistorial[key] && preciosHistorial[key].length > 0)
+    ? preciosHistorial[key][0]
+    : null;
+
+  // Fecha desde Supabase (historialSupabase) — buscar por key o por sku_id
+  let supaFecha = null;
+  if(historialSupabase[key] && historialSupabase[key].fecha){
+    supaFecha = historialSupabase[key].fecha;
+  } else {
+    // buscar por sku_id como fallback
+    const ins = INSUMOS_BASE[key];
+    if(ins && ins.sku_id){
+      const match = Object.values(historialSupabase).find(function(h){ return h.sku_id === ins.sku_id; });
+      if(match && match.fecha) supaFecha = match.fecha;
+    }
+  }
+
+  // Retornar la más reciente entre manual y supabase
+  if(!manual && !supaFecha) return null;
+  if(!manual) return { fecha: supaFecha, usuario: 'Odoo/OC' };
+  if(!supaFecha) return manual;
+
+  // Comparar fechas y devolver la más reciente
+  return new Date(supaFecha) >= new Date(manual.fecha)
+    ? { fecha: supaFecha, usuario: 'Odoo/OC' }
+    : manual;
 }
 
 function abrirHistorial(key){
