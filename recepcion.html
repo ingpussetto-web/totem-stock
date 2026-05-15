@@ -894,7 +894,9 @@ async function verEtiquetasHistorial(recepcionId){
       alert('No hay etiquetas UID para esta recepción.');
       return;
     }
-    renderEtiquetas();
+    etiquetasSeleccionadas = new Set(etiquetasGeneradas.map(function(e){ return e.uid; }));
+    document.getElementById('etiquetas-preview-wrap').style.display='block';
+    generarVistaEtiquetas();
     showPage('recepcion');
     setTimeout(function(){ setStep(3); }, 100);
   }catch(e){
