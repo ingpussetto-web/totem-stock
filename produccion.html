@@ -404,11 +404,11 @@ async function abrirOP(opId){
                 const asignados = bomItems.filter(i=>i.estado==='asignado').length;
                 const completo = total > 0 && asignados === total;
                 return completo
-                  ? \`<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">▶ Iniciar Producción</button>\`
-                  : \`<button class="btn" onclick="iniciarOPConPendientes()" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.08);color:var(--text3);border-color:var(--border2);">▶ Iniciar Producción</button>\`;
+                  ? '<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">&#9654; Iniciar Producción</button>'
+                  : '<button class="btn" onclick="iniciarOPConPendientes()" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.08);color:var(--text3);border-color:var(--border2);">&#9654; Iniciar Producción</button>';
               })()
             : esIniciada
-            ? \`<div style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">● En curso</div>\`
+            ? '<div style="font-size:11px;color:var(--green);font-family:\'DM Mono\',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">&#9679; En curso</div>'
             : ''
           }
         </div>
