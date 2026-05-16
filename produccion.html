@@ -223,7 +223,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
         <button class="btn" onclick="volverAOPs()">← Volver</button>
         <div style="display:flex;gap:8px;">
           <button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>
-          <button class="btn solid-green lg" id="btn-cerrar" onclick="cerrarOP()">✓ Cerrar OP</button>
+          <button class="btn solid-green lg" id="btn-cerrar" onclick="cerrarOP()">✓ Orden de Producción Finalizada</button>
         </div>
       </div>
     </div>
@@ -399,9 +399,16 @@ async function abrirOP(opId){
             ${currentOP.color_gabinete?`<div class="op-detail-color">● Color gabinete: ${currentOP.color_gabinete}</div>`:''}
           </div>
           ${!esIniciada && currentOP.estado==='en_produccion'
-            ? `<button class="btn solid-green" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;">▶ Iniciar producción</button>`
+            ? (()=>{
+                const total = bomItems.filter(i=>i.incluido!==false).length;
+                const asignados = bomItems.filter(i=>i.estado==='asignado').length;
+                const completo = total > 0 && asignados === total;
+                return completo
+                  ? \`<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">▶ Iniciar Producción</button>\`
+                  : \`<button class="btn" onclick="iniciarOPConPendientes()" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.08);color:var(--text3);border-color:var(--border2);">▶ Iniciar Producción</button>\`;
+              })()
             : esIniciada
-            ? `<div style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">● En curso</div>`
+            ? \`<div style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">● En curso</div>\`
             : ''
           }
         </div>
@@ -419,7 +426,16 @@ async function abrirOP(opId){
 }
 
 // ─── PROGRESO ───────────────────────────────────────────────
-async function iniciarOP(){
+async function iniciarOPConPendientes(){
+  const total = bomItems.filter(i=>i.incluido!==false).length;
+  const asignados = bomItems.filter(i=>i.estado==='asignado').length;
+  const pendientes = total - asignados;
+  const confirmar = confirm('Hay ' + pendientes + ' insumo(s) pendiente(s) de asignación.\n\n¿Iniciar la producción con faltantes? Se notificará la desviación a Compras.');
+  if(!confirmar) return;
+  await iniciarOP(true);
+}
+
+async function iniciarOP(conDesvio){
   if(!currentOP) return;
   try{
     await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
