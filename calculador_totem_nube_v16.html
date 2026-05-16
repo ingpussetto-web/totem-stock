@@ -4890,6 +4890,7 @@ function matchLicProy(l, p){
 }
 
 function cambiarEstadoProyecto(id, estado){
+  id = typeof id === 'string' ? parseInt(id) : id;
   const p = proyectos.find(function(p){ return p.id===id; });
   if(!p) return;
   p.estado = estado;
@@ -4932,6 +4933,8 @@ function renderVentas(){
           const parts = m.split('-');
           return '<option value="'+m+'" '+(current===m?'selected':'')+'>'+MESES_NOMBRES[parseInt(parts[1])]+' '+parts[0]+'</option>';
         }).join('');
+    // Restaurar valor seleccionado — si estaba vacío, forzar "Todos los meses"
+    mesSelect.value = current || '';
   }
 
   let lista = proyectos;
@@ -5154,7 +5157,6 @@ function renderVentas(){
             +'<button class="btn red" onclick="borrarProyectoDirecto(\''+p.id+'\')" style="height:28px;font-size:11px;padding:0 6px;" title="Eliminar registro permanentemente">🗑</button>'
           +'</div>'
         +'</div>'
-        + '<div id="op-info-'+p.id+'" style="display:none;margin:4px 0 8px 0;"></div>'
         + itemsHTML
         + licHTML
         + pendientesHTML
