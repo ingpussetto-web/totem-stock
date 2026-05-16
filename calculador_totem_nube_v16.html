@@ -5154,6 +5154,7 @@ function renderVentas(){
             +'<button class="btn red" onclick="borrarProyectoDirecto(\''+p.id+'\')" style="height:28px;font-size:11px;padding:0 6px;" title="Eliminar registro permanentemente">🗑</button>'
           +'</div>'
         +'</div>'
+        + '<div id="op-info-'+p.id+'" style="display:none;margin:4px 0 8px 0;"></div>'
         + itemsHTML
         + licHTML
         + pendientesHTML
@@ -6367,7 +6368,6 @@ async function verificarPreciosActualizados(){
 }
 
 async function crearOP(proyId){
-  proyId = typeof proyId === 'string' ? parseInt(proyId) : proyId;
   const p = proyectos.find(function(x){ return x.id === proyId; });
   if(!p){ alert('Proyecto no encontrado.'); return; }
 
