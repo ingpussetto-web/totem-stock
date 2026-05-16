@@ -4937,7 +4937,7 @@ function renderVentas(){
     mesSelect.value = current || '';
   }
 
-  let lista = proyectos;
+  let lista = [...proyectos].sort(function(a,b){ return (b.anio*12+b.mes)-(a.anio*12+a.mes); });
   if(filtroMes){
     const parts = filtroMes.split('-');
     lista = lista.filter(function(p){ return p.anio===parseInt(parts[0]) && p.mes===parseInt(parts[1]); });
