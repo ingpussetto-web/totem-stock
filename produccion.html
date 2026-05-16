@@ -221,10 +221,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
       <!-- Acciones -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
         <button class="btn" onclick="volverAOPs()">← Volver</button>
-        <div style="display:flex;gap:8px;">
-          <button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>
-          <button class="btn solid-green lg" id="btn-cerrar" onclick="cerrarOP()">✓ Orden de Producción Finalizada</button>
-        </div>
+        <div style="display:flex;gap:8px;" id="botones-accion-op"></div>
       </div>
     </div>
 
@@ -398,16 +395,7 @@ async function abrirOP(opId){
             <div class="op-detail-producto">${currentOP.producto_nombre} × ${currentOP.cantidad}</div>
             ${currentOP.color_gabinete?`<div class="op-detail-color">● Color gabinete: ${currentOP.color_gabinete}</div>`:''}
           </div>
-          ${!esIniciada && currentOP.estado==='en_produccion'
-            ? (()=>{
-                const total = bomItems.filter(i=>i.incluido!==false).length;
-                const asignados = bomItems.filter(i=>i.estado==='asignado').length;
-                const completo = total > 0 && asignados === total;
-                return completo
-                  ? '<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">&#9654; Iniciar Producción</button>'
-                  : '<button class="btn" onclick="iniciarOPConPendientes()" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.08);color:var(--text3);border-color:var(--border2);">&#9654; Iniciar Producción</button>';
-              })()
-            : esIniciada
+          ${esIniciada
             ? '<div style="font-size:11px;color:var(--green);font-family:\'DM Mono\',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">&#9679; En curso</div>'
             : ''
           }
@@ -450,6 +438,26 @@ async function iniciarOP(conDesvio){
   }catch(e){ toast('Error: '+e.message); }
 }
 
+function renderBotonesAccion(){
+  const el = document.getElementById('botones-accion-op');
+  if(!el || !currentOP) return;
+  const esIniciada = currentOP.estado === 'iniciada';
+  const total = bomItems.filter(i=>i.incluido!==false).length;
+  const asignados = bomItems.filter(i=>i.estado==='asignado').length;
+  const completo = total > 0 && asignados === total;
+
+  if(esIniciada){
+    // En producción — mostrar solo Finalizar
+    el.innerHTML = '<button class="btn solid-green lg" onclick="cerrarOP()">✓ Orden de Producción Finalizada</button>';
+  } else {
+    // Asignando insumos — mostrar Reportar faltante + Iniciar Producción
+    const btnIniciar = completo
+      ? '<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">&#9654; Iniciar Producción</button>'
+      : '<button class="btn" onclick="iniciarOPConPendientes()" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.12);color:var(--text3);border-color:var(--border2);">&#9654; Iniciar Producción</button>';
+    el.innerHTML = '<button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>' + btnIniciar;
+  }
+}
+
 function actualizarProgreso(){
   const total = bomItems.filter(i=>i.incluido!==false).length;
   const asignados = bomItems.filter(i=>i.estado==='asignado').length;
@@ -457,6 +465,7 @@ function actualizarProgreso(){
   document.getElementById('prog-fill').style.width = pct+'%';
   document.getElementById('prog-label').textContent = `${asignados} de ${total} insumos asignados`;
   document.getElementById('prog-pct').textContent = pct+'%';
+  renderBotonesAccion();
 
   // Mostrar faltantes si hay
   const faltantes = bomItems.filter(i=>i.incluido!==false && i.estado==='pendiente');
