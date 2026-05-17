@@ -902,7 +902,9 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         </select>
         <select id="ventas-filtro-estado" onchange="renderVentas()" style="min-width:130px;height:32px;font-size:12px;">
           <option value="">Todos los estados</option>
+          <option value="iniciado">Iniciado</option>
           <option value="produccion">En producción</option>
+          <option value="listo_despacho">Listo para despacho</option>
           <option value="despachado">Despachado</option>
           <option value="instalado">Instalado</option>
           <option value="cancelado">Cancelado</option>
@@ -3806,7 +3808,7 @@ function aprobarCotizacion(){
     email: c.email||'',
     mes: new Date().getMonth()+1,
     anio: new Date().getFullYear(),
-    estado: 'produccion',
+    estado: 'iniciado',
     notas: c.sistema||'',
     items: c.items.map(function(it){ return {desc:it.nombre, cat:it.cat||'equipo', cant:it.cant, precio:it.precio}; })
   };
@@ -3863,7 +3865,7 @@ function cambiarEstadoCot(id, estado){
         cliente: c.empresa,
         mes: new Date().getMonth()+1,
         anio: new Date().getFullYear(),
-        estado: 'produccion',
+        estado: 'iniciado',
         notas: c.sistema||'',
         items: c.items.map(function(it){ return {desc:it.nombre||it.desc, cat:it.cat||'equipo', cant:it.cant, precio:it.precio}; })
       };
@@ -4964,7 +4966,7 @@ function renderVentas(){
   if(!listaEl) return;
   if(lista.length===0){ listaEl.innerHTML='<div class="empty">— Sin proyectos para el filtro seleccionado.</div>'; return; }
 
-  const estadoLabels = {produccion:'En producción',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado'};
+  const estadoLabels = {iniciado:'Iniciado',produccion:'En producción',listo_despacho:'Listo para despacho',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado'};
   const catLabel = {equipo:'✅ Equipo',periferico:'🔧 Periférico',servicio:'🔧 Servicio'};
   function proyectoTieneLicencia(p){
     return licencias.some(function(l){ return matchLicProy(l, p); });
@@ -5143,9 +5145,6 @@ function renderVentas(){
             })()
           +'</div>'
           +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">'
-            +(p.estado!=='cancelado'
-              ? '<select onchange="cambiarEstadoProyecto(\''+p.id+'\',this.value)" style="height:28px;font-size:11px;padding:2px 6px;">'+estadosSelect+'</select>'
-              : '')
             +historialBtn
             +btnRelev
             +btnAgenda
@@ -6109,40 +6108,95 @@ loadFromSheets();
 async function cargarInfoOP(proyId, orden){
   const el = document.getElementById('op-info-'+proyId);
   if(!el) return;
-  if(!orden){ el.style.display='none'; return; }
+
+  // Buscar el proyecto para conocer su estado actual
+  const proy = proyectos.find(function(p){ return p.id == proyId; });
+  const estadoProy = proy ? proy.estado : '';
+
+  // Si el proyecto ya está despachado o instalado, mostrar banner final sin consultar OP
+  if(estadoProy === 'despachado' || estadoProy === 'instalado'){
+    const label = estadoProy === 'instalado' ? '✅ Instalado' : '✅ Despachado';
+    const color = estadoProy === 'instalado' ? '#4d9fff' : 'var(--green)';
+    el.innerHTML = '<div style="padding:7px 12px;background:rgba(0,200,150,0.08);border:1px solid '+color+';border-radius:8px;display:flex;align-items:center;gap:10px;"><span style="color:'+color+';font-weight:600;font-size:13px;">'+label+'</span></div>';
+    el.style.display = 'block';
+    return;
+  }
+
+  // Si no tiene orden asignada, no hay OP — mostrar banner Iniciado
+  if(!orden){
+    if(estadoProy === 'iniciado'){
+      el.innerHTML = '<div style="padding:7px 12px;background:rgba(100,100,200,0.08);border:1px solid #4d9fff;border-radius:8px;display:flex;align-items:center;gap:10px;"><span style="font-size:15px;">🔵</span><span style="color:#4d9fff;font-weight:600;font-size:13px;">Iniciado — Sin OP asignada aún</span></div>';
+      el.style.display = 'block';
+    } else {
+      el.style.display='none';
+    }
+    return;
+  }
+
   try{
     const ops = await stockAPI('ordenes_produccion?v14_orden=eq.'+encodeURIComponent(orden)+'&select=op_numero,estado,color_gabinete&limit=1');
-    if(!ops || !ops.length){ el.style.display='none'; return; }
+    if(!ops || !ops.length){
+      el.style.display='none';
+      return;
+    }
     const op = ops[0];
-    const estadoColors = {
-      bom_pendiente:'var(--amber)',
-      bom_confirmada:'var(--blue,#4d9fff)',
-      en_produccion:'var(--green)',
-      completada:'var(--text3)'
-    };
-    const estadoLabels = {
-      bom_pendiente:'BOM pendiente',
-      bom_confirmada:'BOM confirmada',
-      en_produccion:'En producción',
-      completada:'Completada'
-    };
     const color = op.color_gabinete || '';
-    const estadoColor = estadoColors[op.estado] || 'var(--text3)';
-    const estadoLabel = estadoLabels[op.estado] || op.estado;
     const opUrl = 'https://ingpussetto-web.github.io/totem-stock/produccion.html?op='+encodeURIComponent(op.op_numero);
+
+    // Sincronizar estado del proyecto con el estado real de la OP
+    if(op.estado === 'en_produccion' && estadoProy !== 'produccion' && estadoProy !== 'listo_despacho' && estadoProy !== 'despachado'){
+      cambiarEstadoProyecto(proyId, 'produccion');
+    }
+    if(op.estado === 'completada' && estadoProy !== 'listo_despacho' && estadoProy !== 'despachado'){
+      cambiarEstadoProyecto(proyId, 'listo_despacho');
+    }
+
     const esCompletada = op.estado === 'completada';
-    el.innerHTML =
-      (esCompletada
-        ? '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.12);border:1px solid var(--green);border-radius:8px;display:flex;align-items:center;gap:10px;">'          +'<span style="font-size:15px;">✅</span>'          +'<span style="color:var(--green);font-weight:600;font-size:13px;">Lista para despacho!</span>'          +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);font-size:11px;text-decoration:none;border:1px solid var(--green);border-radius:4px;padding:2px 8px;">Ver OP →</a>'          +'</div>'
-        : '')
-      +'<span style="color:var(--green);font-family:monospace;">⚙ '+op.op_numero+'</span>'
-      +(color ? ' &nbsp;·&nbsp; <span style="color:var(--amber);">● '+color+'</span>' : '')
-      +' &nbsp;·&nbsp; <span style="color:'+estadoColor+';">'+estadoLabel+'</span>'
-      +(esCompletada ? '' : ' &nbsp;<a href="'+opUrl+'" target="_blank" style="color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>');
+    const enProd = op.estado === 'en_produccion' || op.estado === 'iniciada';
+
+    let html = '';
+
+    if(esCompletada){
+      // Banner Listo para despacho con botón para marcar como despachado
+      html = '<div style="margin-bottom:6px;padding:10px 14px;background:rgba(0,200,150,0.12);border:1px solid var(--green);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+        +'<span style="font-size:16px;">✅</span>'
+        +'<span style="color:var(--green);font-weight:600;font-size:13px;">Lista para despacho!</span>'
+        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
+        +'<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">'
+          +'<a href="'+opUrl+'" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;border:1px solid var(--green);border-radius:4px;padding:2px 8px;">Ver OP →</a>'
+          +'<button onclick="despacharProyecto(\''+proyId+'\')" style="background:var(--green);color:#000;border:none;border-radius:4px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;">✓ Marcar despachado</button>'
+        +'</div>'
+      +'</div>';
+    } else if(enProd){
+      html = '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:14px;">⚙️</span>'
+        +'<span style="color:var(--green);font-size:12px;">En producción · '+op.op_numero+'</span>'
+        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
+        +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>'
+      +'</div>';
+    } else {
+      // BOM pendiente o confirmada
+      const estadoLabelsOP = {bom_pendiente:'BOM pendiente',bom_confirmada:'BOM confirmada'};
+      const estadoLabel = estadoLabelsOP[op.estado] || op.estado;
+      html = '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(245,166,35,0.08);border:1px solid var(--amber);border-radius:8px;display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:14px;">📋</span>'
+        +'<span style="color:var(--amber);font-size:12px;">'+estadoLabel+' · '+op.op_numero+'</span>'
+        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
+        +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--amber);text-decoration:none;font-size:10px;">→ Ver OP</a>'
+      +'</div>';
+    }
+
+    el.innerHTML = html;
     el.style.display = 'block';
   } catch(e){
     el.style.display='none';
   }
+}
+
+function despacharProyecto(proyId){
+  if(!confirm('¿Confirmar que el equipo fue despachado?')) return;
+  cambiarEstadoProyecto(proyId, 'despachado');
+  renderVentas();
 }
 
 
