@@ -6141,7 +6141,7 @@ async function cargarInfoOP(proyId, orden){
     }
     const op = ops[0];
     const color = op.color_gabinete || '';
-    const opUrl = 'https://ingpussetto-web.github.io/totem-stock/produccion.html?op='+encodeURIComponent(op.op_numero);
+    const opUrl = 'https://ingpussetto-web.github.io/totem-stock/produccion.html'+(op.estado==='completada'?'?vista=terminadas':'?op='+encodeURIComponent(op.op_numero));
 
     // Sincronizar estado del proyecto con el estado real de la OP
     if(op.estado === 'en_produccion' && estadoProy !== 'produccion' && estadoProy !== 'listo_despacho' && estadoProy !== 'despachado'){

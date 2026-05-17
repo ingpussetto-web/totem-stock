@@ -171,9 +171,23 @@ textarea.form-input{resize:vertical;min-height:80px;}
 
     <!-- LISTA DE OPs -->
     <div class="page active" id="page-ops">
-      <div class="page-header">
-        <div class="page-title">Órdenes para fabricar</div>
-        <div class="page-sub">Seleccioná una orden para empezar a asignar insumos</div>
+      <div class="page-header" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div class="page-title">Órdenes de producción</div>
+            <div class="page-sub">Seleccioná una orden para asignar insumos</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="filtro-vista" onchange="aplicarFiltros()" style="height:32px;font-size:12px;padding:0 8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;">
+              <option value="vigentes">⚙ Vigentes</option>
+              <option value="terminadas">✅ Terminadas</option>
+            </select>
+            <select id="filtro-mes" onchange="aplicarFiltros()" style="height:32px;font-size:12px;padding:0 8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;">
+              <option value="">Todos los meses</option>
+            </select>
+          </div>
+        </div>
+        <div id="ops-kpis" style="display:none;margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;"></div>
       </div>
       <div id="ops-list"><div class="loading"><div class="spinner"></div>Cargando órdenes...</div></div>
     </div>
@@ -343,34 +357,114 @@ async function checkConnection(){
 }
 
 // ─── LOAD OPs ───────────────────────────────────────────────
+let todasLasOPs = [];
+
 async function loadOPs(){
   try{
-    // Solo OPs en estado en_produccion
-    ops = await api('op_progreso?estado=eq.en_produccion&select=*&order=created_at.asc');
-    renderOPs();
+    // Cargar todas las OPs (vigentes y terminadas)
+    todasLasOPs = await api('op_progreso?select=*&order=created_at.desc');
+    ops = todasLasOPs.filter(o => o.estado === 'en_produccion' || o.estado === 'iniciada' || o.estado === 'bom_confirmada' || o.estado === 'bom_pendiente');
+    poblarFiltroMes();
+    aplicarFiltros();
   }catch(e){
     document.getElementById('ops-list').innerHTML=`<div class="empty"><div class="empty-icon">⚠</div>Error cargando órdenes</div>`;
   }
 }
 
-function renderOPs(){
+function poblarFiltroMes(){
+  const sel = document.getElementById('filtro-mes');
+  if(!sel) return;
+  const meses = new Set();
+  todasLasOPs.forEach(o=>{
+    const d = new Date(o.created_at);
+    meses.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  });
+  const mesesArr = Array.from(meses).sort().reverse();
+  const NOMBRES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'};
+  sel.innerHTML = '<option value="">Todos los meses</option>'
+    + mesesArr.map(m=>{
+        const [y,mo] = m.split('-');
+        return `<option value="${m}">${NOMBRES[parseInt(mo)]} ${y}</option>`;
+      }).join('');
+}
+
+function aplicarFiltros(){
+  const vista = document.getElementById('filtro-vista')?.value || 'vigentes';
+  const mes   = document.getElementById('filtro-mes')?.value || '';
+
+  let lista = todasLasOPs;
+
+  // Filtro vista
+  if(vista === 'vigentes'){
+    lista = lista.filter(o => o.estado !== 'completada');
+  } else {
+    lista = lista.filter(o => o.estado === 'completada');
+  }
+
+  // Filtro mes
+  if(mes){
+    const [y,mo] = mes.split('-');
+    lista = lista.filter(o=>{
+      const d = new Date(o.created_at);
+      return d.getFullYear() === parseInt(y) && (d.getMonth()+1) === parseInt(mo);
+    });
+  }
+
+  renderOPs(lista, vista);
+}
+
+function renderOPs(lista, vista){
   const el = document.getElementById('ops-list');
-  if(!ops.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">✓</div>No hay órdenes activas para producción</div>';
+  if(!lista) lista = ops;
+  if(!vista) vista = 'vigentes';
+
+  // KPIs solo para terminadas
+  const kpisEl = document.getElementById('ops-kpis');
+  if(vista === 'terminadas' && kpisEl){
+    const totalOPs = lista.length;
+    const totalEquipos = lista.reduce((s,o)=>s+(o.cantidad||0),0);
+    kpisEl.style.display = 'grid';
+    kpisEl.innerHTML =
+      `<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;">OPs terminadas</div>
+        <div style="font-size:22px;font-weight:600;color:var(--green);margin-top:4px;">${totalOPs}</div>
+      </div>`
+      +`<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;">Equipos finalizados</div>
+        <div style="font-size:22px;font-weight:600;color:var(--green);margin-top:4px;">${totalEquipos}</div>
+      </div>`;
+  } else if(kpisEl){
+    kpisEl.style.display = 'none';
+  }
+
+  if(!lista.length){
+    const msg = vista === 'terminadas' ? 'No hay órdenes terminadas' : 'No hay órdenes activas para producción';
+    el.innerHTML=`<div class="empty"><div class="empty-icon">${vista==='terminadas'?'✓':'⚙'}</div>${msg}</div>`;
     return;
   }
-  el.innerHTML = ops.map(o=>{
+
+  el.innerHTML = lista.map(o=>{
     const pct = o.items_total>0 ? Math.round((o.items_asignados/o.items_total)*100) : 0;
-    const fecha = new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
-    return `<div class="op-card" onclick="abrirOP(${o.id})">
-      <div class="op-numero">${o.op_numero}</div>
-      <div class="op-cliente">${o.cliente}</div>
-      <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
-      <div class="op-meta">${fecha}${o.color_gabinete?' · '+o.color_gabinete:''}</div>
-      <div class="op-progress-mini">
+    const fechaRef = o.estado === 'completada' ? (o.fecha_cierre || o.created_at) : o.created_at;
+    const fecha = new Date(fechaRef).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
+    const esTerminada = o.estado === 'completada';
+    const borderColor = esTerminada ? 'var(--text3)' : 'var(--green)';
+    const clickable = esTerminada ? '' : `onclick="abrirOP(${o.id})"`;
+    const cursor = esTerminada ? 'default' : 'pointer';
+    return `<div class="op-card" ${clickable} style="border-left-color:${borderColor};cursor:${cursor};opacity:${esTerminada?'0.75':'1'};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="op-numero">${o.op_numero}</div>
+          <div class="op-cliente">${o.cliente}</div>
+          <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
+          <div class="op-meta">${fecha}${o.color_gabinete?' · '+o.color_gabinete:''}</div>
+        </div>
+        ${esTerminada ? '<span style="font-size:11px;color:var(--green);font-weight:600;padding:3px 8px;border:1px solid var(--green);border-radius:4px;white-space:nowrap;">✓ Terminada</span>' : ''}
+      </div>
+      ${!esTerminada ? `<div class="op-progress-mini">
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
         <div class="progress-label">${o.items_asignados}/${o.items_total}</div>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -810,8 +904,15 @@ function toast(msg){
 // ─── INIT ────────────────────────────────────────────────────
 async function init(){
   const ok=await checkConnection();
-  if(ok) loadOPs();
-  else if(!SUPA_URL||!SUPA_KEY) showPage('config');
+  if(ok){
+    await loadOPs();
+    // Si viene con ?vista=terminadas desde el calculador, activar ese filtro
+    const params = new URLSearchParams(window.location.search);
+    if(params.get('vista') === 'terminadas'){
+      const sel = document.getElementById('filtro-vista');
+      if(sel){ sel.value = 'terminadas'; aplicarFiltros(); }
+    }
+  } else if(!SUPA_URL||!SUPA_KEY) showPage('config');
 }
 init();
 </script>
