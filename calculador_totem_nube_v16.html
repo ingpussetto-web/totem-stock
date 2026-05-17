@@ -4964,7 +4964,7 @@ function renderVentas(){
   if(!listaEl) return;
   if(lista.length===0){ listaEl.innerHTML='<div class="empty">— Sin proyectos para el filtro seleccionado.</div>'; return; }
 
-  const estadoLabels = {produccion:'En producción',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado'};
+  const estadoLabels = {produccion:'En producción',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado'};
   const catLabel = {equipo:'✅ Equipo',periferico:'🔧 Periférico',servicio:'🔧 Servicio'};
   function proyectoTieneLicencia(p){
     return licencias.some(function(l){ return matchLicProy(l, p); });
@@ -5160,6 +5160,7 @@ function renderVentas(){
         + itemsHTML
         + licHTML
         + pendientesHTML
+        +'<div id="op-info-'+p.id+'" style="display:none;margin-top:8px;"></div>'
         +'<div style="display:flex;justify-content:flex-end;padding-top:8px;margin-top:4px;border-top:1px solid var(--border2);">'
           +'<span style="font-size:13px;font-weight:500;font-family:monospace;">Total neto: '+fmt(totalProy)+'</span>'
         +'</div>'
