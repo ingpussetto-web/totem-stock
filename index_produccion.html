@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Producción</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0f;
+  --panel:#0d1117;
+  --panel2:#111620;
+  --border:rgba(255,255,255,0.06);
+  --border2:rgba(255,255,255,0.12);
+  --text:#e8eaf0;--text2:#7a8099;--text3:#3a4055;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.08);
+  --amber:#ffb340;--amber-dim:rgba(255,179,64,0.08);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.08);
+  --cyan:#22d3ee;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;}
+
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;
+}
+
+.wrapper{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;position:relative;}
+
+.header{text-align:center;margin-bottom:40px;}
+.logo{display:inline-flex;align-items:center;gap:12px;margin-bottom:8px;}
+.logo-dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.85);}}
+.logo-name{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.02em;}
+.logo-sub{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:0.15em;text-transform:uppercase;text-align:center;}
+.logo-area{font-size:11px;color:var(--green);font-family:'DM Mono',monospace;letter-spacing:0.12em;text-transform:uppercase;text-align:center;margin-top:4px;}
+.header-line{width:60px;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent);margin:14px auto 0;}
+
+.clock-bar{display:flex;align-items:center;gap:16px;margin-bottom:32px;padding:10px 20px;background:var(--panel);border:1px solid var(--border);border-radius:8px;}
+.clock-time{font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);}
+.clock-date{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);}
+.clock-sep{width:1px;height:20px;background:var(--border2);}
+
+.modules-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:640px;width:100%;}
+.modules-grid.full{grid-template-columns:1fr;}
+
+.col-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.15em;font-family:'DM Mono',monospace;margin-bottom:10px;padding-left:4px;grid-column:1/-1;}
+
+.mod-card{display:flex;align-items:center;gap:14px;padding:16px 18px;background:var(--panel);border:1px solid var(--border);border-radius:12px;text-decoration:none;color:var(--text);transition:all 0.2s;position:relative;overflow:hidden;cursor:pointer;}
+.mod-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity 0.2s;}
+.mod-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+.mod-card:hover::before{opacity:1;}
+.mod-card.green::before{background:var(--green-dim);}
+.mod-card.green:hover{border-color:rgba(0,229,160,0.25);}
+.mod-card.blue::before{background:var(--blue-dim);}
+.mod-card.blue:hover{border-color:rgba(77,159,255,0.25);}
+.mod-card.amber::before{background:var(--amber-dim);}
+.mod-card.amber:hover{border-color:rgba(255,179,64,0.25);}
+.mod-card.cyan::before{background:rgba(34,211,238,0.08);}
+.mod-card.cyan:hover{border-color:rgba(34,211,238,0.25);}
+
+.mod-card.readonly{opacity:0.7;}
+.mod-card.readonly::after{content:'SOLO LECTURA';position:absolute;top:8px;right:8px;font-size:7px;font-family:'DM Mono',monospace;letter-spacing:0.1em;color:var(--text3);background:var(--panel2);border:1px solid var(--border2);padding:2px 5px;border-radius:3px;}
+
+.mod-icon{font-size:22px;width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--panel2);position:relative;z-index:1;}
+.mod-info{position:relative;z-index:1;flex:1;}
+.mod-name{font-size:14px;font-weight:600;margin-bottom:2px;}
+.mod-desc{font-size:11px;color:var(--text2);line-height:1.3;}
+.mod-arrow{font-size:14px;color:var(--text3);position:relative;z-index:1;transition:transform 0.2s,color 0.2s;}
+.mod-card:hover .mod-arrow{transform:translateX(3px);color:var(--text2);}
+
+.footer{margin-top:32px;text-align:center;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+.footer span{color:var(--green);}
+
+.modules-grid{animation:fadeUp 0.5s ease-out;}
+.header{animation:fadeUp 0.4s ease-out;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <div class="logo-name">Totem Nube</div>
+    </div>
+    <div class="logo-sub">Sistema de gestión integral</div>
+    <div class="logo-area">▸ Área de Producción</div>
+    <div class="header-line"></div>
+  </div>
+
+  <div class="clock-bar">
+    <div class="clock-time" id="clock">--:--</div>
+    <div class="clock-sep"></div>
+    <div class="clock-date" id="clock-date">--/--/----</div>
+  </div>
+
+  <div class="modules-grid">
+
+    <div class="col-title">🏭 Trabajo</div>
+
+    <a class="mod-card green" href="https://ingpussetto-web.github.io/totem-stock/produccion.html" target="_blank">
+      <div class="mod-icon">🔧</div>
+      <div class="mod-info">
+        <div class="mod-name">Producción</div>
+        <div class="mod-desc">Checklist de insumos y escaneo por OP</div>
+      </div>
+      <div class="mod-arrow">→</div>
+    </a>
+
+    <a class="mod-card amber" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html" target="_blank">
+      <div class="mod-icon">📥</div>
+      <div class="mod-info">
+        <div class="mod-name">Recepción</div>
+        <div class="mod-desc">Ingreso de insumos comprados al stock</div>
+      </div>
+      <div class="mod-arrow">→</div>
+    </a>
+
+    <div class="col-title" style="margin-top:8px;">📦 Consulta</div>
+
+    <a class="mod-card blue readonly" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html" target="_blank">
+      <div class="mod-icon">📊</div>
+      <div class="mod-info">
+        <div class="mod-name">Stock actual</div>
+        <div class="mod-desc">Catálogo, cantidades y unidades físicas</div>
+      </div>
+      <div class="mod-arrow">→</div>
+    </a>
+
+    <a class="mod-card blue" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST" target="_blank">
+      <div class="mod-icon">📱</div>
+      <div class="mod-info">
+        <div class="mod-name">Escaneo QR</div>
+        <div class="mod-desc">Consulta de insumos desde el celular</div>
+      </div>
+      <div class="mod-arrow">→</div>
+    </a>
+
+    <div class="col-title" style="margin-top:8px;">📺 Panel</div>
+
+    <a class="mod-card cyan" href="https://ingpussetto-web.github.io/totem-stock/dashboard_produccion.html" target="_blank" style="grid-column:1/-1;">
+      <div class="mod-icon">📺</div>
+      <div class="mod-info">
+        <div class="mod-name">Dashboard TV</div>
+        <div class="mod-desc">Panel en tiempo real para el televisor del taller</div>
+      </div>
+      <div class="mod-arrow">→</div>
+    </a>
+
+  </div>
+
+  <div class="footer" style="margin-top:32px;">
+    Totem Nube · Producción · <span>v1.0</span>
+  </div>
+
+</div>
+
+<script>
+function updateClock(){
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('clock').textContent = h+':'+m;
+  const days = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  document.getElementById('clock-date').textContent =
+    days[now.getDay()]+' '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+document.querySelectorAll('a.mod-card').forEach(a => {
+  a.addEventListener('click', function(e) {
+    e.preventDefault();
+    const url = this.href.split('?')[0] + '?v=' + Date.now();
+    window.open(url, '_blank');
+  });
+});
+</script>
+</body>
+</html>
