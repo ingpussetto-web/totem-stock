@@ -749,6 +749,17 @@ async function confirmarBOM(){
   if(sinStock.length){
     const lista = sinStock.map(i=>'• '+i.nombre).join('\n');
     if(!confirm(`⚠ ${sinStock.length} insumo${sinStock.length>1?'s':''} sin stock al confirmar:\n\n${lista}\n\nSe registrará la alerta para Compras. ¿Confirmás igual?`)) return;
+    // Registrar faltantes en alertas_gerencia para Compras
+    try{
+      const alertas = sinStock.map(i=>({
+        tipo: 'faltante_generacion_op',
+        op_id: currentOP.id,
+        sku_id: i.sku_id,
+        mensaje: `Faltante al generar OP ${currentOP.op_numero} (${currentOP.cliente}): ${i.nombre} — sin stock al confirmar BOM`,
+        leida: false
+      }));
+      await api('alertas_gerencia', 'POST', alertas);
+    }catch(e){ console.warn('Error registrando alertas faltantes:', e.message); }
   }
   await guardarBOM('bom_confirmada');
 }
