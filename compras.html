@@ -708,8 +708,9 @@ async function loadDesvios(){
     const cerrados = items ? items.filter(i => i.ordenes_produccion && i.ordenes_produccion.estado === 'cerrada') : [];
 
     if(!cerrados.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin desvíos pendientes</td></tr>';
-      statsEl.innerHTML = '';
+      tbody.innerHTML = alertasGeneracionHTML || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin desvíos pendientes</td></tr>';
+      // No limpiar statsEl si ya tiene KPIs de alertas generación OP
+      if(!alertasGeneracionHTML) statsEl.innerHTML = '';
       return;
     }
 
@@ -753,7 +754,7 @@ async function loadDesvios(){
 
     // ── Stats desvíos cerrados ───────────────────────────────────────────────
     const ops = [...new Set(cerrados.map(i=>i.ordenes_produccion.op_numero))];
-    statsEl.innerHTML = '<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
+    statsEl.innerHTML += '<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
       +'<div style="font-size:22px;font-weight:700;color:#ff4d6a;">'+cerrados.length+'</div>'
       +'<div style="font-size:11px;color:var(--text3);">Desvíos cerrados</div></div>'
       +'<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
