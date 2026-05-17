@@ -520,8 +520,18 @@ async function iniciarOPConPendientes(){
   const total = bomItems.filter(i=>i.incluido!==false).length;
   const asignados = bomItems.filter(i=>i.estado==='asignado').length;
   const pendientes = total - asignados;
-  const confirmar = confirm('Hay ' + pendientes + ' insumo(s) pendiente(s) de asignación.\n\n¿Iniciar la producción con faltantes? Se notificará la desviación a Compras.');
-  if(!confirmar) return;
+
+  // Primero confirmar la intención
+  if(!confirm('Hay ' + pendientes + ' insumo(s) pendiente(s) de asignación.\n\n¿Iniciar la producción con faltantes? Se notificará la desviación a Compras.')) return;
+
+  // Pedir contraseña del encargado
+  const pass = prompt('Esta acción requiere autorización del encargado.\nIngresá la contraseña:');
+  if(pass === null) return; // canceló
+  if(pass !== 'picone001'){
+    alert('Contraseña incorrecta. No se puede iniciar con faltantes.');
+    return;
+  }
+
   await iniciarOP(true);
 }
 
