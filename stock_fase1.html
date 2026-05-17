@@ -667,9 +667,10 @@ async function loadStock(){
     
     // Merge UID skus into display
     const uidRows = uidSkus.map(s=>{
-      const total = uidCounts.filter(u=>u.sku_id===s.id).length;
+      const enStock = uidCounts.filter(u=>u.sku_id===s.id && u.estado==='stock').length;
       const reservado = uidCounts.filter(u=>u.sku_id===s.id && u.estado==='reservado').length;
-      const disponible = total - reservado;
+      const total = enStock + reservado;
+      const disponible = enStock;
       let alerta = 'ok';
       if(disponible<=0) alerta='sin_stock';
       else if(disponible<=s.stock_minimo) alerta='bajo';

@@ -573,7 +573,7 @@ function renderBOMItem(item){
     // Dropdown de variantes para impresoras y periféricos
     varHTML = `<select class="var-select" onchange="cambiarVariante(${item.id},this.value)" ${!incluido?'disabled':''}>
       <option value="">Modelo...</option>
-      ${item._variantes.map(v=>`<option value="${v.id}" ${varActual==v.id?'selected':''}>${v.valor}</option>`).join('')}
+      ${item._variantes.filter(v=>v.valor!=='A definir'&&v.valor!=='a definir').map(v=>`<option value="${v.id}" ${varActual==v.id?'selected':''}>${v.valor}</option>`).join('')}
     </select>`;
   } else if(esGabinete && selectedColor){
     // Gabinete muestra el color ya definido en la OP, sin dropdown
