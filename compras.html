@@ -673,13 +673,30 @@ async function loadDesvios(){
     // ── Alertas de Generación OP (faltantes al confirmar BOM) ──────────────
     let alertasGeneracionHTML = '';
     try{
-      const alertasGen = await api('alertas_gerencia?tipo=eq.faltante_generacion_op&leida=eq.false&select=*,skus(id,nombre,codigo),ordenes_produccion(id,op_numero,cliente)&order=id.desc');
+      // Traer alertas sin join — enriquecer con queries separadas
+      const alertasGen = await api('alertas_gerencia?tipo=eq.faltante_generacion_op&leida=eq.false&order=id.desc');
       if(alertasGen && alertasGen.length){
-        // Enriquecer con nombre de SKU si no viene del join
+        // Obtener op_ids y sku_ids únicos para enriquecer
+        const opIds = [...new Set(alertasGen.filter(a=>a.op_id).map(a=>a.op_id))];
+        const skuIds = [...new Set(alertasGen.filter(a=>a.sku_id).map(a=>a.sku_id))];
+        
+        const opsMap = {};
+        if(opIds.length){
+          const ops = await api('ordenes_produccion?id=in.('+opIds.join(',')+')'+'&select=id,op_numero,cliente').catch(()=>[]);
+          (ops||[]).forEach(o=>{ opsMap[o.id]=o; });
+        }
+        const skusMap = {};
+        if(skuIds.length){
+          const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo').catch(()=>[]);
+          (skus||[]).forEach(s=>{ skusMap[s.id]=s; });
+        }
+
         alertasGeneracionHTML = '<div style="margin-bottom:24px;">'          +'<div style="font-size:11px;font-weight:600;color:#4d9fff;margin-bottom:8px;letter-spacing:0.05em;">🔵 FALTANTES EN GENERACIÓN DE OP — Sin stock al confirmar BOM</div>'          +'<table style="width:100%;border-collapse:collapse;border:1px solid rgba(77,159,255,0.2);border-radius:8px;overflow:hidden;">'          +'<thead><tr style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;border-bottom:1px solid rgba(77,159,255,0.15);">'          +'<th style="padding:8px 16px;text-align:left;">Insumo</th>'          +'<th style="padding:8px;text-align:left;">OP</th>'          +'<th style="padding:8px;text-align:left;">Cliente</th>'          +'<th style="padding:8px;text-align:center;">Origen</th>'          +'<th style="padding:8px;"></th>'          +'</tr></thead><tbody>'          + alertasGen.map(a => {
-              const sku = a.skus || {};
-              const op = a.ordenes_produccion || {};
-              const nombre = sku.nombre || a.mensaje || '—';
+              const sku = skusMap[a.sku_id] || {};
+              const op = opsMap[a.op_id] || {};
+              // Extraer nombre del mensaje como fallback
+              const nombreFallback = a.mensaje ? a.mensaje.replace(/^Faltante al generar OP [^:]+: /, '').replace(/ — sin stock.*$/, '') : '—';
+              const nombre = sku.nombre || nombreFallback;
               return '<tr style="border-top:1px solid rgba(77,159,255,0.1);">'                +'<td style="padding:10px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'                +(sku.codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+sku.codigo+'</div>':'')+'</td>'                +'<td style="padding:10px;font-family:DM Mono,monospace;font-size:12px;color:#4d9fff;">'+(op.op_numero||'—')+'</td>'                +'<td style="padding:10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'                +'<td style="padding:10px;text-align:center;"><span style="background:rgba(77,159,255,0.12);color:#4d9fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">Generación OP</span></td>'                +'<td style="padding:10px;text-align:right;display:flex;gap:6px;justify-content:flex-end;">'                  +'<button class="btn" data-alertaid="'+a.id+'" data-skuid="'+(sku.id||'')+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="" onclick="generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#4d9fff;color:#4d9fff;">🛒 Generar OC</button>'                  +'<button class="btn" onclick="marcarAlertaLeida('+a.id+')" style="font-size:11px;padding:4px 8px;border-color:var(--border2);color:var(--text3);" title="Marcar como resuelto">✓</button>'                +'</td>'              +'</tr>';
             }).join('')          +'</tbody></table></div>';
         statsEl.innerHTML = '<div style="background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:8px;padding:12px 20px;">'          +'<div style="font-size:22px;font-weight:700;color:#4d9fff;">'+alertasGen.length+'</div>'          +'<div style="font-size:11px;color:var(--text3);">Faltantes en OP</div></div>';
