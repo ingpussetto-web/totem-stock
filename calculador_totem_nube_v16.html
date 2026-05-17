@@ -6433,7 +6433,10 @@ async function crearOP(proyId){
   try {
     const existing = await stockAPI('ordenes_produccion?v14_orden=eq.' + encodeURIComponent(p.orden) + '&select=op_numero');
     if(existing && existing.length > 0){
-      if(!confirm('Este proyecto ya tiene una OP creada (' + existing[0].op_numero + ').\n¿Querés crear una adicional de todas formas?')) return;
+      if(confirm('Este proyecto ya tiene una OP creada (' + existing[0].op_numero + ').\n¿Ir a Órdenes de Producción?')){
+        window.open('https://ingpussetto-web.github.io/totem-stock/ops_ventas.html', '_blank');
+      }
+      return;
     }
   } catch(e){
     alert('Error de conexión con el sistema de stock.\n' + e.message);
