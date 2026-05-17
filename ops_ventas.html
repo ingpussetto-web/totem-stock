@@ -374,8 +374,8 @@ function renderOPs(){
 }
 
 function renderOPCard(o){
-  const estadoLabel = {bom_pendiente:'BOM pendiente',bom_confirmada:'BOM confirmada',en_produccion:'En producción',completada:'Completada'};
-  const estadoBadge = {bom_pendiente:'pendiente',bom_confirmada:'confirmada',en_produccion:'produccion',completada:'completada'};
+  const estadoLabel = {bom_pendiente:'BOM pendiente',bom_confirmada:'BOM confirmada',en_produccion:'En producción',iniciada:'En producción',completada:'Completada',cancelada:'Cancelada'};
+  const estadoBadge = {bom_pendiente:'pendiente',bom_confirmada:'confirmada',en_produccion:'produccion',iniciada:'produccion',completada:'completada',cancelada:'cancelada'};
   const pct = o.items_total > 0 ? Math.round((o.items_asignados/o.items_total)*100) : 0;
   const fecha = new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
 
