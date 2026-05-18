@@ -710,7 +710,7 @@ async function loadGabinetesPendientes(){
           const oc = item.ordenes_compra || {};
           const variantes = variantesMap[item.sku_id] || [];
           const pendiente = item.cantidad - (item.cantidad_recibida||0);
-          const optsColores = variantes.filter(v=>v.valor!=='A definir').map(v=>`<option value="${v.valor}">${v.valor}</option>`).join('');
+          const makeOpts = (colorActual) => variantes.filter(v=>v.valor!=='A definir').map(v=>`<option value="${v.valor}" ${v.valor===colorActual?'selected':''} >${v.valor}</option>`).join('');
           const filas = asignacionFilas[item.id] || [{color:'', qty: pendiente}];
           const totalAsignado = filas.reduce((s,f)=>s+(parseInt(f.qty)||0),0);
           const puedeSumar = totalAsignado < pendiente;
@@ -720,7 +720,7 @@ async function loadGabinetesPendientes(){
               <select onchange="actualizarFila(${item.id},${fi},'color',this.value)"
                 style="height:32px;font-size:12px;padding:0 8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;min-width:140px;">
                 <option value="">— Color —</option>
-                ${optsColores}
+                ${makeOpts(fila.color)}
               </select>
               <input type="number" min="1" max="${pendiente}" value="${fila.qty||1}"
                 onchange="actualizarFila(${item.id},${fi},'qty',this.value)"
