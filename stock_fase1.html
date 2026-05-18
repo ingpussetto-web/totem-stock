@@ -328,7 +328,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <option value="baja">Baja</option>
         </select>
         <div class="spacer"></div>
-        <button class="btn green" onclick="openModalUid()">+ Registrar unidad</button>
+        <button class="btn green" onclick="openModalUidConPass()">+ Registrar unidad</button>
       </div>
       <div class="card">
         <div class="tbl-wrap">
@@ -937,6 +937,13 @@ async function loadVariantesUid(){
     grp.style.display='block';
     sel.innerHTML = '<option value="">Sin variante</option>' + vars.map(v=>`<option value="${v.id}">${v.valor}</option>`).join('');
   } catch(e){}
+}
+
+function openModalUidConPass(){
+  const pass = prompt('Registrar una unidad física requiere autorización.\nIngresá la contraseña:');
+  if(pass === null) return;
+  if(pass !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
+  openModalUid();
 }
 
 function openModalUid(){
