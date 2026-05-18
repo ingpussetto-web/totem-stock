@@ -350,6 +350,24 @@ body::before{
     &nbsp;·&nbsp; Todos los módulos conectados a Supabase
   </div>
 
+  <!-- QR de configuración para celulares -->
+  <div style="margin-top:24px;text-align:center;">
+    <button onclick="mostrarQRConfig()" style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:8px;padding:8px 16px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;letter-spacing:0.08em;">
+      📱 QR configuración celulares
+    </button>
+  </div>
+
+  <!-- Modal QR config -->
+  <div id="modal-qr-config" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="this.style.display='none'">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;padding:32px;text-align:center;max-width:320px;" onclick="event.stopPropagation()">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">QR de configuración</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px;">Escaneá desde el celular — guarda la conexión automáticamente</div>
+      <div id="qr-config-container" style="margin:0 auto 16px;"></div>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">scan.html · configuración automática</div>
+      <button onclick="document.getElementById('modal-qr-config').style.display='none'" style="margin-top:16px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 16px;font-size:12px;cursor:pointer;">Cerrar</button>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -365,6 +383,30 @@ function updateClock(){
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// QR de configuración para celulares
+function mostrarQRConfig(){
+  const url = localStorage.getItem('supa_url') || '';
+  const key = localStorage.getItem('supa_key') || '';
+  if(!url || !key){
+    alert('No hay credenciales de Supabase guardadas en este dispositivo.\nConfiguralas primero en cualquier módulo → Configuración.');
+    return;
+  }
+  const modal = document.getElementById('modal-qr-config');
+  modal.style.display = 'flex';
+  const container = document.getElementById('qr-config-container');
+  container.innerHTML = '';
+  const configUrl = 'https://ingpussetto-web.github.io/totem-stock/scan.html?setup=1&su=' + encodeURIComponent(url) + '&sk=' + encodeURIComponent(key);
+  // Cargar QRCode si no está
+  if(typeof QRCode === 'undefined'){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    s.onload = () => new QRCode(container, {text: configUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+    document.head.appendChild(s);
+  } else {
+    new QRCode(container, {text: configUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+  }
+}
 
 // Anti-caché: agregar timestamp a todos los links de módulos al hacer click
 document.querySelectorAll('a.mod-card').forEach(a => {

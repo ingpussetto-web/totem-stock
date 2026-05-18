@@ -147,6 +147,23 @@ async function api(path, method='GET', body=null){
   return res.json();
 }
 
+// Setup automático desde QR de configuración
+(function setupFromURL(){
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('setup') === '1'){
+    const su = params.get('su');
+    const sk = params.get('sk');
+    if(su && sk){
+      localStorage.setItem('supa_url', decodeURIComponent(su));
+      localStorage.setItem('supa_key', decodeURIComponent(sk));
+      // Limpiar URL y continuar
+      const uid = params.get('uid') || '';
+      const newUrl = window.location.pathname + (uid ? '?uid='+uid : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }
+})();
+
 async function init(){
   const params = new URLSearchParams(window.location.search);
   const uid = params.get('uid');
