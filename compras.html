@@ -238,6 +238,9 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <div class="nav-item" onclick="showPage('proveedores')" id="nav-proveedores">
         <span>▤</span> Proveedores
       </div>
+      <div class="nav-item" onclick="showPage('gabinetes')" id="nav-gabinetes">
+        <span>🎨</span> Colores pendientes
+      </div>
       <div class="nav-item" onclick="showPage('desvios')" id="nav-desvios">
         <span>⚠</span> Alertas de compra
       </div>
@@ -288,6 +291,14 @@ textarea.form-input{resize:vertical;min-height:70px;}
     </div>
 
     <!-- PROVEEDORES -->
+    <div class="page" id="page-gabinetes">
+      <div class="page-header">
+        <div class="page-title">Colores pendientes</div>
+        <div class="page-sub">Gabinetes comprados con color "A definir" — asigná el color para habilitar el ingreso al depósito.</div>
+      </div>
+      <div id="gabinetes-list"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
     <div class="page" id="page-desvios">
       <div class="page-header">
         <div>
@@ -661,6 +672,111 @@ function showPage(id){
   if(id==='proveedores') loadProveedores();
   if(id==='config') loadConfig();
   if(id==='desvios') loadDesvios();
+  if(id==='gabinetes') loadGabinetesPendientes();
+}
+
+// ─── COLORES PENDIENTES ──────────────────────────────────────
+async function loadGabinetesPendientes(){
+  const el = document.getElementById('gabinetes-list');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
+  try{
+    // Traer oc_items con color A definir de OCs no cerradas ni canceladas
+    const items = await api('oc_items?color=eq.A definir&select=*,ordenes_compra(id,oc_numero,estado,proveedor_id,proveedores(nombre))&order=id.desc');
+    const activos = (items||[]).filter(i => i.ordenes_compra && i.ordenes_compra.estado !== 'cancelada' && i.ordenes_compra.estado !== 'cerrada');
+
+    if(!activos.length){
+      el.innerHTML = '<div class="empty" style="padding:40px;text-align:center;color:var(--text3);">✓ No hay gabinetes pendientes de definición de color</div>';
+      return;
+    }
+
+    // Traer variantes de cada SKU para el selector de color
+    const skuIds = [...new Set(activos.map(i=>i.sku_id).filter(Boolean))];
+    const variantesMap = {};
+    if(skuIds.length){
+      const vars = await api('variantes?sku_id=in.('+skuIds.join(',')+')'+'&select=id,sku_id,valor&order=valor.asc');
+      (vars||[]).forEach(v=>{ if(!variantesMap[v.sku_id]) variantesMap[v.sku_id]=[]; variantesMap[v.sku_id].push(v); });
+    }
+
+    el.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px;">'
+      + activos.map(item => {
+          const oc = item.ordenes_compra || {};
+          const proveedor = oc.proveedores?.nombre || '—';
+          const variantes = variantesMap[item.sku_id] || [];
+          const pendiente = item.cantidad - (item.cantidad_recibida||0);
+          return `<div style="background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:16px 18px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;">${item.nombre}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:DM Mono,monospace;">${oc.oc_numero||'—'} · ${proveedor}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:11px;color:var(--text3);">Pendiente de definir</div>
+                <div style="font-size:20px;font-weight:700;color:var(--amber);">${pendiente} ud.</div>
+              </div>
+            </div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.08em;">Asignar color</div>
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div>
+                  <div style="font-size:10px;color:var(--text3);margin-bottom:4px;">Color</div>
+                  <select id="color-sel-${item.id}" style="height:32px;font-size:12px;padding:0 8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;min-width:130px;">
+                    <option value="">— Elegir color —</option>
+                    ${variantes.filter(v=>v.valor!=='A definir').map(v=>`<option value="${v.valor}">${v.valor}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--text3);margin-bottom:4px;">Cantidad (máx. ${pendiente})</div>
+                  <input id="color-qty-${item.id}" type="number" min="1" max="${pendiente}" value="${pendiente}" style="height:32px;width:80px;font-size:12px;padding:0 8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;">
+                </div>
+                <button onclick="asignarColorGabinete(${item.id},${item.oc_id},${item.sku_id},${pendiente})" style="height:32px;padding:0 16px;background:var(--green);color:#000;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">✓ Confirmar color</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')
+      + '</div>';
+  }catch(e){ el.innerHTML = '<div style="color:var(--red);padding:20px;">Error: '+e.message+'</div>'; }
+}
+
+async function asignarColorGabinete(itemId, ocId, skuId, pendienteTotal){
+  const colorSel = document.getElementById('color-sel-'+itemId);
+  const qtySel = document.getElementById('color-qty-'+itemId);
+  const color = colorSel?.value;
+  const qty = parseInt(qtySel?.value) || 0;
+
+  if(!color){ alert('Seleccioná un color antes de confirmar.'); return; }
+  if(qty <= 0 || qty > pendienteTotal){ alert('Cantidad inválida.'); return; }
+
+  if(!confirm(`¿Confirmar ${qty} unidad${qty>1?'es':''} de gabinete color "${color}"?\nEsto habilitará el ingreso al depósito.`)) return;
+
+  try{
+    if(qty === pendienteTotal){
+      // Asignar todo — actualizar el item directamente
+      await api(`oc_items?id=eq.${itemId}`, 'PATCH', {color});
+      toast(`Color "${color}" asignado a todos los gabinetes ✓`);
+    } else {
+      // Asignación parcial — actualizar cantidad del item actual y crear uno nuevo con el resto
+      await api(`oc_items?id=eq.${itemId}`, 'PATCH', {color, cantidad: qty});
+      // Traer datos del item original para duplicar
+      const original = await api(`oc_items?id=eq.${itemId}&select=*`);
+      if(original && original.length){
+        const o = original[0];
+        await api('oc_items', 'POST', [{
+          oc_id: ocId,
+          sku_id: skuId,
+          nombre: o.nombre,
+          color: 'A definir',
+          cantidad: pendienteTotal - qty,
+          cantidad_recibida: 0,
+          precio_unitario_neto: o.precio_unitario_neto,
+          precio_unitario_bruto: o.precio_unitario_bruto,
+          iva_pct: o.iva_pct,
+          total_neto: o.total_neto
+        }]);
+      }
+      toast(`${qty} ud. asignadas a "${color}" — restan ${pendienteTotal-qty} ud. en "A definir" ✓`);
+    }
+    loadGabinetesPendientes();
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 // ─── DESVÍOS DE PRODUCCIÓN ─────────────────────────────────
