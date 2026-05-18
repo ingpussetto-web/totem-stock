@@ -240,7 +240,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
         <div id="desvios-panel"></div>
         <div style="display:flex;justify-content:space-between;margin-top:14px;">
           <button class="btn" onclick="volverPanel1()">← Revisar</button>
-          <button class="btn solid-green lg" onclick="confirmarConDesvios()">Confirmar igual y registrar →</button>
+          <button class="btn solid-green lg" onclick="confirmarConDesviosConPass()">Confirmar igual y registrar →</button>
         </div>
       </div>
 
@@ -566,6 +566,16 @@ function volverPanel1(){
 }
 
 function confirmarConDesvios(){ confirmarRecepcion(); }
+
+function confirmarConDesviosConPass(){
+  const pass = prompt('Confirmar recepción con desvíos requiere autorización del encargado.\nIngresá la contraseña:');
+  if(pass === null) return;
+  if(pass !== 'picone001'){
+    alert('Contraseña incorrecta. No se puede confirmar con desvíos.');
+    return;
+  }
+  confirmarConDesvios();
+}
 
 async function confirmarRecepcion(){
   try{

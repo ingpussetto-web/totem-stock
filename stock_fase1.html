@@ -232,7 +232,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <option value="cantidad">Por cantidad</option>
         </select>
         <div class="spacer"></div>
-        <button class="btn green" onclick="openModalSku()">+ Nuevo SKU</button>
+        <button class="btn green" onclick="openModalSkuConPass()">+ Nuevo SKU</button>
       </div>
       <div class="card">
         <div class="tbl-wrap">
@@ -802,7 +802,7 @@ function renderUnidades(){
     <td>${badgeEstado(u.estado)}${u.estado==='reservado'&&u._op_numero?`<div style="font-size:10px;margin-top:3px;"><a href="produccion.html?op=${encodeURIComponent(u._op_numero)}" target="_blank" style="color:var(--accent);text-decoration:none;font-family:monospace;" title="Ver OP en producción">📋 ${u._op_numero}</a></div>`:''}</td>
     <td style="font-size:11px;color:var(--text3)">${formatDate(u.created_at)}</td>
     <td class="td-actions">
-      <button class="btn sm red" onclick="deleteUid(${u.id})">Baja</button>
+      <!-- Baja solo disponible desde index de Gerencia -->
     </td>
   </tr>`).join('');
 }
@@ -811,7 +811,22 @@ function renderUnidades(){
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
+function openModalSkuConPass(){
+  const pass = prompt('Esta acción requiere autorización.\nIngresá la contraseña:');
+  if(pass === null) return;
+  if(pass !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
+  openModalSku(null);
+}
+
 function openModalSku(id=null){
+  if(id !== null){
+    const pass = prompt('Esta acción requiere autorización.\nIngresá la contraseña:');
+    if(pass === null) return;
+    if(pass !== 'picone001'){
+      alert('Contraseña incorrecta.');
+      return;
+    }
+  }
   editingSkuId = id;
   variantesTemp = [];
   document.getElementById('modal-sku-title').textContent = id ? 'Editar SKU' : 'Nuevo SKU';
