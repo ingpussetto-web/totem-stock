@@ -456,6 +456,19 @@ function renderItemsRecepcion(){
           <span style="color:var(--amber);">Pendiente hoy: <strong>${pendiente}</strong></span>
         </div>` : '';
 
+    // Items con color A definir — mostrar como bloqueados
+    if(item.color === 'A definir'){
+      return `<div class="rec-item" id="rec-item-${i}" style="opacity:0.6;border:1px dashed rgba(255,179,64,0.4);background:rgba(255,179,64,0.04);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="rec-item-nombre" style="color:var(--text2);">${item.nombre}</div>
+          <span style="background:rgba(255,179,64,0.15);color:var(--amber);font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid rgba(255,179,64,0.3);">⏳ Color pendiente de definir</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;">
+          ${pendiente} unidad${pendiente>1?'es':''} en espera — Compras debe definir el color antes de poder ingresar al depósito.
+        </div>
+      </div>`;
+    }
+
     return `<div class="rec-item" id="rec-item-${i}">
       <div class="rec-item-nombre">${item.nombre}
         ${item.skus?.tracking==='uid'?'<span style="font-size:10px;color:var(--blue);margin-left:6px;font-family:\'DM Mono\',monospace;">UID</span>':''}
@@ -518,6 +531,7 @@ function procesarRecepcion(){
   // Recolectar lo que ingresó el usuario
   recepcionItems = itemsActual.map((item,i)=>{
     const pendiente = item.cantidad - (item.cantidad_recibida||0);
+    if(item.color === 'A definir') return null; // Bloqueado hasta que Compras defina color
     const qtyRec = parseFloat(document.getElementById(`qty-rec-${i}`)?.value)||0;
     const colorRec = document.getElementById(`color-rec-${i}`)?.value||item.color||'';
     const qtyDesvio = qtyRec < pendiente;
@@ -539,6 +553,7 @@ function procesarRecepcion(){
     };
   });
 
+  recepcionItems = recepcionItems.filter(i=>i!==null);
   desviosDetectados = recepcionItems.filter(i=>i.tiene_desvio);
 
   if(desviosDetectados.length){
@@ -584,7 +599,8 @@ async function confirmarRecepcion(){
     const hayDesvios = desviosDetectados.length > 0;
     const totalRecibido = recepcionItems.reduce((s,i)=>s+i.cantidad_recibida,0);
     const totalEsperado = recepcionItems.reduce((s,i)=>s+i.cantidad_esperada,0);
-    const esParcial = totalRecibido < totalEsperado;
+    const itemsADefinirPend = itemsActual.filter(i=>i.color==='A definir' && (i.cantidad-(i.cantidad_recibida||0))>0);
+    const esParcial = totalRecibido < totalEsperado || itemsADefinirPend.length > 0;
 
     // Generar número de recepción
     const fecha = new Date();
