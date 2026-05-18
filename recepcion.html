@@ -595,32 +595,24 @@ function volverPanel1(){
 
 function imprimirEtiquetaCaja(codigo, nombre){
   const win = window.open('','_blank','width=400,height=500');
-  win.document.write(`<!DOCTYPE html><html><head>
-    <title>Etiqueta Caja — ${nombre}</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-    <style>
-      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;}
-      .label{border:2px solid #333;border-radius:8px;padding:20px;text-align:center;width:280px;}
-      .tn{font-size:11px;color:#666;margin-bottom:4px;letter-spacing:0.1em;text-transform:uppercase;}
-      .nombre{font-size:14px;font-weight:700;margin:8px 0;}
-      .codigo{font-size:10px;color:#999;font-family:monospace;margin-bottom:12px;}
-      .badge{background:#ffb340;color:#000;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.1em;margin-bottom:12px;display:inline-block;}
-      #qr{margin:0 auto;}
-      @media print{body{min-height:auto;}}
-    </style>
-  </head><body>
-    <div class="label">
-      <div class="tn">Totem Nube</div>
-      <div class="badge">📦 CAJA</div>
-      <div class="nombre">${nombre}</div>
-      <div class="codigo">${codigo}</div>
-      <div id="qr"></div>
-    </div>
-    <script>
-      new QRCode(document.getElementById('qr'),{text:'${codigo}',width:160,height:160,correctLevel:QRCode.CorrectLevel.M});
-      setTimeout(()=>window.print(),800);
-    <\/script>
-  </body></html>\`);
+  const html = '<!DOCTYPE html><html><head>'
+    + '<title>Etiqueta Caja</title>'
+    + '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></' + 'script>'
+    + '<style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;}'
+    + '.label{border:2px solid #333;border-radius:8px;padding:20px;text-align:center;width:280px;}'
+    + '.badge{background:#ffb340;color:#000;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.1em;margin-bottom:12px;display:inline-block;}'
+    + '.nombre{font-size:14px;font-weight:700;margin:8px 0;}.codigo{font-size:10px;color:#999;font-family:monospace;margin-bottom:12px;}'
+    + '#qr{margin:0 auto;}@media print{body{min-height:auto;}}</style>'
+    + '</head><body><div class="label">'
+    + '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.1em;">Totem Nube</div>'
+    + '<div class="badge">📦 CAJA</div>'
+    + '<div class="nombre">' + nombre + '</div>'
+    + '<div class="codigo">' + codigo + '</div>'
+    + '<div id="qr"></div></div>'
+    + '<script>new QRCode(document.getElementById("qr"),{text:"' + codigo + '",width:160,height:160,correctLevel:QRCode.CorrectLevel.M});'
+    + 'setTimeout(function(){window.print();},800);</' + 'script>'
+    + '</body></html>';
+  win.document.write(html);
   win.document.close();
 }
 
