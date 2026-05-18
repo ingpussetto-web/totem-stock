@@ -609,7 +609,7 @@ function imprimirEtiquetaCaja(codigo, nombre){
     + '<div class="nombre">' + nombre + '</div>'
     + '<div class="codigo">' + codigo + '</div>'
     + '<div id="qr"></div></div>'
-    + '<script>new QRCode(document.getElementById("qr"),{text:"' + codigo + '",width:160,height:160,correctLevel:QRCode.CorrectLevel.M});'
+    + '<script>new QRCode(document.getElementById("qr"),{text:"https://ingpussetto-web.github.io/totem-stock/scan.html?uid=' + codigo + '",width:160,height:160,correctLevel:QRCode.CorrectLevel.M});'
     + 'setTimeout(function(){window.print();},800);</' + 'script>'
     + '</body></html>';
   win.document.write(html);
