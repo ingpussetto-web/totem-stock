@@ -250,7 +250,6 @@ textarea.form-input{resize:vertical;min-height:70px;}
           <div class="card-title">✓ Recepción registrada</div>
           <div id="rec-resultado"></div>
         </div>
-        <div id="caja-resumen-wrap" style="display:none;"></div>
         <div id="etiquetas-preview-wrap" style="display:none;">
           <div class="card">
             <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
@@ -411,7 +410,9 @@ async function abrirRecepcion(ocId){
     ocActual = ocActual[0];
 
     // Items sin precio — solo nombre, cantidad, color y SKU
-    itemsActual = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)`);
+    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)`);
+    // Filtrar solo items con saldo pendiente (excluir los ya recibidos completamente)
+    itemsActual = (todosItems||[]).filter(i => (i.cantidad - (i.cantidad_recibida||0)) > 0);
 
     document.getElementById('rec-title').textContent = 'Recepcionando ' + ocActual.oc_numero;
     document.getElementById('rec-sub').textContent = itemsActual.length + ' insumos · ' + new Date(ocActual.created_at).toLocaleDateString('es-AR');
@@ -454,19 +455,6 @@ function renderItemsRecepcion(){
           <span style="color:var(--green);">Ya recibido: <strong>${yaRecibido}</strong></span>
           <span style="color:var(--amber);">Pendiente hoy: <strong>${pendiente}</strong></span>
         </div>` : '';
-
-    // Items con color A definir — mostrar como bloqueados
-    if(item.color === 'A definir'){
-      return `<div class="rec-item" id="rec-item-${i}" style="opacity:0.6;border:1px dashed rgba(255,179,64,0.4);background:rgba(255,179,64,0.04);">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div class="rec-item-nombre" style="color:var(--text2);">${item.nombre}</div>
-          <span style="background:rgba(255,179,64,0.15);color:var(--amber);font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid rgba(255,179,64,0.3);">⏳ Color pendiente de definir</span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:8px;">
-          ${pendiente} unidad${pendiente>1?'es':''} en espera — Compras debe definir el color antes de poder ingresar al depósito.
-        </div>
-      </div>`;
-    }
 
     return `<div class="rec-item" id="rec-item-${i}">
       <div class="rec-item-nombre">${item.nombre}
@@ -530,7 +518,6 @@ function procesarRecepcion(){
   // Recolectar lo que ingresó el usuario
   recepcionItems = itemsActual.map((item,i)=>{
     const pendiente = item.cantidad - (item.cantidad_recibida||0);
-    if(item.color === 'A definir') return null; // Bloqueado
     const qtyRec = parseFloat(document.getElementById(`qty-rec-${i}`)?.value)||0;
     const colorRec = document.getElementById(`color-rec-${i}`)?.value||item.color||'';
     const qtyDesvio = qtyRec < pendiente;
@@ -552,7 +539,6 @@ function procesarRecepcion(){
     };
   });
 
-  recepcionItems = recepcionItems.filter(i=>i!==null);
   desviosDetectados = recepcionItems.filter(i=>i.tiene_desvio);
 
   if(desviosDetectados.length){
@@ -595,13 +581,10 @@ function confirmarConDesviosConPass(){
 
 async function confirmarRecepcion(){
   try{
-    recepcionItems = recepcionItems.filter(i=>i!==null); // Excluir items A definir
     const hayDesvios = desviosDetectados.length > 0;
     const totalRecibido = recepcionItems.reduce((s,i)=>s+i.cantidad_recibida,0);
     const totalEsperado = recepcionItems.reduce((s,i)=>s+i.cantidad_esperada,0);
-    // Contar items A definir que quedaron pendientes — la OC debe quedar parcial
-    const itemsADefinir = itemsActual.filter(i=>i.color==='A definir' && (i.cantidad-(i.cantidad_recibida||0))>0);
-    const esParcial = totalRecibido < totalEsperado || itemsADefinir.length > 0;
+    const esParcial = totalRecibido < totalEsperado;
 
     // Generar número de recepción
     const fecha = new Date();
@@ -778,29 +761,6 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
     document.getElementById('etiquetas-preview-wrap').style.display='block';
     etiquetasSeleccionadas = new Set(etiquetasGeneradas.map(function(e){ return e.uid; }));
     generarVistaEtiquetas();
-  }
-
-  // Mostrar resumen de items de caja (tracking cantidad)
-  const itemsCaja = recepcionItems.filter(ri => ri.tracking !== 'uid' && ri.cantidad_recibida > 0);
-  if(itemsCaja.length){
-    const cajaWrap = document.getElementById('caja-resumen-wrap');
-    if(cajaWrap){
-      cajaWrap.style.display = 'block';
-      cajaWrap.innerHTML = '<div style="margin-top:16px;padding:12px 16px;background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.3);border-radius:8px;">'
-        + '<div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:10px;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.08em;">📦 Insumos de caja — Stock actualizado</div>'
-        + itemsCaja.map(ri => {
-            const codigo = ri.codigo || '';
-            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);">'
-              + '<div><div style="font-size:12px;font-weight:500;">' + ri.nombre + '</div>'
-              + (codigo ? '<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">' + codigo + '</div>' : '')
-              + '</div>'
-              + '<div style="text-align:right;">'
-              + '<div style="font-size:13px;font-weight:600;color:var(--amber);">+' + ri.cantidad_recibida + ' ud.</div>'
-              + '<div style="font-size:10px;color:var(--text3);">Sumado a stock de caja</div>'
-              + '</div></div>';
-          }).join('')
-        + '</div>';
-    }
   }
 }
 
