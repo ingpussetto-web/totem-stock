@@ -161,6 +161,12 @@ async function init(){
     const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre,tracking,categorias(nombre)),variantes(id,valor)`);
 
     if(!unidades || !unidades.length){
+      // Fallback: buscar por código de SKU (etiqueta de caja)
+      const skus = await api(`skus?codigo=eq.${encodeURIComponent(uid)}&select=id,codigo,nombre,tracking,categorias(nombre)`).catch(()=>[]);
+      if(skus && skus.length && skus[0].tracking === 'cantidad'){
+        await renderCaja(skus[0]);
+        return;
+      }
       renderNotFound(uid);
       return;
     }
@@ -307,6 +313,96 @@ function renderBaja(){
       <div class="insumo-uid">${u.uid}</div>
     </div>
   `;
+}
+
+let cajaSkuActual = null;
+let cajaStockRow = null;
+
+async function renderCaja(sku){
+  cajaSkuActual = sku;
+
+  // Traer stock disponible
+  const stockRows = await api(`stock?sku_id=eq.${sku.id}&select=id,cantidad,cantidad_reservada`).catch(()=>[]);
+  cajaStockRow = stockRows?.[0];
+  const total = cajaStockRow?.cantidad || 0;
+  const reservado = cajaStockRow?.cantidad_reservada || 0;
+  const disponible = total - reservado;
+
+  // Traer OPs con este insumo pendiente de asignar
+  const bomItems = await api(
+    `op_bom_items?sku_id=eq.${sku.id}&estado=eq.pendiente&incluido=eq.true&select=id,qty,ordenes_produccion(id,op_numero,cliente,estado)`
+  ).catch(()=>[]);
+  const opsActivas = (bomItems||[]).filter(i =>
+    i.ordenes_produccion &&
+    ['en_produccion','iniciada','bom_confirmada'].includes(i.ordenes_produccion.estado)
+  );
+
+  const colorDisp = disponible <= 0 ? 'var(--red)' : opsActivas.length > disponible ? 'var(--amber)' : 'var(--green)';
+
+  const opsHTML = opsActivas.length
+    ? opsActivas.map(item => {
+        const op = item.ordenes_produccion;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border);">
+          <div>
+            <div style="font-size:13px;font-weight:600;font-family:monospace;color:var(--green);">${op.op_numero}</div>
+            <div style="font-size:11px;color:var(--text3);">${op.cliente}</div>
+          </div>
+          <button data-bomid="${item.id}" data-opnum="${op.op_numero}"
+            onclick="asignarDesdeCaja(this)"
+            style="background:var(--green);color:#000;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">
+            ✓ Asignar
+          </button>
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--text3);font-size:12px;padding:12px 0;">Sin OPs activas que necesiten este insumo</div>';
+
+  document.getElementById('result').innerHTML = `
+    <div style="padding:16px 0;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:28px;margin-bottom:6px;">📦</div>
+        <div style="font-size:11px;color:var(--text3);font-family:monospace;text-transform:uppercase;letter-spacing:0.1em;">${sku.categorias?.nombre||''}</div>
+        <div style="font-size:18px;font-weight:700;margin:4px 0;">${sku.nombre}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:monospace;">${sku.codigo}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;">Disponible</div>
+          <div style="font-size:32px;font-weight:700;color:${colorDisp};">${disponible}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;">Total caja</div>
+          <div style="font-size:32px;font-weight:700;">${total}</div>
+        </div>
+      </div>
+      <div id="caja-ops-wrap">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:monospace;margin-bottom:8px;">OPs que necesitan este insumo</div>
+        ${opsHTML}
+      </div>
+    </div>`;
+  document.getElementById('result').style.display='block';
+}
+
+async function asignarDesdeCaja(btn){
+  const bomId = btn.dataset.bomid;
+  const opNum = btn.dataset.opnum;
+  if(!cajaStockRow){ alert('Error: sin stock registrado'); return; }
+  const disponible = (cajaStockRow.cantidad||0) - (cajaStockRow.cantidad_reservada||0);
+  if(disponible <= 0){ alert('Sin stock disponible en caja'); return; }
+  if(!confirm('¿Asignar 1 unidad de ' + cajaSkuActual.nombre + ' a ' + opNum + '?')) return;
+  try{
+    // Marcar BOM item como asignado
+    await api(`op_bom_items?id=eq.${bomId}`, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
+    // Descontar del stock
+    await api(`stock?id=eq.${cajaStockRow.id}`, 'PATCH', {cantidad_reservada: (cajaStockRow.cantidad_reservada||0) + 1});
+    cajaStockRow.cantidad_reservada = (cajaStockRow.cantidad_reservada||0) + 1;
+    btn.closest('div[style*="border-top"]').innerHTML = '<div style="color:var(--green);font-size:12px;padding:10px 0;border-top:1px solid var(--border);">✓ Asignado a ' + opNum + '</div>';
+    // Actualizar contador disponible
+    const nuevoDisp = (cajaStockRow.cantidad||0) - cajaStockRow.cantidad_reservada;
+    const colorDisp = nuevoDisp <= 0 ? 'var(--red)' : 'var(--green)';
+    document.querySelector('#result [style*="Disponible"] + div') &&
+      (document.querySelectorAll('#result [style*="font-size:32px"]')[0].textContent = nuevoDisp);
+    document.querySelectorAll('#result [style*="font-size:32px"]')[0].style.color = colorDisp;
+  }catch(e){ alert('Error: ' + e.message); }
 }
 
 function renderNotFound(uid){
