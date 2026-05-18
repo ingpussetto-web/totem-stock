@@ -231,7 +231,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
           <textarea class="form-input" id="rec-observaciones" placeholder="Ej: Llegaron en buen estado. Faltaron 2 gabinetes negros que vendrán la próxima semana."></textarea>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
-          <button class="btn solid-green lg" onclick="procesarRecepcion()">Confirmar recepción →</button>
+          <button class="btn solid-green lg" id="btn-confirmar-recepcion" onclick="procesarRecepcion()">Confirmar recepción →</button>
         </div>
       </div>
 
@@ -435,6 +435,16 @@ async function abrirRecepcion(ocId){
 function renderItemsRecepcion(){
   const el = document.getElementById('rec-items-list');
   const esParcial = ocActual?.estado === 'recibida_parcial';
+  // Deshabilitar botón confirmar si todos los items están bloqueados (A definir)
+  const todosBlockeados = itemsActual.every(i => i.color === 'A definir');
+  const btnConfirmar = document.getElementById('btn-confirmar-recepcion');
+  if(btnConfirmar){
+    btnConfirmar.disabled = todosBlockeados;
+    btnConfirmar.style.opacity = todosBlockeados ? '0.4' : '1';
+    btnConfirmar.style.cursor = todosBlockeados ? 'not-allowed' : 'pointer';
+    btnConfirmar.title = todosBlockeados ? 'Definí el color desde Compras antes de recibir' : '';
+  }
+
   el.innerHTML = itemsActual.map((item,i)=>{
     const yaRecibido = item.cantidad_recibida||0;
     const pendiente = item.cantidad - yaRecibido;
