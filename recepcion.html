@@ -843,7 +843,7 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
             + '</div>'
             + '<div style="display:flex;align-items:center;gap:10px;">'
             + '<span style="font-size:13px;font-weight:600;color:var(--amber);">+' + ri.cantidad_recibida + ' ud.</span>'
-            + (codigo ? '<button onclick="imprimirEtiquetaCaja('' + codigo + '','' + ri.nombre.replace(/'/g,"\'") + '')" style="background:rgba(255,179,64,0.15);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨 Etiqueta caja</button>' : '')
+            + (codigo ? '<button data-codigo="' + codigo + '" data-nombre="' + ri.nombre.replace(/"/g,'') + '" onclick="imprimirEtiquetaCaja(this.dataset.codigo,this.dataset.nombre)" style="background:rgba(255,179,64,0.15);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨 Etiqueta caja</button>' : '')
             + '</div>'
             + '</div>';
         }).join('')
