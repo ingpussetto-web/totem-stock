@@ -551,6 +551,7 @@ function procesarRecepcion(){
       sku_id: item.sku_id,
       nombre: item.nombre,
       tracking: item.skus?.tracking,
+      codigo: item.skus?.codigo||'',
       cantidad_esperada: pendiente,
       cantidad_recibida: qtyRec,
       color_esperado: item.color||'',
@@ -590,6 +591,37 @@ function volverPanel1(){
   document.getElementById('rec-panel1').style.display='block';
   document.getElementById('rec-panel2').style.display='none';
   setStep(1);
+}
+
+function imprimirEtiquetaCaja(codigo, nombre){
+  const win = window.open('','_blank','width=400,height=500');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>Etiqueta Caja — ${nombre}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+    <style>
+      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;}
+      .label{border:2px solid #333;border-radius:8px;padding:20px;text-align:center;width:280px;}
+      .tn{font-size:11px;color:#666;margin-bottom:4px;letter-spacing:0.1em;text-transform:uppercase;}
+      .nombre{font-size:14px;font-weight:700;margin:8px 0;}
+      .codigo{font-size:10px;color:#999;font-family:monospace;margin-bottom:12px;}
+      .badge{background:#ffb340;color:#000;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.1em;margin-bottom:12px;display:inline-block;}
+      #qr{margin:0 auto;}
+      @media print{body{min-height:auto;}}
+    </style>
+  </head><body>
+    <div class="label">
+      <div class="tn">Totem Nube</div>
+      <div class="badge">📦 CAJA</div>
+      <div class="nombre">${nombre}</div>
+      <div class="codigo">${codigo}</div>
+      <div id="qr"></div>
+    </div>
+    <script>
+      new QRCode(document.getElementById('qr'),{text:'${codigo}',width:160,height:160,correctLevel:QRCode.CorrectLevel.M});
+      setTimeout(()=>window.print(),800);
+    <\/script>
+  </body></html>\`);
+  win.document.close();
 }
 
 function confirmarConDesvios(){ confirmarRecepcion(); }
@@ -787,6 +819,35 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
     document.getElementById('etiquetas-preview-wrap').style.display='block';
     etiquetasSeleccionadas = new Set(etiquetasGeneradas.map(function(e){ return e.uid; }));
     generarVistaEtiquetas();
+  }
+
+  // Mostrar resumen + botón etiqueta para insumos de caja (tracking cantidad)
+  const itemsCaja = recepcionItems.filter(ri => ri.tracking !== 'uid' && ri.cantidad_recibida > 0);
+  if(itemsCaja.length){
+    let cajaWrap = document.getElementById('caja-resumen-wrap');
+    if(!cajaWrap){
+      cajaWrap = document.createElement('div');
+      cajaWrap.id = 'caja-resumen-wrap';
+      const etiqWrap = document.getElementById('etiquetas-preview-wrap');
+      if(etiqWrap) etiqWrap.parentNode.insertBefore(cajaWrap, etiqWrap);
+    }
+    cajaWrap.style.display = 'block';
+    cajaWrap.innerHTML = '<div style="margin-top:16px;padding:14px 16px;background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.3);border-radius:8px;">'
+      + '<div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:10px;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.08em;">📦 Insumos de caja — Stock actualizado</div>'
+      + itemsCaja.map(ri => {
+          const codigo = ri.codigo || ri.sku_codigo || '';
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid rgba(255,179,64,0.15);">'
+            + '<div>'
+            + '<div style="font-size:12px;font-weight:500;">' + ri.nombre + '</div>'
+            + (codigo ? '<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">' + codigo + '</div>' : '')
+            + '</div>'
+            + '<div style="display:flex;align-items:center;gap:10px;">'
+            + '<span style="font-size:13px;font-weight:600;color:var(--amber);">+' + ri.cantidad_recibida + ' ud.</span>'
+            + (codigo ? '<button onclick="imprimirEtiquetaCaja('' + codigo + '','' + ri.nombre.replace(/'/g,"\'") + '')" style="background:rgba(255,179,64,0.15);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨 Etiqueta caja</button>' : '')
+            + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
   }
 }
 

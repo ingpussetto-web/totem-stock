@@ -651,6 +651,7 @@ function renderCatalogo(){
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
         <button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>
+        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -810,6 +811,38 @@ function renderUnidades(){
 // ─── MODALS ─────────────────────────────────────────────────────────────────
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function imprimirEtiquetaCaja(codigo, nombre){
+  // Generar QR del código de SKU e imprimir
+  const win = window.open('','_blank','width=400,height=500');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>Etiqueta Caja — ${nombre}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+    <style>
+      body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;}
+      .label{border:2px solid #333;border-radius:8px;padding:20px;text-align:center;width:280px;}
+      .tn{font-size:11px;color:#666;margin-bottom:4px;letter-spacing:0.1em;text-transform:uppercase;}
+      .nombre{font-size:14px;font-weight:700;margin:8px 0;}
+      .codigo{font-size:10px;color:#999;font-family:monospace;margin-bottom:12px;}
+      .badge{background:#ffb340;color:#000;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.1em;margin-bottom:12px;display:inline-block;}
+      #qr{margin:0 auto;}
+      @media print{body{min-height:auto;}.label{border:2px solid #333;}}
+    </style>
+  </head><body>
+    <div class="label">
+      <div class="tn">Totem Nube</div>
+      <div class="badge">📦 CAJA</div>
+      <div class="nombre">${nombre}</div>
+      <div class="codigo">${codigo}</div>
+      <div id="qr"></div>
+    </div>
+    <script>
+      new QRCode(document.getElementById('qr'),{text:'${codigo}',width:160,height:160,correctLevel:QRCode.CorrectLevel.M});
+      setTimeout(()=>window.print(),800);
+    <\/script>
+  </body></html>`);
+  win.document.close();
+}
 
 function openModalSkuConPass(){
   const pass = prompt('Esta acción requiere autorización.\nIngresá la contraseña:');
