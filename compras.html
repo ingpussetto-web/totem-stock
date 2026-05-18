@@ -238,9 +238,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <div class="nav-item" onclick="showPage('proveedores')" id="nav-proveedores">
         <span>▤</span> Proveedores
       </div>
-      <div class="nav-item" onclick="showPage('gabinetes')" id="nav-gabinetes">
-        <span>🎨</span> Colores pendientes
-      </div>
+
       <div class="nav-item" onclick="showPage('desvios')" id="nav-desvios">
         <span>⚠</span> Alertas de compra
       </div>
@@ -281,6 +279,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
           <option value="borrador">Borrador</option>
           <option value="aprobada">Aprobada</option>
           <option value="recibida_parcial">Recepción parcial</option>
+          <option value="color_pendiente">⚠ Color pendiente</option>
           <option value="cerrada">Cerrada</option>
           <option value="cancelada">Cancelada</option>
         </select>
@@ -681,7 +680,7 @@ async function loadGabinetesPendientes(){
   el.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
   try{
     // Traer oc_items con color A definir de OCs no cerradas ni canceladas
-    const items = await api('oc_items?color=eq.A definir&select=*,ordenes_compra(id,oc_numero,estado,proveedor_id,proveedores(nombre))&order=id.desc');
+    const items = await api('oc_items?color=eq.A%20definir&select=*,ordenes_compra(id,oc_numero,estado,proveedor_id)&order=id.desc');
     const activos = (items||[]).filter(i => i.ordenes_compra && i.ordenes_compra.estado !== 'cancelada' && i.ordenes_compra.estado !== 'cerrada');
 
     if(!activos.length){
@@ -700,7 +699,7 @@ async function loadGabinetesPendientes(){
     el.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px;">'
       + activos.map(item => {
           const oc = item.ordenes_compra || {};
-          const proveedor = oc.proveedores?.nombre || '—';
+          const proveedor = oc.oc_numero || '—';
           const variantes = variantesMap[item.sku_id] || [];
           const pendiente = item.cantidad - (item.cantidad_recibida||0);
           return `<div style="background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:16px 18px;">
@@ -979,6 +978,10 @@ function renderOCs(){
   const estadoFil=document.getElementById('oc-estado')?.value||'';
   let rows=ocs.filter(o=>{
     if(search&&!o.oc_numero?.toLowerCase().includes(search)&&!o.proveedores?.razon_social?.toLowerCase().includes(search)) return false;
+    if(estadoFil==='color_pendiente'){
+      // Mostrar solo OCs con items A definir pendientes
+      return o._itemsPendientes?.some(i=>i.color==='A definir');
+    }
     if(estadoFil&&o.estado!==estadoFil) return false;
     return true;
   });
@@ -991,11 +994,17 @@ function renderOCs(){
     const pagada=o.pago_estado==='pagada';
     const tieneFactura=!!o.factura_url;
     // Panel pendientes
-    const pendientesHtml = o.estado==='recibida_parcial' && o._itemsPendientes?.length
-      ? `<div style="margin-top:8px;padding:10px 12px;background:var(--blue-dim);border:1px solid var(--blue-border);border-radius:var(--radius);">
-          <div style="font-size:9px;color:var(--blue);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">⏳ Pendiente de recepción</div>
-          ${o._itemsPendientes.map(i=>`<div style="font-size:12px;padding:2px 0;">• ${i.nombre}${i.color?' ('+i.color+')':''}: faltan <strong>${i.cantidad-(i.cantidad_recibida||0)}</strong> de ${i.cantidad}</div>`).join('')}
+    const itemsADefinirPendientes = o._itemsPendientes?.filter(i=>i.color==='A definir' && (i.cantidad-(i.cantidad_recibida||0))>0)||[];
+    const alertaColorHtml = itemsADefinirPendientes.length
+      ? `<div style="margin-top:8px;padding:8px 12px;background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.3);border-radius:6px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;">🎨</span>
+          <span style="font-size:11px;color:var(--amber);font-weight:600;">${itemsADefinirPendientes.length} gabinete${itemsADefinirPendientes.length>1?'s':''} pendiente${itemsADefinirPendientes.length>1?'s':''} de definir color — ir a <strong>Colores pendientes</strong></span>
         </div>` : '';
+    const pendientesHtml = o.estado==='recibida_parcial' && o._itemsPendientes?.length
+      ? alertaColorHtml + `<div style="margin-top:8px;padding:10px 12px;background:var(--blue-dim);border:1px solid var(--blue-border);border-radius:var(--radius);">
+          <div style="font-size:9px;color:var(--blue);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">⏳ Pendiente de recepción</div>
+          ${o._itemsPendientes.filter(i=>i.color!=='A definir').map(i=>`<div style="font-size:12px;padding:2px 0;">• ${i.nombre}${i.color?' ('+i.color+')':''}: faltan <strong>${i.cantidad-(i.cantidad_recibida||0)}</strong> de ${i.cantidad}</div>`).join('')}
+        </div>` : alertaColorHtml;
     // Panel historial cierre (para OCs cerradas)
     const historialCierreHtml = o.estado==='cerrada' ? (() => {
       const recs = o._recepciones||[];

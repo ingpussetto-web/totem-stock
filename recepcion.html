@@ -599,7 +599,9 @@ async function confirmarRecepcion(){
     const hayDesvios = desviosDetectados.length > 0;
     const totalRecibido = recepcionItems.reduce((s,i)=>s+i.cantidad_recibida,0);
     const totalEsperado = recepcionItems.reduce((s,i)=>s+i.cantidad_esperada,0);
-    const esParcial = totalRecibido < totalEsperado;
+    // Contar items A definir que quedaron pendientes — la OC debe quedar parcial
+    const itemsADefinir = itemsActual.filter(i=>i.color==='A definir' && (i.cantidad-(i.cantidad_recibida||0))>0);
+    const esParcial = totalRecibido < totalEsperado || itemsADefinir.length > 0;
 
     // Generar número de recepción
     const fecha = new Date();
