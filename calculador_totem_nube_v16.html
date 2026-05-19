@@ -3606,6 +3606,7 @@ function getCotizacionData(estado){
     tel: document.getElementById('cot-tel').value.trim(),
     email: document.getElementById('cot-email').value.trim(),
     sistema: document.getElementById('cot-sistema').value.trim(),
+    categoria: document.getElementById('cot-categoria')?.value || '',
     validez: parseInt(document.getElementById('cot-validez').value)||15,
     notas: document.getElementById('cot-notas').value.trim(),
     items: [...cotItemsTemp],
@@ -4268,6 +4269,7 @@ function detectarCategoriaOP(c){
   if(s.includes('atenci') || s.includes('remota')) return 'atencion';
   if(s.includes('encuesta')) return 'encuesta';
   if(c.categoria === 'Accesorios') return 'accesorios';
+  if(s.includes('mini pc') && s.includes('player')) return 'accesorios';
   return 'default';
 }
 
