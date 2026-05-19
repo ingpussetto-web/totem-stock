@@ -358,13 +358,34 @@ body::before{
   </div>
 
   <!-- Modal QR config -->
-  <div id="modal-qr-config" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="this.style.display='none'">
-    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;padding:32px;text-align:center;max-width:320px;" onclick="event.stopPropagation()">
+  <div id="modal-qr-config" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;" onclick="this.style.display='none'">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;padding:32px;text-align:center;max-width:360px;width:90%;" onclick="event.stopPropagation()">
       <div style="font-size:13px;font-weight:600;margin-bottom:4px;">QR de configuración</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:16px;">Escaneá desde el celular — guarda la conexión automáticamente</div>
-      <div id="qr-config-container" style="margin:0 auto 16px;"></div>
-      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">scan.html · configuración automática</div>
-      <button onclick="document.getElementById('modal-qr-config').style.display='none'" style="margin-top:16px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 16px;font-size:12px;cursor:pointer;">Cerrar</button>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:20px;">Escaneá desde el celular — guarda la conexión automáticamente</div>
+
+      <!-- Formulario de credenciales -->
+      <div id="qr-form-area">
+        <div style="text-align:left;margin-bottom:12px;">
+          <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:0.08em;display:block;margin-bottom:4px;">SUPABASE URL</label>
+          <input id="qr-input-url" type="text" placeholder="https://xxxx.supabase.co"
+            style="width:100%;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:'DM Mono',monospace;outline:none;">
+        </div>
+        <div style="text-align:left;margin-bottom:16px;">
+          <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:0.08em;display:block;margin-bottom:4px;">ANON KEY</label>
+          <input id="qr-input-key" type="text" placeholder="eyJhbGciOiJIUzI1NiIs..."
+            style="width:100%;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:'DM Mono',monospace;outline:none;">
+        </div>
+        <button onclick="generarQRConfig()" style="width:100%;background:var(--green);color:#000;border:none;border-radius:8px;padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.04em;">
+          📱 Generar QR
+        </button>
+      </div>
+
+      <!-- Contenedor QR (oculto hasta generar) -->
+      <div id="qr-config-container" style="margin:0 auto 12px;display:none;"></div>
+      <div id="qr-config-hint" style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;display:none;">scan.html · configuración automática</div>
+      <button id="qr-volver-btn" onclick="volverFormQR()" style="display:none;margin-top:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 16px;font-size:11px;cursor:pointer;">← Cambiar credenciales</button>
+
+      <button onclick="document.getElementById('modal-qr-config').style.display='none'" style="margin-top:14px;display:block;width:100%;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 16px;font-size:12px;cursor:pointer;">Cerrar</button>
     </div>
   </div>
 
@@ -386,26 +407,50 @@ updateClock();
 
 // QR de configuración para celulares
 function mostrarQRConfig(){
-  const url = localStorage.getItem('supa_url') || '';
-  const key = localStorage.getItem('supa_key') || '';
-  if(!url || !key){
-    alert('No hay credenciales de Supabase guardadas en este dispositivo.\nConfiguralas primero en cualquier módulo → Configuración.');
-    return;
-  }
+  // Pre-cargar valores desde localStorage si existen (comodidad)
+  const urlGuardada = localStorage.getItem('supa_url') || '';
+  const keyGuardada = localStorage.getItem('supa_key') || '';
+  if(urlGuardada) document.getElementById('qr-input-url').value = urlGuardada;
+  if(keyGuardada) document.getElementById('qr-input-key').value = keyGuardada;
+  // Mostrar siempre el formulario primero
+  volverFormQR();
   const modal = document.getElementById('modal-qr-config');
   modal.style.display = 'flex';
+}
+
+function generarQRConfig(){
+  const url = document.getElementById('qr-input-url').value.trim();
+  const key = document.getElementById('qr-input-key').value.trim();
+  if(!url || !key){
+    alert('Completá ambos campos para generar el QR.');
+    return;
+  }
   const container = document.getElementById('qr-config-container');
   container.innerHTML = '';
   const configUrl = 'https://ingpussetto-web.github.io/totem-stock/scan.html?setup=1&su=' + encodeURIComponent(url) + '&sk=' + encodeURIComponent(key);
-  // Cargar QRCode si no está
+  const hacerQR = () => {
+    new QRCode(container, {text: configUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+    document.getElementById('qr-form-area').style.display = 'none';
+    container.style.display = 'block';
+    document.getElementById('qr-config-hint').style.display = 'block';
+    document.getElementById('qr-volver-btn').style.display = 'inline-block';
+  };
   if(typeof QRCode === 'undefined'){
     const s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-    s.onload = () => new QRCode(container, {text: configUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+    s.onload = hacerQR;
     document.head.appendChild(s);
   } else {
-    new QRCode(container, {text: configUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+    hacerQR();
   }
+}
+
+function volverFormQR(){
+  document.getElementById('qr-form-area').style.display = 'block';
+  document.getElementById('qr-config-container').style.display = 'none';
+  document.getElementById('qr-config-hint').style.display = 'none';
+  document.getElementById('qr-volver-btn').style.display = 'none';
+  document.getElementById('qr-config-container').innerHTML = '';
 }
 
 // Anti-caché: agregar timestamp a todos los links de módulos al hacer click
