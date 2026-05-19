@@ -156,15 +156,27 @@ async function api(path, method='GET', body=null){
     if(su && sk){
       localStorage.setItem('supa_url', decodeURIComponent(su));
       localStorage.setItem('supa_key', decodeURIComponent(sk));
-      // Limpiar URL y continuar
       const uid = params.get('uid') || '';
-      const newUrl = window.location.pathname + (uid ? '?uid='+uid : '');
+      if(!uid){
+        window.history.replaceState({}, '', window.location.pathname);
+        document.getElementById('container').innerHTML =
+          '<div style="text-align:center;padding:60px 20px;">' +
+          '<div style="font-size:56px;margin-bottom:16px;">&#x2705;</div>' +
+          '<div style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--green);">Celular configurado</div>' +
+          '<div style="font-size:13px;color:var(--text3);margin-bottom:24px;line-height:1.6;">La conexion a Supabase quedo guardada en este dispositivo.</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-top:16px;">Ya podes escanear etiquetas QR de insumos.</div>' +
+          '</div>';
+        window._setupDone = true;
+        return;
+      }
+      const newUrl = window.location.pathname + '?uid=' + uid;
       window.history.replaceState({}, '', newUrl);
     }
   }
 })();
 
 async function init(){
+  if(window._setupDone) return;
   const params = new URLSearchParams(window.location.search);
   const uid = params.get('uid');
 
