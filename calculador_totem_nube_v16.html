@@ -4270,6 +4270,7 @@ function sel(id, val){
 function abrirModalOP(cotId){
   const c = cotizaciones.find(function(x){ return x.id===cotId; });
   if(!c) return;
+  window._opCotNumero = c.numero || '';
 
   const cat = detectarCategoriaOP(c);
   const cfg = OP_MAPEO[cat] || OP_MAPEO['default'];
@@ -4324,12 +4325,14 @@ function abrirModalOP(cotId){
     <!-- Header -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a3a6b;padding-bottom:10px;margin-bottom:14px;">
       <div>
-        <div style="font-size:17px;font-weight:700;color:#1a3a6b;letter-spacing:0.04em;">ORDEN DE PRODUCCIÓN TÓTEMS</div>
+        <div style="font-size:17px;font-weight:700;color:#1a3a6b;letter-spacing:0.04em;">DOC. OP — ORDEN DE PRODUCCIÓN</div>
         <div style="font-size:10px;color:#888;margin-top:2px;">R-OP-01.1 · Rev.: 03</div>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:11px;color:#888;">N°:</div>
-        <input id="op-numero" type="text" placeholder="502/26" value="${c.numero?c.numero.replace('COT-','OP-'):''}" style="width:100px;text-align:right;font-size:14px;font-weight:700;color:#1a3a6b;border:1px solid #ccc;border-radius:4px;padding:2px 6px;" />
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">N° referencia (cotización):</div>
+        <div style="font-size:13px;font-weight:700;color:#1a3a6b;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#f5f7fa;text-align:right;">${c.numero?c.numero.replace('COT-','OP-'):''}</div>
+        <div style="font-size:11px;color:#888;margin-top:8px;margin-bottom:4px;">Código OP interno:</div>
+        <input id="op-codigo-interno" type="text" placeholder="Ej: OP-001" value="" style="width:120px;text-align:right;font-size:14px;font-weight:700;color:#fff;background:#1a3a6b;border:1px solid #1a3a6b;border-radius:4px;padding:4px 8px;" />
       </div>
     </div>
 
@@ -4358,7 +4361,7 @@ function abrirModalOP(cotId){
         ${opCampo('Forma','op-forma','select',['Vertical','Inclinado','Atril','Otro'],forma)}
         ${opCampo('Tamaño pantalla','op-pantalla','select',['15"','19"','22"','32"','43"','50"','55"'],pantalla)}
         ${opCampo('Táctil','op-tactil','select',['SI','NO'],cfg.tactil)}
-        ${opCampo('Color tótem','op-color','select',['Negro','Blanco','Gris Claro','Gris Plomo','Otro'],'')}
+        ${opCampo('Color tótem','op-color','select',['Blanco','Negro','Gris Claro','Gris Plomo','Otro'],'Blanco')}
         ${opCampo('Plano especial','op-plano','select',['NO','SI'],'')}
       </div>
       <div style="margin-top:8px;">
@@ -4374,7 +4377,7 @@ function abrirModalOP(cotId){
         ${opCampo('Sistema Operativo','op-so','select',['Windows 11','Linux','No aplica'],tieneMiniPC?'Windows 11':'No aplica')}
         ${opCampo('Lic. Windows activada','op-winlic','select',['SI','NO','No aplica'],tieneMiniPC?'SI':'No aplica')}
         ${opCampo('Impresora térmica','op-impresora','select',['SI','NO'],tieneImpresora?'SI':cfg.impresora||'NO')}
-        ${opCampo('Lector QR','op-qr','select',['SI','NO'],cfg.lectorQR)}
+        ${opCampo('Lector QR','op-qr','select',['NO','SI'],'NO')}
         ${opCampo('Cámara web','op-camara','select',['SI','NO'],cfg.camara)}
       </div>
       ${cfg.playerVisible ? `
@@ -4421,13 +4424,15 @@ function abrirModalOP(cotId){
     <!-- Botones -->
     <div class="no-print" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:14px;border-top:1px solid #eee;">
       <button onclick="cerrarModalOP()" style="padding:8px 16px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;">Cerrar</button>
-      <button onclick="compartirOPTelegram()" style="padding:8px 16px;border:1px solid #1a3a6b;border-radius:6px;background:#1a3a6b;color:#fff;cursor:pointer;font-size:13px;">📄 Guardar PDF</button>
+      <button onclick="guardarDocOP()" style="padding:8px 16px;border:1px solid #00c896;border-radius:6px;background:#00c896;color:#000;cursor:pointer;font-size:13px;font-weight:600;">💾 Guardar en sistema</button>
       <button onclick="imprimirOP()" style="padding:8px 16px;border:1px solid #1a3a6b;border-radius:6px;background:#1a3a6b;color:#fff;cursor:pointer;font-size:13px;">🖨 Imprimir</button>
     </div>
   </div>`;
 
   overlay.addEventListener('click', function(e){ if(e.target===overlay) cerrarModalOP(); });
   document.body.appendChild(overlay);
+  // Cargar datos guardados si existen
+  cargarDocOP(window._opCotNumero);
 }
 
 function opSeccion(titulo, contenidoHTML){
@@ -4537,6 +4542,82 @@ function imprimirOP(){
     window.onafterprint=function(){window.close();};
   <\/script></body></html>`);
   ventana.document.close();
+}
+
+async function guardarDocOP(){
+  const cotNumero = window._opCotNumero || '';
+  if(!cotNumero){ alert('Error: sin referencia de cotización.'); return; }
+  const datos = {
+    codigo_op_interno: document.getElementById('op-codigo-interno')?.value || '',
+    cliente: document.getElementById('op-cliente')?.value || '',
+    contacto: document.getElementById('op-contacto')?.value || '',
+    fecha_aprobacion: document.getElementById('op-fecha-apro')?.value || '',
+    fecha_compromiso: document.getElementById('op-fecha-comp')?.value || '',
+    producto: document.getElementById('op-producto')?.value || '',
+    cantidad: document.getElementById('op-cantidad')?.value || '',
+    transporte: document.getElementById('op-transporte')?.checked,
+    material: document.getElementById('op-material')?.value || '',
+    forma: document.getElementById('op-forma')?.value || '',
+    pantalla: document.getElementById('op-pantalla')?.value || '',
+    tactil: document.getElementById('op-tactil')?.value || '',
+    color: document.getElementById('op-color')?.value || '',
+    plano: document.getElementById('op-plano')?.value || '',
+    obs_estructura: document.getElementById('op-obs-estructura')?.value || '',
+    mini_pc: document.getElementById('op-minipc')?.value || '',
+    sistema_operativo: document.getElementById('op-so')?.value || '',
+    windows: document.getElementById('op-windows')?.value || '',
+    impresora: document.getElementById('op-impresora')?.value || '',
+    camara: document.getElementById('op-camara')?.value || '',
+    lector_qr: document.getElementById('op-qr')?.value || '',
+    player: document.getElementById('op-player')?.value || '',
+    cantidad_players: document.getElementById('op-qty-player')?.value || '',
+    tipo_pantalla: document.getElementById('op-tipo-pantalla')?.value || '',
+    otros_accesorios: document.getElementById('op-otros')?.value || '',
+    ploteo_vidrio: document.getElementById('op-ploteo-vidrio')?.value || '',
+    ploteo_totem: document.getElementById('op-ploteo-totem')?.value || '',
+    obs_ploteo: document.getElementById('op-obs-ploteo')?.value || '',
+    config_software: document.getElementById('op-sw')?.value || '',
+    ajustes_medida: document.getElementById('op-ajustes')?.value || '',
+    obs_adicionales: document.getElementById('op-obs-adicionales')?.value || ''
+  };
+  try {
+    // Verificar si ya existe
+    const existing = await stockAPI('doc_op_config?cot_numero=eq.' + encodeURIComponent(cotNumero) + '&select=id');
+    if(existing && existing.length > 0){
+      await stockAPI('doc_op_config?cot_numero=eq.' + encodeURIComponent(cotNumero), 'PATCH', {datos: datos, updated_at: new Date().toISOString()});
+    } else {
+      await stockAPI('doc_op_config', 'POST', {cot_numero: cotNumero, datos: datos});
+    }
+    alert('✅ Doc. OP guardado en sistema.');
+  } catch(e){
+    alert('Error al guardar: ' + e.message);
+  }
+}
+
+async function cargarDocOP(cotNumero){
+  try {
+    const rows = await stockAPI('doc_op_config?cot_numero=eq.' + encodeURIComponent(cotNumero) + '&select=*');
+    if(!rows || rows.length === 0) return;
+    const d = rows[0].datos || {};
+    if(d.codigo_op_interno) { const el = document.getElementById('op-codigo-interno'); if(el) el.value = d.codigo_op_interno; }
+    const campos = ['op-cliente','op-contacto','op-fecha-apro','op-fecha-comp','op-producto','op-cantidad',
+      'op-material','op-forma','op-pantalla','op-tactil','op-color','op-plano','op-obs-estructura',
+      'op-minipc','op-so','op-windows','op-impresora','op-camara','op-qr','op-player','op-qty-player',
+      'op-tipo-pantalla','op-otros','op-ploteo-vidrio','op-ploteo-totem','op-obs-ploteo',
+      'op-sw','op-ajustes','op-obs-adicionales'];
+    const keys = ['cliente','contacto','fecha_aprobacion','fecha_compromiso','producto','cantidad',
+      'material','forma','pantalla','tactil','color','plano','obs_estructura',
+      'mini_pc','sistema_operativo','windows','impresora','camara','lector_qr','player','cantidad_players',
+      'tipo_pantalla','otros_accesorios','ploteo_vidrio','ploteo_totem','obs_ploteo',
+      'config_software','ajustes_medida','obs_adicionales'];
+    campos.forEach(function(id, i){
+      const el = document.getElementById(id);
+      if(el && d[keys[i]] !== undefined) el.value = d[keys[i]];
+    });
+    if(document.getElementById('op-transporte') && d.transporte !== undefined){
+      document.getElementById('op-transporte').checked = d.transporte;
+    }
+  } catch(e){ /* silencioso si no hay datos guardados */ }
 }
 
 function compartirOPTelegram(){
