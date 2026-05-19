@@ -4261,6 +4261,8 @@ const OP_MAPEO = {
 };
 
 function detectarCategoriaOP(c){
+  // Primero chequear por campo categoria (tiene prioridad sobre detección por texto)
+  if(c.categoria === 'Accesorios') return 'accesorios';
   const s = ((c.sistema||'')+(c.items||[]).map(function(i){return i.nombre||'';}).join(' ')).toLowerCase();
   if(s.includes('turnero') || s.includes('turno')) return 'turnero';
   if(s.includes('vigilancia') || s.includes('vigilanci')) return 'vigilancia';
@@ -4268,8 +4270,6 @@ function detectarCategoriaOP(c){
   if(s.includes('publicidad') || s.includes('digital signage')) return 'publicidad';
   if(s.includes('atenci') || s.includes('remota')) return 'atencion';
   if(s.includes('encuesta')) return 'encuesta';
-  if(c.categoria === 'Accesorios') return 'accesorios';
-  if(s.includes('mini pc') && s.includes('player')) return 'accesorios';
   return 'default';
 }
 
