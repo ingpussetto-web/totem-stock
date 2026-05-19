@@ -712,6 +712,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
             <option value="Totem NubiPay">Totem NubiPay</option>
             <option value="Encuesta Satisfacción">Encuesta Satisfacción</option>
             <option value="VideoWall">VideoWall</option>
+            <option value="Accesorios">Accesorios</option>
           </select>
         </div>
         <div class="modal-field">
@@ -1518,6 +1519,22 @@ const FIJOS_DEFAULT = [
   {name:"Luz y telefonía",monto:160000},
   {name:"Comida empleados",monto:360000},
   {name:"Otros gastos",monto:200000},
+
+  // ══════════════════════════════════════════════════════════════
+  // ACCESORIOS
+  // ══════════════════════════════════════════════════════════════
+  {id:"acc_minipc_beelink_n95",name:"Mini PC Beelink N95 8GB",categoria:"Accesorios",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[{key:"minipc_beelink_n95",qty:1}]},
+
+  {id:"acc_player_hdmi",name:"Player HDMI (Transmisor contenidos)",categoria:"Accesorios",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[{key:"player",qty:1}]},
+
+  {id:"acc_impresora_termica",name:"Impresora Térmica — XPrinter",categoria:"Accesorios",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[{key:"impresora",qty:1},{key:"fuente_impresora",qty:1}]},
+
 ];
 
 // Estado
@@ -3214,7 +3231,7 @@ function filtrarProductosPorCategoria(){
     if(licTipo) licTipo.value = licConfig.tipo;
     if(licModulos) licModulos.style.display = licConfig.modulos ? 'block' : 'none';
   } else {
-    const sinLicencia = ['Turnero sin software','VideoWall','Terminal Autogestión'];
+    const sinLicencia = ['Turnero sin software','VideoWall','Terminal Autogestión','Accesorios'];
     if(sinLicencia.includes(cat)){
       if(licCheck){ licCheck.checked = false; }
       if(licPanel) licPanel.style.display = 'none';
@@ -4228,6 +4245,11 @@ const OP_MAPEO = {
   'encuesta': {
     material: 'Metálico', tactil: 'SI', impresora: 'NO',
     lectorQR: 'NO', camara: 'NO', playerVisible: false,
+    tipoPantallaVisible: false, softwareOpciones: ['No aplica']
+  },
+  'accesorios': {
+    material: 'N/A', tactil: 'N/A', impresora: 'N/A',
+    lectorQR: 'N/A', camara: 'N/A', playerVisible: false,
     tipoPantallaVisible: false, softwareOpciones: ['No aplica']
   },
   'default': {
@@ -6531,9 +6553,16 @@ async function crearOP(proyId){
     return;
   }
 
-  // Pedir color de gabinete via modal
-  const color = await seleccionarColor(p.cliente, p.orden);
-  if(color === null) return; // cancelado
+  // Detectar si es un proyecto de Accesorios
+  const esAccesorios = (p.items || []).filter(function(it){ return it.cat === 'equipo'; })
+    .every(function(it){
+      const prod = PRODUCTOS.find(function(pr){ return pr.name === it.desc; });
+      return prod && prod.categoria === 'Accesorios';
+    });
+
+  // Pedir color de gabinete via modal (solo si no es Accesorios)
+  const color = esAccesorios ? 'N/A' : await seleccionarColor(p.cliente, p.orden);
+  if(!esAccesorios && color === null) return; // cancelado
 
   // Generar número de OP correlativo por día
   // Formato: OP05052026-001
@@ -6554,22 +6583,30 @@ async function crearOP(proyId){
   } catch(e){}
   const opNumero = prefijoDia + String(ultimoNum + 1).padStart(3,'0');
 
-  // Buscar el producto en PRODUCTOS para obtener la BOM
-  // Tomamos el primer item de equipo y buscamos por nombre
+  // Construir BOM: para Accesorios iteramos todos los items; para el resto solo el primero
   const itemNombre = itemsEquipo[0].desc;
   const prodDef = PRODUCTOS.find(function(pr){ return pr.name === itemNombre; });
+  const itemsParaBOM = esAccesorios ? itemsEquipo : [itemsEquipo[0]];
 
   let bomItems = [];
-  if(prodDef && prodDef.insumos){
-    // Obtener mapeo de SKUs desde Supabase
-    try {
-      const mapeo = await stockAPI('v14_sku_map?select=v14_key,sku_id,qty_factor,skus(codigo,nombre)');
-      const mapeoDict = {};
-      (mapeo || []).forEach(function(m){ mapeoDict[m.v14_key] = m; });
+  try {
+    const mapeo = await stockAPI('v14_sku_map?select=v14_key,sku_id,qty_factor,skus(codigo,nombre)');
+    const mapeoDict = {};
+    (mapeo || []).forEach(function(m){ mapeoDict[m.v14_key] = m; });
 
-      prodDef.insumos.forEach(function(ins){
+    for(const itEquipo of itemsParaBOM){
+      const pDef = PRODUCTOS.find(function(pr){ return pr.name === itEquipo.desc; });
+      if(!pDef || !pDef.insumos) continue;
+      const cantItem = itEquipo.cant || 1;
+
+      pDef.insumos.forEach(function(ins){
         const m = mapeoDict[ins.key];
-        const qty = (ins.qty || 1) * (m ? (m.qty_factor || 1) : 1);
+        const qty = (ins.qty || 1) * (m ? (m.qty_factor || 1) : 1) * cantItem;
+        // Para Accesorios, evitar duplicados sumando cantidades
+        if(esAccesorios){
+          const existing = bomItems.find(function(b){ return b.v14_key === ins.key; });
+          if(existing){ existing.qty += qty; return; }
+        }
         bomItems.push({
           sku_id: m && m.sku_id ? m.sku_id : null,
           v14_key: ins.key,
@@ -6580,9 +6617,9 @@ async function crearOP(proyId){
         });
         // Si hay cooler, agregar automáticamente la fuente del cooller (id 21)
         if(ins.key === 'cooler' || ins.key === 'cooler_doble'){
-          const cantFuente = ins.key === 'cooler_doble' ? 2 : 1;
+          const cantFuente = (ins.key === 'cooler_doble' ? 2 : 1) * cantItem;
           bomItems.push({
-            sku_id: 21, // Fuente 12v 2a para cooller
+            sku_id: 21,
             v14_key: 'fuente_cooller',
             nombre: 'Fuente 12v 2a (para cooller)',
             qty: cantFuente,
@@ -6591,10 +6628,10 @@ async function crearOP(proyId){
           });
         }
       });
-    } catch(e){
-      alert('Error obteniendo BOM del sistema de stock.\n' + e.message);
-      return;
     }
+  } catch(e){
+    alert('Error obteniendo BOM del sistema de stock.\n' + e.message);
+    return;
   }
 
   // Crear la OP en Supabase
