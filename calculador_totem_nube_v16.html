@@ -4267,6 +4267,7 @@ function detectarCategoriaOP(c){
   if(s.includes('publicidad') || s.includes('digital signage')) return 'publicidad';
   if(s.includes('atenci') || s.includes('remota')) return 'atencion';
   if(s.includes('encuesta')) return 'encuesta';
+  if(c.categoria === 'Accesorios') return 'accesorios';
   return 'default';
 }
 
@@ -4320,6 +4321,12 @@ function abrirModalOP(cotId){
   const swOpts = cfg.softwareOpciones.map(function(o){
     return '<option'+(o===swDefault?' selected':'')+'>'+o+'</option>';
   }).join('');
+
+  // Modal simplificado para Accesorios
+  if(cat === 'accesorios'){
+    abrirModalOPAccesorios(c);
+    return;
+  }
 
   const overlay = document.createElement('div');
   overlay.id = 'modal-op';
@@ -4564,6 +4571,92 @@ function imprimirOP(){
     window.onafterprint=function(){window.close();};
   <\/script></body></html>`);
   ventana.document.close();
+}
+
+function abrirModalOPAccesorios(c){
+  window._opCotNumero = c.numero || '';
+  const proyAsoc = proyectos.find(function(p){ return p.orden === c.numero.replace('COT-',''); });
+  const contactoStr = (c.contacto||proyAsoc?.contacto||'') + (c.tel||proyAsoc?.tel ? ' · Tel: '+(c.tel||proyAsoc?.tel) : '');
+  const cant = c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0) || 1;
+  const fechaHoy = new Date().toISOString().split('T')[0];
+  const fechaComp = proyAsoc?.fechaCompromiso || '';
+
+  // Construir lista de ítems desde la cotización
+  const itemsEquipo = c.items.filter(function(i){ return i.cat==='equipo'; });
+  const itemsHTML = itemsEquipo.map(function(it, idx){
+    return '<div style="display:grid;grid-template-columns:1fr 80px;gap:8px;margin-bottom:6px;">' +
+      '<div style="background:#1a2540;border:1px solid #3a4a6b;border-radius:4px;padding:6px 10px;font-size:13px;color:#fff;">' + (it.desc||it.nombre||'') + '</div>' +
+      '<input type="number" id="op-acc-cant-'+idx+'" value="'+(it.cant||1)+'" min="1" style="background:#1a2540;border:1px solid #3a4a6b;border-radius:4px;padding:6px;color:#fff;font-size:13px;text-align:center;">' +
+      '</div>';
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-op';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+
+  overlay.innerHTML = '<div id="op-contenido" style="background:#fff;color:#111;border-radius:10px;padding:28px 32px;max-width:720px;width:100%;font-family:Arial,sans-serif;font-size:13px;position:relative;">' +
+    '<style>#op-contenido input,#op-contenido select,#op-contenido textarea{background:#1a2540;color:#fff;border:1px solid #3a4a6b;border-radius:4px;padding:4px 6px;font-size:12px;width:100%;box-sizing:border-box;}#op-contenido select option{background:#1a2540;color:#fff;}</style>' +
+    // Header
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a3a6b;padding-bottom:10px;margin-bottom:14px;">' +
+      '<div><div style="font-size:17px;font-weight:700;color:#1a3a6b;letter-spacing:0.04em;">DOC. OP — ACCESORIOS</div>' +
+      '<div style="font-size:10px;color:#888;margin-top:2px;">R-OP-01.1 · Rev.: 03</div></div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-size:11px;color:#888;margin-bottom:4px;">N° referencia:</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#1a3a6b;padding:2px 6px;border:1px solid #ddd;border-radius:4px;background:#f5f7fa;">' + (c.numero?c.numero.replace('COT-','OP-'):'') + '</div>' +
+        '<div style="font-size:11px;color:#888;margin-top:8px;margin-bottom:4px;">Código OP interno:</div>' +
+        '<input id="op-codigo-interno" type="text" placeholder="Ej: OP-001" style="width:120px;text-align:right;font-size:14px;font-weight:700;color:#fff;background:#1a3a6b;border:1px solid #1a3a6b;border-radius:4px;padding:4px 8px;">' +
+      '</div>' +
+    '</div>' +
+    // Datos del proyecto
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;padding:12px;background:#f5f7fa;border-radius:6px;">' +
+      '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cliente / Empresa</label>' +
+        '<input id="op-cliente" type="text" value="'+(c.empresa||'')+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+      '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Fecha aprobación</label>' +
+        '<input id="op-fecha-apro" type="date" value="'+fechaHoy+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+      '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Nombre ref. / Tel</label>' +
+        '<input id="op-contacto" type="text" value="'+contactoStr+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+      '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">📅 Fecha compromiso cliente</label>' +
+        '<input id="op-fecha-comp" type="date" value="'+fechaComp+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+      '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Producto</label>' +
+        '<input id="op-producto" type="text" value="'+(c.sistema||'Accesorios')+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+      '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cantidad total</label>' +
+        '<input id="op-cantidad" type="number" value="'+cant+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+    '</div>' +
+    // Accesorios
+    '<div style="background:#1a3a6b;color:#fff;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:0.08em;border-radius:4px 4px 0 0;margin-bottom:0;">ACCESORIOS SOLICITADOS</div>' +
+    '<div style="border:1px solid #ddd;border-top:none;border-radius:0 0 4px 4px;padding:12px;margin-bottom:14px;">' +
+      '<div style="display:grid;grid-template-columns:1fr 80px;gap:8px;margin-bottom:6px;">' +
+        '<div style="font-size:10px;color:#888;text-transform:uppercase;">Descripción</div>' +
+        '<div style="font-size:10px;color:#888;text-transform:uppercase;text-align:center;">Cant.</div>' +
+      '</div>' +
+      itemsHTML +
+    '</div>' +
+    // Software
+    '<div style="background:#1a3a6b;color:#fff;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:0.08em;border-radius:4px 4px 0 0;margin-bottom:0;">SOFTWARE</div>' +
+    '<div style="border:1px solid #ddd;border-top:none;border-radius:0 0 4px 4px;padding:12px;margin-bottom:14px;">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+        '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Configuración software</label>' +
+          '<select id="op-sw" style="margin-top:2px;"><option>No aplica</option><option>Gestión Play</option><option>CUOS</option><option>Windows</option></select></div>' +
+        '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Requiere ajustes a medida</label>' +
+          '<select id="op-ajustes" style="margin-top:2px;"><option>N/A</option><option>SI</option><option>NO</option></select></div>' +
+      '</div>' +
+    '</div>' +
+    // Observaciones
+    '<div style="margin-bottom:14px;">' +
+      '<label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones adicionales del proyecto</label>' +
+      '<textarea id="op-obs-adicionales" rows="3" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;resize:vertical;box-sizing:border-box;"></textarea>' +
+    '</div>' +
+    // Botones
+    '<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid #eee;">' +
+      '<button onclick="cerrarModalOP()" style="padding:8px 16px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;">Cerrar</button>' +
+      '<button onclick="guardarDocOP()" style="padding:8px 16px;border:1px solid #00c896;border-radius:6px;background:#00c896;color:#000;cursor:pointer;font-size:13px;font-weight:600;">💾 Guardar en sistema</button>' +
+      '<button onclick="imprimirOP()" style="padding:8px 16px;border:1px solid #1a3a6b;border-radius:6px;background:#1a3a6b;color:#fff;cursor:pointer;font-size:13px;">🖨 Imprimir</button>' +
+    '</div>' +
+  '</div>';
+
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) cerrarModalOP(); });
+  document.body.appendChild(overlay);
+  cargarDocOP(window._opCotNumero);
 }
 
 async function guardarDocOP(){
