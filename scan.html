@@ -419,17 +419,18 @@ async function asignarDesdeCaja(btn){
   if(!confirm('¿Asignar 1 unidad de ' + cajaSkuActual.nombre + ' a ' + opNum + '?')) return;
   try{
     // Marcar BOM item como asignado
-    await api(`op_bom_items?id=eq.${bomId}`, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
+    await api('op_bom_items?id=eq.'+bomId, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
     // Descontar del stock
-    await api(`stock?id=eq.${cajaStockRow.id}`, 'PATCH', {cantidad_reservada: (cajaStockRow.cantidad_reservada||0) + 1});
+    await api('stock?id=eq.'+cajaStockRow.id, 'PATCH', {cantidad_reservada: (cajaStockRow.cantidad_reservada||0) + 1});
     cajaStockRow.cantidad_reservada = (cajaStockRow.cantidad_reservada||0) + 1;
-    btn.closest('div[style*="border-top"]').innerHTML = '<div style="color:var(--green);font-size:12px;padding:10px 0;border-top:1px solid var(--border);">✓ Asignado a ' + opNum + '</div>';
+    // Reemplazar fila de la OP con confirmación visual
+    const filaOp = btn.closest('div');
+    if(filaOp) filaOp.innerHTML = '<div style="color:var(--green);font-size:12px;padding:10px 0;border-top:1px solid var(--border);">✓ Asignado a ' + opNum + '</div>';
     // Actualizar contador disponible
     const nuevoDisp = (cajaStockRow.cantidad||0) - cajaStockRow.cantidad_reservada;
     const colorDisp = nuevoDisp <= 0 ? 'var(--red)' : 'var(--green)';
-    document.querySelector('#result [style*="Disponible"] + div') &&
-      (document.querySelectorAll('#result [style*="font-size:32px"]')[0].textContent = nuevoDisp);
-    document.querySelectorAll('#result [style*="font-size:32px"]')[0].style.color = colorDisp;
+    const contadores = document.querySelectorAll('#container [style*="font-size:32px"]');
+    if(contadores[0]){ contadores[0].textContent = nuevoDisp; contadores[0].style.color = colorDisp; }
   }catch(e){ alert('Error: ' + e.message); }
 }
 
