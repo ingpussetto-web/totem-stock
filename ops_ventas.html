@@ -441,6 +441,17 @@ async function abrirBOM(opId){
       }
     }
 
+    // Cargar modelos de zapatilla con stock (4 tomas y 6 tomas)
+    const zapatillaSkuIds = [89, 90];
+    let zapatillaModelos = [];
+    for(let skuId of zapatillaSkuIds){
+      const skuInfo = await api(`skus?id=eq.${skuId}&select=id,nombre`).catch(()=>[]);
+      if(skuInfo && skuInfo.length > 0){
+        const uds = await api(`unidades?sku_id=eq.${skuId}&estado=eq.stock&select=id`).catch(()=>[]);
+        zapatillaModelos.push({id: skuId, nombre: skuInfo[0].nombre, stock: uds?.length || 0});
+      }
+    }
+
     // Cargar stock para cada item de la BOM
     for(let item of currentBOMItems){
       item._stock = 0;
@@ -455,6 +466,11 @@ async function abrirBOM(opId){
           // Mini PC: lista de modelos con stock
           item._minipcModelos = minipcModelos;
           const modeloActual = minipcModelos.find(m=>m.id===item.sku_id);
+          item._stock = modeloActual?.stock || 0;
+        } else if(zapatillaSkuIds.includes(item.sku_id)){
+          // Zapatilla: selector entre 4 y 6 tomas
+          item._zapatillaModelos = zapatillaModelos;
+          const modeloActual = zapatillaModelos.find(m=>m.id===item.sku_id);
           item._stock = modeloActual?.stock || 0;
         } else {
           // UID tracking: contar unidades en stock
@@ -555,8 +571,17 @@ function renderBOMItem(item){
 
   let varHTML = '';
   const esMiniPC = item._minipcModelos !== null && item._minipcModelos !== undefined;
+  const esZapatilla = item._zapatillaModelos !== null && item._zapatillaModelos !== undefined;
 
-  if(esMiniPC && !esCooller){
+  if(esZapatilla){
+    // Selector de zapatilla 4 o 6 tomas
+    const opciones = item._zapatillaModelos.map(m=>{
+      const sinStock = m.stock === 0;
+      const selected = item.sku_id === m.id ? 'selected' : '';
+      return `<option value="${m.id}" ${selected} ${sinStock?'disabled':''}>${m.nombre}${sinStock?' — Sin stock':' ('+m.stock+' ud.)'}</option>`;
+    }).join('');
+    varHTML = `<select class="var-select" style="max-width:200px;" onchange="cambiarModeloZapatilla(${item.id},this.value)" ${!incluido?'disabled':''}><option value="">Seleccionar modelo...</option>${opciones}</select>`;
+  } else if(esMiniPC && !esCooller){
     // Selector de modelo de Mini PC con stock real
     const opciones = item._minipcModelos.map(m=>{
       const sinStock = m.stock === 0;
@@ -645,6 +670,16 @@ async function cambiarVariante(itemId, varId){
   }catch(e){ console.warn('Error recalculando stock variante:', e.message); }
 
   renderBOMEditor();
+}
+
+function cambiarModeloZapatilla(itemId, nuevoSkuId){
+  const item = currentBOMItems.find(i=>i.id===itemId);
+  if(!item || !nuevoSkuId) return;
+  const modelo = item._zapatillaModelos.find(m=>String(m.id)===nuevoSkuId);
+  if(!modelo) return;
+  item.sku_id = parseInt(nuevoSkuId);
+  item.nombre = modelo.nombre;
+  item._skuCambiado = true;
 }
 
 function cambiarModeloMiniPC(itemId, nuevoSkuId){
