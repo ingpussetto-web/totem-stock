@@ -385,7 +385,7 @@ async function renderCaja(sku){
       }).join('')
     : '<div style="color:var(--text3);font-size:12px;padding:12px 0;">Sin OPs activas que necesiten este insumo</div>';
 
-  document.getElementById('result').innerHTML = `
+  document.getElementById('container').innerHTML = `
     <div style="padding:16px 0;">
       <div style="text-align:center;margin-bottom:16px;">
         <div style="font-size:28px;margin-bottom:6px;">📦</div>
@@ -408,7 +408,6 @@ async function renderCaja(sku){
         ${opsHTML}
       </div>
     </div>`;
-  document.getElementById('result').style.display='block';
 }
 
 async function asignarDesdeCaja(btn){
