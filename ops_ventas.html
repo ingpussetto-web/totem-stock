@@ -920,13 +920,43 @@ async function cargarBOMMaestraProducto(){
 
   // Cargar BOM maestra existente
   const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
-  bomMaestraItems = rows.map(r=>({
-    id: r.id,
-    v14_key: r.v14_key,
-    sku_id: r.sku_id,
-    nombre: r.skus?.nombre || r.nombre,
-    qty: r.qty || 1
-  }));
+  
+  if(rows && rows.length > 0){
+    // Ya tiene BOM maestra guardada
+    bomMaestraItems = rows.map(r=>({
+      id: r.id,
+      v14_key: r.v14_key,
+      sku_id: r.sku_id,
+      nombre: r.skus?.nombre || r.nombre,
+      qty: r.qty || 1
+    }));
+  } else {
+    // Sin BOM maestra — tomar de una OP activa de ese producto como base
+    const ops = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id&limit=1').catch(()=>[]);
+    if(ops && ops.length > 0){
+      const opItems = await api('op_bom_items?op_id=eq.'+ops[0].id+'&sku_id=not.is.null&select=*,skus(nombre)&order=id.asc').catch(()=>[]);
+      // Tomar items únicos por sku_id (equipo 1 como referencia)
+      const vistos = new Set();
+      bomMaestraItems = [];
+      for(const item of opItems){
+        if((item.equipo_num||1) !== 1) continue;
+        if(vistos.has(item.sku_id)) continue;
+        vistos.add(item.sku_id);
+        bomMaestraItems.push({
+          id: null,
+          v14_key: item.v14_key,
+          sku_id: item.sku_id,
+          nombre: item.skus?.nombre || item.nombre,
+          qty: item.qty || 1
+        });
+      }
+      if(bomMaestraItems.length > 0){
+        area.innerHTML = '<div style="font-size:11px;color:var(--amber);padding:8px 0;">⚠ Cargado desde OP activa como base. Revisá y guardá para confirmar.</div>';
+      }
+    } else {
+      bomMaestraItems = [];
+    }
+  }
 
   renderBOMMaestraItems();
 }
