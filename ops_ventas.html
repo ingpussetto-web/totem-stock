@@ -198,7 +198,10 @@ select.filter:focus{outline:none;border-color:var(--green);}
           <div class="page-title">Órdenes de Producción</div>
           <div class="page-sub">Revisá, ajustá y confirmá la BOM antes de liberar a Producción</div>
         </div>
-        <button class="btn" onclick="loadOPs()">↻ Actualizar</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="abrirBOMMaestra()" style="border-color:var(--amber);color:var(--amber);">📋 BOM Maestra</button>
+          <button class="btn" onclick="loadOPs()">↻ Actualizar</button>
+        </div>
       </div>
 
       <div class="metrics">
@@ -441,17 +444,6 @@ async function abrirBOM(opId){
       }
     }
 
-    // Cargar modelos de zapatilla con stock (4 tomas y 6 tomas)
-    const zapatillaSkuIds = [89, 90];
-    let zapatillaModelos = [];
-    for(let skuId of zapatillaSkuIds){
-      const skuInfo = await api(`skus?id=eq.${skuId}&select=id,nombre`).catch(()=>[]);
-      if(skuInfo && skuInfo.length > 0){
-        const uds = await api(`unidades?sku_id=eq.${skuId}&estado=eq.stock&select=id`).catch(()=>[]);
-        zapatillaModelos.push({id: skuId, nombre: skuInfo[0].nombre, stock: uds?.length || 0});
-      }
-    }
-
     // Cargar stock para cada item de la BOM
     for(let item of currentBOMItems){
       item._stock = 0;
@@ -466,11 +458,6 @@ async function abrirBOM(opId){
           // Mini PC: lista de modelos con stock
           item._minipcModelos = minipcModelos;
           const modeloActual = minipcModelos.find(m=>m.id===item.sku_id);
-          item._stock = modeloActual?.stock || 0;
-        } else if(zapatillaSkuIds.includes(item.sku_id)){
-          // Zapatilla: selector entre 4 y 6 tomas
-          item._zapatillaModelos = zapatillaModelos;
-          const modeloActual = zapatillaModelos.find(m=>m.id===item.sku_id);
           item._stock = modeloActual?.stock || 0;
         } else {
           // UID tracking: contar unidades en stock
@@ -571,17 +558,8 @@ function renderBOMItem(item){
 
   let varHTML = '';
   const esMiniPC = item._minipcModelos !== null && item._minipcModelos !== undefined;
-  const esZapatilla = item._zapatillaModelos !== null && item._zapatillaModelos !== undefined;
 
-  if(esZapatilla){
-    // Selector de zapatilla 4 o 6 tomas
-    const opciones = item._zapatillaModelos.map(m=>{
-      const sinStock = m.stock === 0;
-      const selected = item.sku_id === m.id ? 'selected' : '';
-      return `<option value="${m.id}" ${selected} ${sinStock?'disabled':''}>${m.nombre}${sinStock?' — Sin stock':' ('+m.stock+' ud.)'}</option>`;
-    }).join('');
-    varHTML = `<select class="var-select" style="max-width:200px;" onchange="cambiarModeloZapatilla(${item.id},this.value)" ${!incluido?'disabled':''}><option value="">Seleccionar modelo...</option>${opciones}</select>`;
-  } else if(esMiniPC && !esCooller){
+  if(esMiniPC && !esCooller){
     // Selector de modelo de Mini PC con stock real
     const opciones = item._minipcModelos.map(m=>{
       const sinStock = m.stock === 0;
@@ -670,16 +648,6 @@ async function cambiarVariante(itemId, varId){
   }catch(e){ console.warn('Error recalculando stock variante:', e.message); }
 
   renderBOMEditor();
-}
-
-function cambiarModeloZapatilla(itemId, nuevoSkuId){
-  const item = currentBOMItems.find(i=>i.id===itemId);
-  if(!item || !nuevoSkuId) return;
-  const modelo = item._zapatillaModelos.find(m=>String(m.id)===nuevoSkuId);
-  if(!modelo) return;
-  item.sku_id = parseInt(nuevoSkuId);
-  item.nombre = modelo.nombre;
-  item._skuCambiado = true;
 }
 
 function cambiarModeloMiniPC(itemId, nuevoSkuId){
@@ -882,6 +850,181 @@ async function init(){
   else if(!SUPA_URL||!SUPA_KEY) showPage('config');
 }
 init();
+
+// ─── BOM MAESTRA ──────────────────────────────────────────────────────────────
+
+const PRODUCTOS_BOM = [
+  {id:'turnero_sw_incl_22', nombre:'Turnero con SW — Inclinado 22"'},
+  {id:'turnero_sw_incl_32', nombre:'Turnero con SW — Inclinado 32"'},
+  {id:'turnero_sw_vert_22', nombre:'Turnero con SW — Vertical 22"'},
+  {id:'turnero_sw_vert_32', nombre:'Turnero con SW — Vertical 32"'},
+  {id:'turnero_sw_atril_19', nombre:'Turnero con SW — Atril 19"'},
+  {id:'turnero_sw_atril_22', nombre:'Turnero con SW — Atril 22"'},
+  {id:'turnero_nosw_incl_22', nombre:'Turnero sin SW — Inclinado 22"'},
+  {id:'turnero_nosw_incl_32', nombre:'Turnero sin SW — Inclinado 32"'},
+  {id:'turnero_nosw_vert_22', nombre:'Turnero sin SW — Vertical 22"'},
+  {id:'turnero_nosw_vert_32', nombre:'Turnero sin SW — Vertical 32"'},
+  {id:'turnero_nosw_atril_19', nombre:'Turnero sin SW — Atril 19"'},
+  {id:'turnero_nosw_atril_22', nombre:'Turnero sin SW — Atril 22"'},
+];
+
+let bomMaestraItems = [];
+let bomMaestraProducto = '';
+let skusDisponibles = [];
+
+async function abrirBOMMaestra(){
+  const pwd = prompt('Contraseña gerencia:');
+  if(pwd !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
+
+  // Cargar SKUs disponibles
+  skusDisponibles = await api('skus?activo=eq.true&select=id,nombre,codigo&order=nombre.asc').catch(()=>[]);
+
+  // Mostrar modal con selector de producto
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-bom-maestra';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:24px;max-width:700px;width:100%;margin-top:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">📋 BOM Maestra</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Modificar insumos base de un producto</div>
+        </div>
+        <button onclick="cerrarBOMMaestra()" style="background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 12px;cursor:pointer;">✕</button>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Producto</label>
+        <select id="bm-producto-sel" onchange="cargarBOMMaestraProducto()" style="width:100%;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;">
+          <option value="">— Seleccioná un producto —</option>
+          ${PRODUCTOS_BOM.map(p=>'<option value="'+p.id+'">'+p.nombre+'</option>').join('')}
+        </select>
+      </div>
+      <div id="bm-items-area" style="min-height:100px;"></div>
+    </div>`;
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) cerrarBOMMaestra(); });
+  document.body.appendChild(overlay);
+}
+
+function cerrarBOMMaestra(){
+  const m = document.getElementById('modal-bom-maestra');
+  if(m) m.remove();
+}
+
+async function cargarBOMMaestraProducto(){
+  const sel = document.getElementById('bm-producto-sel');
+  bomMaestraProducto = sel.value;
+  if(!bomMaestraProducto) return;
+
+  const area = document.getElementById('bm-items-area');
+  area.innerHTML = '<div style="color:var(--text3);font-size:12px;">Cargando...</div>';
+
+  // Cargar BOM maestra existente
+  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
+  bomMaestraItems = rows.map(r=>({
+    id: r.id,
+    v14_key: r.v14_key,
+    sku_id: r.sku_id,
+    nombre: r.skus?.nombre || r.nombre,
+    qty: r.qty || 1
+  }));
+
+  renderBOMMaestraItems();
+}
+
+function renderBOMMaestraItems(){
+  const area = document.getElementById('bm-items-area');
+  if(!area) return;
+
+  const listaHTML = bomMaestraItems.length === 0
+    ? '<div style="color:var(--text3);font-size:12px;padding:12px 0;">Sin insumos definidos. Agregá items abajo.</div>'
+    : bomMaestraItems.map((item, idx)=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;font-size:13px;">${item.nombre}</div>
+        <input type="number" value="${item.qty}" min="1" style="width:50px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:12px;text-align:center;"
+          onchange="bomMaestraItems[${idx}].qty=parseInt(this.value)||1">
+        <button onclick="quitarItemBOMMaestra(${idx})" style="background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;">✕</button>
+      </div>`).join('');
+
+  area.innerHTML = `
+    <div style="margin-bottom:8px;">${listaHTML}</div>
+    <div style="display:grid;grid-template-columns:1fr 80px auto;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <select id="bm-nuevo-sku" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);font-size:12px;">
+        <option value="">— Agregar insumo —</option>
+        ${skusDisponibles.map(s=>'<option value="'+s.id+'|'+s.nombre+'">'+s.nombre+'</option>').join('')}
+      </select>
+      <input type="number" id="bm-nuevo-qty" value="1" min="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);font-size:12px;text-align:center;">
+      <button onclick="agregarItemBOMMaestra()" style="background:var(--green-dim);border:1px solid var(--green);color:var(--green);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;">+ Agregar</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="guardarBOMMaestra()" style="flex:1;background:var(--green);color:#000;border:none;border-radius:8px;padding:10px;font-weight:600;font-size:13px;cursor:pointer;">💾 Guardar y aplicar a OPs activas</button>
+      <button onclick="cerrarBOMMaestra()" style="background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;">Cancelar</button>
+    </div>`;
+}
+
+function quitarItemBOMMaestra(idx){
+  bomMaestraItems.splice(idx, 1);
+  renderBOMMaestraItems();
+}
+
+function agregarItemBOMMaestra(){
+  const sel = document.getElementById('bm-nuevo-sku');
+  const qty = parseInt(document.getElementById('bm-nuevo-qty').value) || 1;
+  if(!sel.value) return;
+  const [skuId, nombre] = sel.value.split('|');
+  bomMaestraItems.push({ id: null, v14_key: 'manual_'+Date.now(), sku_id: parseInt(skuId), nombre, qty });
+  renderBOMMaestraItems();
+}
+
+async function guardarBOMMaestra(){
+  if(!bomMaestraProducto || !bomMaestraItems.length){
+    alert('Seleccioná un producto y agregá al menos un insumo.');
+    return;
+  }
+  if(!confirm('¿Guardar BOM maestra y aplicar cambios a todas las OPs activas de este producto?')) return;
+
+  try {
+    // Borrar BOM maestra existente para este producto
+    await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto), 'DELETE');
+
+    // Insertar nueva BOM maestra
+    const payload = bomMaestraItems.map(item=>({
+      producto_v14: bomMaestraProducto,
+      v14_key: item.v14_key,
+      sku_id: item.sku_id,
+      nombre: item.nombre,
+      qty: item.qty,
+      activo: true
+    }));
+    await api('bom_maestra', 'POST', payload);
+
+    // Aplicar a OPs activas del mismo producto
+    const opsActivas = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id').catch(()=>[]);
+    
+    for(const op of opsActivas){
+      // Borrar BOM items actuales
+      await api('op_bom_items?op_id=eq.'+op.id, 'DELETE');
+      // Insertar nueva BOM
+      const cantEquipos = 1; // Para OPs existentes mantener qty original
+      const bomPayload = bomMaestraItems.map(item=>({
+        op_id: op.id,
+        sku_id: item.sku_id,
+        v14_key: item.v14_key,
+        nombre: item.nombre,
+        qty: item.qty,
+        incluido: true,
+        estado: 'pendiente',
+        equipo_num: 1
+      }));
+      await api('op_bom_items', 'POST', bomPayload);
+    }
+
+    alert('✅ BOM Maestra guardada y aplicada a '+opsActivas.length+' OP(s) activas.');
+    cerrarBOMMaestra();
+    loadOPs();
+  } catch(e){
+    alert('Error: ' + e.message);
+  }
+}
 </script>
 </body>
 </html>
