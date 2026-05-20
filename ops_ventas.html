@@ -1032,21 +1032,38 @@ async function guardarBOMMaestra(){
     const opsActivas = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id').catch(()=>[]);
     
     for(const op of opsActivas){
-      // Borrar BOM items actuales
-      await api('op_bom_items?op_id=eq.'+op.id, 'DELETE');
-      // Insertar nueva BOM
-      const cantEquipos = 1; // Para OPs existentes mantener qty original
-      const bomPayload = bomMaestraItems.map(item=>({
-        op_id: op.id,
-        sku_id: item.sku_id,
-        v14_key: item.v14_key,
-        nombre: item.nombre,
-        qty: item.qty,
-        incluido: true,
-        estado: 'pendiente',
-        equipo_num: 1
-      }));
-      await api('op_bom_items', 'POST', bomPayload);
+      // Obtener items ya asignados — no se tocan
+      const asignados = await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.asignado&select=sku_id,equipo_num').catch(()=>[]);
+      const skusAsignados = new Set(asignados.map(a=>a.sku_id+'_'+(a.equipo_num||1)));
+
+      // Borrar solo los pendientes
+      await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.pendiente', 'DELETE');
+
+      // Detectar equipos activos en esta OP (basado en asignados o default 1)
+      const equiposActivos = asignados.length > 0
+        ? [...new Set(asignados.map(a=>a.equipo_num||1))]
+        : [1];
+
+      // Insertar nueva BOM solo para insumos no asignados
+      const bomPayload = [];
+      for(const eq of equiposActivos){
+        bomMaestraItems.forEach(item=>{
+          const key = item.sku_id+'_'+eq;
+          if(!skusAsignados.has(key)){
+            bomPayload.push({
+              op_id: op.id,
+              sku_id: item.sku_id,
+              v14_key: item.v14_key,
+              nombre: item.nombre,
+              qty: item.qty,
+              incluido: true,
+              estado: 'pendiente',
+              equipo_num: eq
+            });
+          }
+        });
+      }
+      if(bomPayload.length > 0) await api('op_bom_items', 'POST', bomPayload);
     }
 
     alert('✅ BOM Maestra guardada y aplicada a '+opsActivas.length+' OP(s) activas.');
