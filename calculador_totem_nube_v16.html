@@ -6747,18 +6747,24 @@ async function crearOP(proyId){
 
     // Insertar BOM items
     if(bomItems.length > 0){
-      const bomPayload = bomItems.map(function(b){
-        return {
-          op_id: opId,
-          sku_id: b.sku_id,
-          v14_key: b.v14_key,
-          nombre: b.nombre,
-          qty: b.qty,
-          incluido: b.incluido,
-          estado: 'pendiente',
-          notas: b.notas
-        };
-      });
+      // Generar una fila por equipo (cantidad del pedido)
+      const cantEquipos = esAccesorios ? 1 : (itemsEquipo[0].cant || 1);
+      const bomPayload = [];
+      for(let eq = 1; eq <= cantEquipos; eq++){
+        bomItems.forEach(function(b){
+          bomPayload.push({
+            op_id: opId,
+            sku_id: b.sku_id,
+            v14_key: b.v14_key,
+            nombre: b.nombre,
+            qty: 1,
+            incluido: b.incluido,
+            estado: 'pendiente',
+            notas: b.notas,
+            equipo_num: eq
+          });
+        });
+      }
       await stockAPI('op_bom_items', 'POST', bomPayload);
     }
 

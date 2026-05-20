@@ -516,6 +516,56 @@ async function abrirOP(opId){
 }
 
 // ─── PROGRESO ───────────────────────────────────────────────
+async function procesarCaja(sku){
+  const scanArea = document.getElementById('scan-area');
+  // Buscar item en BOM que corresponda a este SKU
+  const equipoNums = [...new Set(bomItems.map(i=>i.equipo_num||1))];
+  const esMultiEquipo = equipoNums.length > 1;
+  const itemsCompatibles = bomItems.filter(i=>
+    i.sku_id === sku.id &&
+    i.estado === 'pendiente' &&
+    i.incluido !== false &&
+    (!esMultiEquipo || (i.equipo_num||1) === equipoActivo)
+  );
+  if(!itemsCompatibles.length){
+    const yaAsignado = bomItems.find(i=>i.sku_id===sku.id && i.estado==='asignado');
+    if(yaAsignado){
+      setFeedback(`⚠ "${sku.nombre}" ya está asignado en esta OP`, 'warn');
+    } else {
+      scanArea.className='scan-area error';
+      setFeedback(`✕ "${sku.nombre}" no está en la lista de esta OP`, 'err');
+      setTimeout(()=>scanArea.className='scan-area', 2000);
+    }
+    return;
+  }
+  // Verificar stock disponible
+  const stockRows = await api(`stock?sku_id=eq.${sku.id}&variante_id=is.null&select=id,cantidad,cantidad_reservada`).catch(()=>[]);
+  const stockRow = stockRows?.[0];
+  const disponible = stockRow ? (stockRow.cantidad - (stockRow.cantidad_reservada||0)) : 0;
+
+  if(disponible <= 0){
+    scanArea.className='scan-area error';
+    setFeedback(`✕ Sin stock disponible de "${sku.nombre}" en caja`, 'err');
+    setTimeout(()=>scanArea.className='scan-area', 2000);
+    return;
+  }
+
+  const item = itemsCompatibles[0];
+  // Asignar item en BOM
+  await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'});
+  // Descontar del stock
+  await api(`stock?id=eq.${stockRow.id}`, 'PATCH', {cantidad_reservada: (stockRow.cantidad_reservada||0) + 1});
+
+  item.estado = 'asignado';
+  item.uid_asignado = sku.codigo+'-CAJA';
+
+  scanArea.className='scan-area success';
+  setFeedback(`✓ "${sku.nombre}" asignado desde caja — Stock restante: ${disponible - 1} ud.`, 'ok');
+  setTimeout(()=>{ scanArea.className='scan-area'; renderChecklist(); }, 1800);
+  document.getElementById('scan-input').value = '';
+  actualizarProgreso();
+}
+
 async function iniciarOPConPendientes(){
   const total = bomItems.filter(i=>i.incluido!==false).length;
   const asignados = bomItems.filter(i=>i.estado==='asignado').length;
@@ -594,21 +644,8 @@ function actualizarProgreso(){
 }
 
 // ─── CHECKLIST ───────────────────────────────────────────────
-function renderChecklist(){
-  const items = verSoloFaltantes
-    ? bomItems.filter(i=>i.estado!=='asignado')
-    : bomItems.slice().sort(function(a,b){ return (a.estado==='asignado'?1:0)-(b.estado==='asignado'?1:0); });
-
-  const el = document.getElementById('checklist');
-  if(!items.length && verSoloFaltantes){
-    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--green);font-family:\'DM Mono\',monospace;font-size:12px;">✓ Todos los insumos asignados</div>';
-    return;
-  }
-
-  el.innerHTML = items.map(item=>{
-    const estado = item.estado || 'pendiente';
-    const variante = item.variantes?.valor || '';
-    return `<div class="check-item ${estado}" id="ci-${item.id}">
+function renderCheckItem(item, estado, variante){
+  return `<div class="check-item ${estado}" id="ci-${item.id}">
       <div class="check-icon">${estado==='asignado'?'✓':'○'}</div>
       <div style="flex:1">
         <div class="check-nombre">${item.nombre}${variante?' — '+variante:''}</div>
@@ -623,6 +660,80 @@ function renderChecklist(){
           : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="asignarManual(${item.id})">Asignar</button>`
       }
     </div>`;
+}
+
+function toggleEquipo(eq){
+  const body = document.getElementById('eq-body-'+eq);
+  const arrow = document.getElementById('arrow-eq-'+eq);
+  if(!body) return;
+  const visible = body.style.display !== 'none';
+  body.style.display = visible ? 'none' : 'block';
+  if(arrow) arrow.textContent = visible ? '▶' : '▼';
+}
+
+// Variable para rastrear equipo activo al escanear
+let equipoActivo = 1;
+
+function seleccionarEquipo(eq){
+  equipoActivo = eq;
+  // Actualizar badges de activo
+  document.querySelectorAll('[id^="activo-eq-"]').forEach(el=>{
+    const num = parseInt(el.id.replace('activo-eq-',''));
+    el.style.display = num===eq ? 'inline' : 'none';
+  });
+}
+
+function renderChecklist(){
+  const el = document.getElementById('checklist');
+
+  // Detectar si hay múltiples equipos
+  const equipoNums = [...new Set(bomItems.map(i=>i.equipo_num||1))].sort((a,b)=>a-b);
+  const totalEquipos = equipoNums.length;
+
+  if(totalEquipos > 1){
+    // Vista por equipo
+    el.innerHTML = equipoNums.map(eq=>{
+      const itemsEq = bomItems.filter(i=>(i.equipo_num||1)===eq);
+      const asignados = itemsEq.filter(i=>i.estado==='asignado').length;
+      const total = itemsEq.length;
+      const completo = asignados === total;
+      const items = verSoloFaltantes ? itemsEq.filter(i=>i.estado!=='asignado') : itemsEq;
+      return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+        <div onclick="toggleEquipo(${eq});seleccionarEquipo(${eq})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel2);cursor:pointer;" id="eq-header-${eq}">
+          <div style="font-size:13px;font-weight:600;">Equipo ${eq} de ${totalEquipos}</div>
+          <div id="activo-eq-${eq}" style="font-size:10px;background:var(--green);color:#000;padding:1px 6px;border-radius:4px;display:none;">● activo</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="eq-progress-${eq}" style="font-size:11px;color:var(--text2);">${asignados}/${total} insumos</span>
+            <span id="arrow-eq-${eq}" style="color:var(--text3);font-size:12px;">▼</span>
+          </div>
+        </div>
+        <div id="eq-body-${eq}" style="padding:8px;">
+          ${items.length===0?'<div style="text-align:center;padding:12px;color:var(--green);font-size:12px;">✓ Todos asignados</div>':
+          items.map(item=>{
+            const estado = item.estado||'pendiente';
+            const variante = item.variantes?.valor||'';
+            return renderCheckItem(item, estado, variante);
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
+
+  // Vista simple (un solo equipo)
+  const items = verSoloFaltantes
+    ? bomItems.filter(i=>i.estado!=='asignado')
+    : bomItems.slice().sort(function(a,b){ return (a.estado==='asignado'?1:0)-(b.estado==='asignado'?1:0); });
+
+  if(!items.length && verSoloFaltantes){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--green);font-family:\'DM Mono\',monospace;font-size:12px;">✓ Todos los insumos asignados</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(item=>{
+    const estado = item.estado || 'pendiente';
+    const variante = item.variantes?.valor || '';
+    return renderCheckItem(item, estado, variante);</div>`;
   }).join('');
 }
 
@@ -670,6 +781,12 @@ async function procesarScan(){
     const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre)`);
 
     if(!unidades || !unidades.length){
+      // Intentar como código de SKU (caja de cantidad)
+      const skuPorCodigo = await api(`skus?codigo=eq.${encodeURIComponent(uid)}&select=id,nombre,codigo,tracking`).catch(()=>[]);
+      if(skuPorCodigo && skuPorCodigo.length && skuPorCodigo[0].tracking === 'cantidad'){
+        await procesarCaja(skuPorCodigo[0]);
+        return;
+      }
       scanArea.className='scan-area error';
       setFeedback(`✕ UID "${uid}" no encontrado en el sistema`, 'err');
       setTimeout(()=>scanArea.className='scan-area', 2000);
