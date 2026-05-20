@@ -4246,7 +4246,7 @@ const OP_MAPEO = {
   'encuesta': {
     material: 'Metálico', tactil: 'SI', impresora: 'NO',
     lectorQR: 'NO', camara: 'NO', playerVisible: false,
-    tipoPantallaVisible: false, softwareOpciones: ['No aplica']
+    tipoPantallaVisible: false, softwareOpciones: ['Gestión Play','No aplica']
   },
   'accesorios': {
     material: 'N/A', tactil: 'N/A', impresora: 'N/A',
@@ -4389,8 +4389,8 @@ function abrirModalOP(cotId){
     ${opSeccion('Estructura', `
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         ${opCampo('Material','op-material','select',['Metálico','Placa MDF'],cfg.material)}
-        ${opCampo('Forma','op-forma','select',['Vertical','Inclinado','Atril','Otro'],forma)}
-        ${opCampo('Tamaño pantalla','op-pantalla','select',['15"','19"','22"','32"','43"','50"','55"'],pantalla)}
+        ${opCampo('Forma','op-forma','select',['Vertical','Inclinado','Atril','Lite de escritorio','Lite de pie','Otro'],forma)}
+        ${opCampo('Tamaño pantalla','op-pantalla','select',['10"','15"','19"','22"','32"','43"','50"','55"'],pantalla)}
         ${opCampo('Táctil','op-tactil','select',['SI','NO'],cfg.tactil)}
         ${opCampo('Color tótem','op-color','select',['Blanco','Negro','Gris Claro','Gris Plomo','Otro'],'Blanco')}
         ${opCampo('Plano especial','op-plano','select',['NO','SI'],'')}
