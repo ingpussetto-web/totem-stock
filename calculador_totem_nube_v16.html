@@ -753,7 +753,13 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <!-- Ploteo -->
         <label id="add-ploteo-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
           <input type="checkbox" id="add-ploteo" onchange="toggleAdicional('ploteo')" style="width:14px;height:14px;" />
-          Ploteo personalizado — $55.000 + IVA
+          Ploteo personalizado —
+          <input type="number" id="add-ploteo-monto" value="55000" placeholder="$ neto" style="width:100px;font-size:12px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--panel2);color:var(--text);" onclick="event.stopPropagation()" /> + IVA
+        </label>
+        <!-- Seteo inicial software -->
+        <label id="add-seteo-wrap" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="add-seteo" style="width:14px;height:14px;" />
+          Seteo inicial de software
         </label>
         <!-- Mini PC -->
         <label id="add-minipc-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
@@ -782,12 +788,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
             </label>
             <input type="number" id="cot-transporte-monto" placeholder="$ neto" style="width:130px;display:none;" />
           </div>
-          <div style="margin-top:8px;">
-            <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;">
-              <input type="checkbox" id="cot-ploteo" onchange="togglePloteo()" /> Incluir ploteo personalizado
-            </label>
-            <input type="number" id="cot-ploteo-monto" value="55000" placeholder="$ neto" style="width:130px;display:none;margin-top:4px;" />
-          </div>
+
         </div>
         <div>
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;margin-bottom:8px;">Licencia de software</div>
@@ -3318,7 +3319,7 @@ function guardarBorrador(){
 
   // Agregar adicionales seleccionados
   if(document.getElementById('add-ploteo')?.checked){
-    const montoPl = parseFloat(document.getElementById('cot-ploteo-monto')?.value)||55000;
+    const montoPl = parseFloat(document.getElementById('add-ploteo-monto')?.value)||55000;
     cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:1, precio:montoPl, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
@@ -3386,8 +3387,8 @@ function abrirNuevaCotizacion(editId){
     const transpMonto = document.getElementById('cot-transporte-monto');
     if(transp){ transp.checked = !!c.transporte; }
     if(transpMonto){ transpMonto.style.display = c.transporte?'block':'none'; transpMonto.value = c.transporteMonto||''; }
-    const ploteoCheck = document.getElementById('cot-ploteo');
-    const ploteoMonto = document.getElementById('cot-ploteo-monto');
+    const ploteoCheck = document.getElementById('add-ploteo');
+    const ploteoMonto = document.getElementById('add-ploteo-monto');
     if(ploteoCheck){ ploteoCheck.checked = !!c.ploteo; }
     if(ploteoMonto){ ploteoMonto.style.display = c.ploteo?'block':'none'; ploteoMonto.value = c.ploteoMonto||55000; }
     // Licencia
@@ -3476,9 +3477,11 @@ function renderCotItemsTemp(){
     + cotItemsTemp.map(function(it,i){
         const iva = Math.round(it.precio*it.cant*0.105);
         const total = Math.round(it.precio*it.cant + iva);
-        return '<tr>'
+        const eqRow = '<tr>'
           +'<td style="padding:5px 6px;color:var(--text3);">'+(i+1)+'</td>'
-          +'<td style="padding:5px 6px;color:var(--text);">'+it.nombre+'</td>'
+          +'<td style="padding:5px 6px;color:var(--text);">'+it.nombre
+            +(it.cat==='equipo' ? ' <button onclick="toggleMiniPC('+i+')" style="font-size:9px;padding:1px 5px;border:1px solid var(--border2);border-radius:4px;background:transparent;color:var(--text3);cursor:pointer;margin-left:4px;">+ Mini PC</button>' : '')
+          +'</td>'
           +'<td style="padding:2px 4px;text-align:center;">'
             +'<input type="number" value="'+it.cant+'" min="1" style="width:50px;height:24px;font-size:11px;text-align:center;" onchange="actualizarItemCot('+i+',\'cant\',this.value)" />'
           +'</td>'
@@ -3489,13 +3492,68 @@ function renderCotItemsTemp(){
           +'<td style="padding:5px 6px;text-align:right;font-family:monospace;font-weight:500;color:var(--text);">'+fmt(total)+'</td>'
           +'<td style="padding:5px 6px;text-align:center;"><button class="btn red" onclick="quitarItemCot('+i+')" style="height:22px;padding:0 6px;font-size:10px;">✕</button></td>'
         +'</tr>';
+        // Sub-fila Mini PC si existe o está expandida
+        const MINIPC_MODELOS = [
+          {key:'minipc_beelink_n95', nombre:'Mini PC BeeLink N95 8GB 256Gb', precio: INSUMOS_BASE.minipc_beelink_n95?.costoBase||0},
+          {key:'minipc_beelink_celeron', nombre:'Mini PC BeeLink Celeron N5095 8GB', precio: INSUMOS_BASE.minipc_beelink_celeron?.costoBase||0}
+        ];
+        let minipcRow = '';
+        if(it.cat==='equipo' && (it.minipc || it._showMiniPC)){
+          const mpc = it.minipc || {key:'', nombre:'', precio:0};
+          const opciones = '<option value="">— Seleccionar modelo —</option>'+MINIPC_MODELOS.map(function(m){
+            return '<option value="'+m.key+'" data-precio="'+m.precio+'" '+(mpc.key===m.key?'selected':'')+'>'+m.nombre+'</option>';
+          }).join('');
+          const ivaPC = Math.round((mpc.precio||0)*it.cant*0.21);
+          const totalPC = Math.round((mpc.precio||0)*it.cant + ivaPC);
+          minipcRow = '<tr style="background:rgba(77,159,255,0.04);">'
+            +'<td style="padding:4px 6px;color:var(--text3);font-size:10px;">↳</td>'
+            +'<td style="padding:4px 6px;">'
+              +'<select style="font-size:11px;height:24px;max-width:240px;" onchange="seleccionarMiniPC('+i+',this)">'+opciones+'</select>'
+            +'</td>'
+            +'<td style="padding:4px 6px;text-align:center;font-size:11px;color:var(--text3);">'+it.cant+'</td>'
+            +'<td style="padding:4px 6px;text-align:right;">'
+              +'<input type="number" value="'+(mpc.precio||0)+'" min="0" style="width:110px;height:24px;font-size:11px;text-align:right;font-family:monospace;" onchange="actualizarPrecioMiniPC('+i+',this.value)" />'
+            +'</td>'
+            +'<td style="padding:4px 6px;text-align:right;font-family:monospace;color:var(--text3);font-size:11px;">'+(mpc.precio?fmt(ivaPC):'—')+'</td>'
+            +'<td style="padding:4px 6px;text-align:right;font-family:monospace;font-size:11px;font-weight:500;">'+(mpc.precio?fmt(totalPC):'—')+'</td>'
+            +'<td style="padding:4px 6px;text-align:center;"><button onclick="quitarMiniPC('+i+')" style="font-size:9px;padding:1px 5px;border:1px solid var(--red);color:var(--red);border-radius:4px;background:transparent;cursor:pointer;">✕</button></td>'
+          +'</tr>';
+        }
+        return eqRow + minipcRow;
       }).join('')
     +'</tbody></table>';
 }
 
+function toggleMiniPC(idx){
+  const it = cotItemsTemp[idx];
+  if(it.minipc){ return; } // ya tiene, no ocultar
+  it._showMiniPC = !it._showMiniPC;
+  renderCotItemsTemp();
+}
+
+function seleccionarMiniPC(idx, sel){
+  const opt = sel.options[sel.selectedIndex];
+  if(!opt.value){ cotItemsTemp[idx].minipc = null; renderCotItemsTemp(); return; }
+  const precio = parseFloat(INSUMOS_BASE[opt.value]?.costoBase||0);
+  cotItemsTemp[idx].minipc = { key: opt.value, nombre: opt.text, precio: precio };
+  cotItemsTemp[idx]._showMiniPC = true;
+  renderCotItemsTemp();
+}
+
+function actualizarPrecioMiniPC(idx, val){
+  if(cotItemsTemp[idx].minipc) cotItemsTemp[idx].minipc.precio = parseFloat(val)||0;
+  renderCotItemsTemp();
+}
+
+function quitarMiniPC(idx){
+  cotItemsTemp[idx].minipc = null;
+  cotItemsTemp[idx]._showMiniPC = false;
+  renderCotItemsTemp();
+}
+
 function togglePloteo(){
-  const checked = document.getElementById('cot-ploteo')?.checked;
-  const montoEl = document.getElementById('cot-ploteo-monto');
+  const checked = document.getElementById('add-ploteo')?.checked;
+  const montoEl = document.getElementById('add-ploteo-monto');
   if(montoEl) montoEl.style.display = checked ? 'block' : 'none';
 }
 
@@ -3595,7 +3653,7 @@ function getCotizacionData(estado){
   const editId = document.getElementById('cot-edit-id').value;
   const tieneTransporte = document.getElementById('cot-transporte').checked;
   const tieneLicencia = document.getElementById('cot-tiene-licencia').checked;
-  const tienePloteo = document.getElementById('cot-ploteo')?.checked;
+  const tienePloteo = document.getElementById('add-ploteo')?.checked;
   return {
     id: editId || genId(),
     numero: editId ? (cotizaciones.find(function(c){ return c.id===editId; })||{}).numero || genCotNumero() : genCotNumero(),
@@ -3613,7 +3671,7 @@ function getCotizacionData(estado){
     transporte: tieneTransporte,
     transporteMonto: tieneTransporte ? parseFloat(document.getElementById('cot-transporte-monto').value)||0 : 0,
     ploteo: tienePloteo,
-    ploteoMonto: tienePloteo ? parseFloat(document.getElementById('cot-ploteo-monto').value)||55000 : 0,
+    ploteoMonto: tienePloteo ? parseFloat(document.getElementById('add-ploteo-monto').value)||55000 : 0,
     licencia: tieneLicencia,
     licDesc: tieneLicencia ? document.getElementById('cot-lic-desc').value.trim() : '',
     licMonto: tieneLicencia ? parseFloat(document.getElementById('cot-lic-monto').value)||0 : 0,
@@ -3648,7 +3706,7 @@ function previsualizarCotizacion(){
     return !['ploteo','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
   });
   if(document.getElementById('add-ploteo')?.checked){
-    const montoPl = parseFloat(document.getElementById('cot-ploteo-monto')?.value)||55000;
+    const montoPl = parseFloat(document.getElementById('add-ploteo-monto')?.value)||55000;
     cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:1, precio:montoPl, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
@@ -3681,7 +3739,7 @@ function generarPreviewHTML(c){
   const validezFecha = new Date(Date.now()+c.validez*86400000).toLocaleDateString('es-AR');
 
   // Calculate totals
-  let subtotalNeto = c.items.reduce(function(s,i){ return s+i.precio*i.cant; },0);
+  let subtotalNeto = c.items.reduce(function(s,i){ return s+(i.precio*i.cant) + (i.minipc ? i.minipc.precio*i.cant : 0); },0);
   if(c.transporte && c.transporteMonto) subtotalNeto += c.transporteMonto;
   if(c.ploteo && c.ploteoMonto) subtotalNeto += c.ploteoMonto;
   if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotalNeto += c.licMonto;
@@ -3692,13 +3750,26 @@ function generarPreviewHTML(c){
   const itemsHTML = c.items.map(function(it,i){
     const iva = Math.round(it.precio*it.cant*0.105);
     const total = it.precio*it.cant + iva;
-    return '<tr>'
+    let rows = '<tr>'
       +'<td style="padding:7px 10px;">'+it.nombre+'</td>'
       +'<td style="padding:7px 10px;text-align:center;">'+it.cant+'</td>'
       +'<td style="padding:7px 10px;text-align:right;">'+fmt2(it.precio)+'</td>'
       +'<td style="padding:7px 10px;text-align:right;">'+fmt2(iva)+'</td>'
       +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(total)+'</td>'
     +'</tr>';
+    // Agregar fila de Mini PC si existe
+    if(it.minipc && it.minipc.precio){
+      const ivaPC = Math.round(it.minipc.precio*it.cant*0.21);
+      const totalPC = it.minipc.precio*it.cant + ivaPC;
+      rows += '<tr style="background:#f9f9fb;">'
+        +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+it.minipc.nombre+'</td>'
+        +'<td style="padding:5px 10px;text-align:center;font-size:12px;">'+it.cant+'</td>'
+        +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(it.minipc.precio)+'</td>'
+        +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(ivaPC)+'</td>'
+        +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2(totalPC)+'</td>'
+      +'</tr>';
+    }
+    return rows;
   }).join('');
 
   // Transport row
