@@ -156,6 +156,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
 .empty{text-align:center;padding:40px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;}
 .empty-icon{font-size:32px;margin-bottom:8px;}
 </style>
+<script src="etiquetas_modal.js"></script>
 </head>
 <body>
 <div class="app">
@@ -808,9 +809,7 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
   `;
 
   if(etiquetasGeneradas.length){
-    document.getElementById('etiquetas-preview-wrap').style.display='block';
-    etiquetasSeleccionadas = new Set(etiquetasGeneradas.map(function(e){ return e.uid; }));
-    generarVistaEtiquetas();
+    abrirModalEtiquetas(etiquetasGeneradas, tnImprimirEtiquetas);
   }
 
   // Mostrar resumen + botón etiqueta para insumos de caja (tracking cantidad)
