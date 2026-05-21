@@ -3421,33 +3421,38 @@ function abrirNuevaCotizacion(editId){
     const itemMinipc = (c.items||[]).find(function(i){ return i.prodId==='minipc_beelink_n95'; });
     const itemHdmi = (c.items||[]).find(function(i){ return i.prodId==='hdmi_transmisor'; });
 
+    // Restaurar checkboxes inmediatamente
     const ploteoCheck = document.getElementById('add-ploteo');
-    const ploteoMonto = document.getElementById('add-ploteo-precio');
-    const ploteoCant = document.getElementById('add-ploteo-cant');
-    if(ploteoCheck){ ploteoCheck.checked = !!itemPloteo; }
-    if(ploteoMonto){ ploteoMonto.style.display = itemPloteo?'inline-block':'none'; ploteoMonto.value = itemPloteo?.precio||55000; }
-    if(ploteoCant){ ploteoCant.style.display = itemPloteo?'inline-block':'none'; ploteoCant.value = itemPloteo?.cant||1; }
-
     const seteoCheck = document.getElementById('add-seteo');
-    const seteoMonto = document.getElementById('add-seteo-precio');
-    const seteoCant = document.getElementById('add-seteo-cant');
-    if(seteoCheck){ seteoCheck.checked = !!itemSeteo; }
-    if(seteoMonto){ seteoMonto.style.display = itemSeteo?'inline-block':'none'; seteoMonto.value = itemSeteo?.precio||0; }
-    if(seteoCant){ seteoCant.style.display = itemSeteo?'inline-block':'none'; seteoCant.value = itemSeteo?.cant||1; }
-
     const minipcCheck = document.getElementById('add-minipc');
-    const minipcMonto = document.getElementById('add-minipc-precio');
-    const minipcCant = document.getElementById('add-minipc-cant');
-    if(minipcCheck){ minipcCheck.checked = !!itemMinipc; }
-    if(minipcMonto){ minipcMonto.style.display = itemMinipc?'inline-block':'none'; minipcMonto.value = itemMinipc?.precio||610600; }
-    if(minipcCant){ minipcCant.style.display = itemMinipc?'inline-block':'none'; minipcCant.value = itemMinipc?.cant||1; }
-
     const hdmiCheck = document.getElementById('add-hdmi');
-    const hdmiMonto = document.getElementById('add-hdmi-precio');
-    const hdmiCant = document.getElementById('add-hdmi-cant');
-    if(hdmiCheck){ hdmiCheck.checked = !!itemHdmi; }
-    if(hdmiMonto){ hdmiMonto.style.display = itemHdmi?'inline-block':'none'; hdmiMonto.value = itemHdmi?.precio||170400; }
-    if(hdmiCant){ hdmiCant.style.display = itemHdmi?'inline-block':'none'; hdmiCant.value = itemHdmi?.cant||1; }
+    if(ploteoCheck) ploteoCheck.checked = !!itemPloteo;
+    if(seteoCheck) seteoCheck.checked = !!itemSeteo;
+    if(minipcCheck) minipcCheck.checked = !!itemMinipc;
+    if(hdmiCheck) hdmiCheck.checked = !!itemHdmi;
+
+    // Restaurar valores con delay para asegurar que el DOM esté listo
+    setTimeout(function(){
+      const ploteoMonto = document.getElementById('add-ploteo-precio');
+      const ploteoCant = document.getElementById('add-ploteo-cant');
+      if(ploteoMonto){ ploteoMonto.style.display = itemPloteo?'inline-block':'none'; ploteoMonto.value = itemPloteo ? itemPloteo.precio : 55000; }
+      if(ploteoCant){ ploteoCant.style.display = itemPloteo?'inline-block':'none'; ploteoCant.value = itemPloteo ? itemPloteo.cant : 1; }
+
+      const seteoMonto = document.getElementById('add-seteo-precio');
+      const seteoCant = document.getElementById('add-seteo-cant');
+      if(seteoMonto){ seteoMonto.style.display = itemSeteo?'inline-block':'none'; seteoMonto.value = itemSeteo ? itemSeteo.precio : 0; }
+      if(seteoCant){ seteoCant.style.display = itemSeteo?'inline-block':'none'; seteoCant.value = itemSeteo ? itemSeteo.cant : 1; }
+
+      const minipcMonto = document.getElementById('add-minipc-precio');
+      const minipcCant = document.getElementById('add-minipc-cant');
+      if(minipcMonto){ minipcMonto.style.display = itemMinipc?'inline-block':'none'; minipcMonto.value = itemMinipc ? itemMinipc.precio : 610600; }
+      if(minipcCant){ minipcCant.style.display = itemMinipc?'inline-block':'none'; minipcCant.value = itemMinipc ? itemMinipc.cant : 1; }
+
+      const hdmiMonto = document.getElementById('add-hdmi-precio');
+      const hdmiCant = document.getElementById('add-hdmi-cant');
+      if(hdmiMonto){ hdmiMonto.style.display = itemHdmi?'inline-block':'none'; hdmiMonto.value = itemHdmi ? itemHdmi.precio : 170400; }
+      if(hdmiCant){ hdmiCant.style.display = itemHdmi?'inline-block':'none'; hdmiCant.value = itemHdmi ? itemHdmi.cant : 1; }
+    }, 50);
     // Licencia
     const licCheck = document.getElementById('cot-tiene-licencia');
     if(licCheck){ licCheck.checked = !!c.licencia; }
