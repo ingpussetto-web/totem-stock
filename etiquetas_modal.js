@@ -228,7 +228,7 @@
               <span>#${String(et.num||p+1).padStart(4,'0')}</span>
             </div>
           </div>`;
-          qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:80,height:80,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
+          qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:64,height:64,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
         } else {
           celdasHTML += `<div class="label label-vacia"></div>`;
         }
@@ -242,18 +242,20 @@
       <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
       <style>
         body{font-family:Arial,sans-serif;background:#fff;margin:0;padding:8mm;}
-        .label-sheet{width:200mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;}
-        .label{width:100mm;height:71.75mm;border:0.5pt solid #ccc;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid;}
-        .label-vacia{width:100mm;height:71.75mm;page-break-inside:avoid;}
-        .label-brand{font-size:7pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
-        .label-nombre{font-size:9pt;font-weight:700;color:#111;line-height:1.2;margin:2mm 0 1mm;}
-        .label-variante{font-size:8pt;color:#444;margin-bottom:1mm;}
-        .label-body{display:flex;align-items:center;gap:3mm;flex:1;}
-        .label-uid-label{font-size:5.5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5mm;}
-        .label-uid{font-size:7pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.3;}
-        .label-footer{display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1mm;margin-top:1mm;font-size:5.5pt;color:#888;}
-        .label-estado{font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:1mm 2mm;font-weight:600;}
-        @media print{body{padding:0;margin:0;}}
+        body{margin:0;padding:2mm;}
+        .label-sheet{width:206mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;page-break-after:always;}
+        .label-sheet:last-child{page-break-after:auto;}
+        .label{width:103mm;height:67mm;border:0.5pt solid #ccc;border-radius:1.5mm;padding:2mm 2.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;}
+        .label-vacia{width:103mm;height:67mm;page-break-inside:avoid;box-sizing:border-box;}
+        .label-brand{font-size:6pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
+        .label-nombre{font-size:8pt;font-weight:700;color:#111;line-height:1.2;margin:1mm 0 0.5mm;}
+        .label-variante{font-size:7pt;color:#444;margin-bottom:0.5mm;}
+        .label-body{display:flex;align-items:center;gap:2mm;flex:1;min-height:0;}
+        .label-uid-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3mm;}
+        .label-uid{font-size:6pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.2;}
+        .label-footer{display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:0.5mm;margin-top:0.5mm;font-size:5pt;color:#888;}
+        .label-estado{font-size:5.5pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:1.5mm;padding:0.5mm 1.5mm;font-weight:600;}
+        @media print{body{padding:0;margin:0;}@page{margin:4mm;}}
       </style>
     </head><body>
       ${hojasHTML}
