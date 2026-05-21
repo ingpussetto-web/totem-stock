@@ -3145,7 +3145,6 @@ function recalcPE(){
 // ─── MÓDULO COTIZACIONES ─────────────────────────────────────────────────────
 let cotizaciones = [];
 let cotItemsTemp = [];
-let _preciosAdicionales = {ploteo:55000, seteo:0, minipc:610600, hdmi:170400, ploteoCant:1, seteoCant:1, minipcCant:1, hdmiCant:1};
 
 const EMPRESA = {
   nombre: 'Totem Nube S.A.S.',
@@ -3323,6 +3322,34 @@ function toggleAdicional(tipo){
 
 function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ }
 
+function sincronizarAdicionales(){
+  // Limpiar adicionales previos
+  cotItemsTemp = cotItemsTemp.filter(function(i){
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
+  });
+  // Agregar los activos leyendo directo del DOM
+  if(document.getElementById('add-ploteo')?.checked){
+    const cant = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
+    const precio = parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000;
+    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cant, precio:precio, cat:'servicio'});
+  }
+  if(document.getElementById('add-seteo')?.checked){
+    const cant = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
+    const precio = parseFloat(document.getElementById('add-seteo-precio')?.value)||0;
+    cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cant, precio:precio, cat:'servicio'});
+  }
+  if(document.getElementById('add-minipc')?.checked){
+    const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
+    const precio = parseFloat(document.getElementById('add-minipc-precio')?.value)||610600;
+    cotItemsTemp.push({prodId:'minipc_beelink_n95', nombre:'Player Mini PC Beelink N95 8GB', cant:cant, precio:precio, cat:'periferico'});
+  }
+  if(document.getElementById('add-hdmi')?.checked){
+    const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
+    const precio = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
+    cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:precio, cat:'periferico'});
+  }
+}
+
 function guardarBorrador(){
   // Auto-agregar producto seleccionado si no se hizo click en "+"
   const sel = document.getElementById('cot-item-producto');
@@ -3332,40 +3359,11 @@ function guardarBorrador(){
     const cant = parseInt(document.getElementById('cot-item-cant')?.value)||1;
     if(p) cotItemsTemp.push({prodId:p.id, nombre:p.name, cant:cant, precio:precio, cat:'equipo'});
   }
-  // Limpiar adicionales previos para evitar duplicados
-  cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
-  });
-
-  // Agregar adicionales seleccionados
-  if(document.getElementById('add-ploteo')?.checked){
-    const cantPl = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
-    const montoPl = parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000;
-    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cantPl, precio:montoPl, cat:'servicio'});
-  }
-  if(document.getElementById('add-seteo')?.checked){
-    const precioElSt = document.getElementById('add-seteo-precio');
-    const cantElSt = document.getElementById('add-seteo-cant');
-    const montoSt = (precioElSt && precioElSt.value !== '' && parseFloat(precioElSt.value) > 0)
-      ? parseFloat(precioElSt.value)
-      : _preciosAdicionales.seteo;
-    const cantSt = (cantElSt && cantElSt.value !== '') ? parseInt(cantElSt.value)||1 : _preciosAdicionales.seteoCant||1;
-    if(parseFloat(precioElSt?.value) > 0) _preciosAdicionales.seteo = parseFloat(precioElSt.value);
-    cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cantSt, precio:montoSt, cat:'servicio'});
-  }
-  if(document.getElementById('add-minipc')?.checked){
-    const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
-    const montoMp = parseFloat(document.getElementById('add-minipc-precio')?.value)||610600;
-    cotItemsTemp.push({prodId:'minipc_beelink_n95', nombre:'Player Mini PC Beelink N95 8GB', cant:cant, precio:montoMp, cat:'periferico'});
-  }
-  if(document.getElementById('add-hdmi')?.checked){
-    const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
-    const montoHd = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
-    cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:montoHd, cat:'periferico'});
-  }
+  sincronizarAdicionales();
   if(cotItemsTemp.length===0){ alert('Agregá al menos un producto.'); return; }
   guardarCotizacion('borrador');
 }
+
 
 function abrirNuevaCotizacion(editId){
   cotItemsTemp = [];
@@ -3427,48 +3425,34 @@ function abrirNuevaCotizacion(editId){
     const itemMinipc = (c.items||[]).find(function(i){ return i.prodId==='minipc_beelink_n95'; });
     const itemHdmi = (c.items||[]).find(function(i){ return i.prodId==='hdmi_transmisor'; });
 
-    // Restaurar checkboxes inmediatamente
     const ploteoCheck = document.getElementById('add-ploteo');
     const seteoCheck = document.getElementById('add-seteo');
-    const minipcCheck = document.getElementById('add-minipc');
-    const hdmiCheck = document.getElementById('add-hdmi');
-    if(ploteoCheck) ploteoCheck.checked = !!itemPloteo;
-    if(seteoCheck) seteoCheck.checked = !!itemSeteo;
-    if(minipcCheck) minipcCheck.checked = !!itemMinipc;
-    if(hdmiCheck) hdmiCheck.checked = !!itemHdmi;
+    const minipcCheck2 = document.getElementById('add-minipc');
+    const hdmiCheck2 = document.getElementById('add-hdmi');
+    if(ploteoCheck){ ploteoCheck.checked = !!itemPloteo; toggleAdicional('ploteo'); }
+    if(seteoCheck){ seteoCheck.checked = !!itemSeteo; toggleAdicional('seteo'); }
+    if(minipcCheck2){ minipcCheck2.checked = !!itemMinipc; toggleAdicional('minipc'); }
+    if(hdmiCheck2){ hdmiCheck2.checked = !!itemHdmi; toggleAdicional('hdmi'); }
 
-    // Restaurar valores con delay para asegurar que el DOM esté listo
-    setTimeout(function(){
-      const ploteoMonto = document.getElementById('add-ploteo-precio');
-      const ploteoCant = document.getElementById('add-ploteo-cant');
-      if(ploteoMonto){ 
-        ploteoMonto.style.display = itemPloteo?'inline-block':'none'; 
-        ploteoMonto.value = itemPloteo ? itemPloteo.precio : 55000;
-        if(itemPloteo) _preciosAdicionales.ploteo = itemPloteo.precio||55000;
-        if(itemPloteo) _preciosAdicionales.ploteoCant = itemPloteo.cant||1;
-      }
-      if(ploteoCant){ ploteoCant.style.display = itemPloteo?'inline-block':'none'; ploteoCant.value = itemPloteo ? itemPloteo.cant : 1; }
+    const ploteoMonto = document.getElementById('add-ploteo-precio');
+    const ploteoCant = document.getElementById('add-ploteo-cant');
+    if(ploteoMonto && itemPloteo){ ploteoMonto.value = itemPloteo.precio; }
+    if(ploteoCant && itemPloteo){ ploteoCant.value = itemPloteo.cant||1; }
 
-      const seteoMonto = document.getElementById('add-seteo-precio');
-      const seteoCant = document.getElementById('add-seteo-cant');
-      if(seteoMonto){ 
-        seteoMonto.style.display = itemSeteo?'inline-block':'none'; 
-        seteoMonto.value = itemSeteo ? itemSeteo.precio : 0;
-        if(itemSeteo) _preciosAdicionales.seteo = itemSeteo.precio||0;
-        if(itemSeteo) _preciosAdicionales.seteoCant = itemSeteo.cant||1;
-      }
-      if(seteoCant){ seteoCant.style.display = itemSeteo?'inline-block':'none'; seteoCant.value = itemSeteo ? itemSeteo.cant : 1; }
+    const seteoMonto = document.getElementById('add-seteo-precio');
+    const seteoCant = document.getElementById('add-seteo-cant');
+    if(seteoMonto && itemSeteo){ seteoMonto.value = itemSeteo.precio; }
+    if(seteoCant && itemSeteo){ seteoCant.value = itemSeteo.cant||1; }
 
-      const minipcMonto = document.getElementById('add-minipc-precio');
-      const minipcCant = document.getElementById('add-minipc-cant');
-      if(minipcMonto){ minipcMonto.style.display = itemMinipc?'inline-block':'none'; minipcMonto.value = itemMinipc ? itemMinipc.precio : 610600; }
-      if(minipcCant){ minipcCant.style.display = itemMinipc?'inline-block':'none'; minipcCant.value = itemMinipc ? itemMinipc.cant : 1; }
+    const minipcMonto = document.getElementById('add-minipc-precio');
+    const minipcCant = document.getElementById('add-minipc-cant');
+    if(minipcMonto && itemMinipc){ minipcMonto.value = itemMinipc.precio; }
+    if(minipcCant && itemMinipc){ minipcCant.value = itemMinipc.cant||1; }
 
-      const hdmiMonto = document.getElementById('add-hdmi-precio');
-      const hdmiCant = document.getElementById('add-hdmi-cant');
-      if(hdmiMonto){ hdmiMonto.style.display = itemHdmi?'inline-block':'none'; hdmiMonto.value = itemHdmi ? itemHdmi.precio : 170400; }
-      if(hdmiCant){ hdmiCant.style.display = itemHdmi?'inline-block':'none'; hdmiCant.value = itemHdmi ? itemHdmi.cant : 1; }
-    }, 50);
+    const hdmiMonto = document.getElementById('add-hdmi-precio');
+    const hdmiCant = document.getElementById('add-hdmi-cant');
+    if(hdmiMonto && itemHdmi){ hdmiMonto.value = itemHdmi.precio; }
+    if(hdmiCant && itemHdmi){ hdmiCant.value = itemHdmi.cant||1; }
     // Licencia
     const licCheck = document.getElementById('cot-tiene-licencia');
     if(licCheck){ licCheck.checked = !!c.licencia; }
@@ -3747,7 +3731,7 @@ function getCotizacionData(estado){
   const editId = document.getElementById('cot-edit-id').value;
   const tieneTransporte = document.getElementById('cot-transporte').checked;
   const tieneLicencia = document.getElementById('cot-tiene-licencia').checked;
-  const tienePloteo = document.getElementById('add-ploteo')?.checked;
+
   return {
     id: editId || genId(),
     numero: editId ? (cotizaciones.find(function(c){ return c.id===editId; })||{}).numero || genCotNumero() : genCotNumero(),
@@ -3764,8 +3748,7 @@ function getCotizacionData(estado){
     items: [...cotItemsTemp],
     transporte: tieneTransporte,
     transporteMonto: tieneTransporte ? parseFloat(document.getElementById('cot-transporte-monto').value)||0 : 0,
-    ploteo: tienePloteo,
-    ploteoMonto: tienePloteo ? parseFloat(document.getElementById('add-ploteo-precio').value)||55000 : 0,
+
     licencia: tieneLicencia,
     licDesc: tieneLicencia ? document.getElementById('cot-lic-desc').value.trim() : '',
     licMonto: tieneLicencia ? parseFloat(document.getElementById('cot-lic-monto').value)||0 : 0,
@@ -3777,6 +3760,7 @@ function getCotizacionData(estado){
 }
 
 function guardarCotizacion(estado){
+  sincronizarAdicionales();
   const c = getCotizacionData(estado||'borrador');
   if(!c.empresa){ alert('Completá la empresa cliente.'); return; }
   if(c.items.length===0){ alert('Agregá al menos un ítem.'); return; }
@@ -3793,10 +3777,7 @@ function guardarCotizacion(estado){
 }
 
 function previsualizarCotizacion(){
-  // Limpiar adicionales de cotItemsTemp — getCotizacionData los agrega frescos
-  cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
-  });
+  sincronizarAdicionales();
   const c = getCotizacionData('borrador');
   if(!c.empresa){ alert('Completá la empresa cliente.'); return; }
   if(c.items.length===0){ alert('Agregá al menos un ítem.'); return; }
