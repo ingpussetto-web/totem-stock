@@ -3145,6 +3145,7 @@ function recalcPE(){
 // ─── MÓDULO COTIZACIONES ─────────────────────────────────────────────────────
 let cotizaciones = [];
 let cotItemsTemp = [];
+let _preciosAdicionales = {ploteo:55000, seteo:0, minipc:610600, hdmi:170400, ploteoCant:1, seteoCant:1, minipcCant:1, hdmiCant:1};
 
 const EMPRESA = {
   nombre: 'Totem Nube S.A.S.',
@@ -3343,13 +3344,13 @@ function guardarBorrador(){
     cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cantPl, precio:montoPl, cat:'servicio'});
   }
   if(document.getElementById('add-seteo')?.checked){
-    const cantSt = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
-    // Leer precio del campo o del item guardado en cotItemsTemp como fallback
     const precioElSt = document.getElementById('add-seteo-precio');
-    const montoSt = (precioElSt && precioElSt.value !== '' && precioElSt.value !== '0')
-      ? parseFloat(precioElSt.value)||0
-      : (window._lastSeteoPrice||0);
-    if(montoSt > 0) window._lastSeteoPrice = montoSt;
+    const cantElSt = document.getElementById('add-seteo-cant');
+    const montoSt = (precioElSt && precioElSt.value !== '' && parseFloat(precioElSt.value) > 0)
+      ? parseFloat(precioElSt.value)
+      : _preciosAdicionales.seteo;
+    const cantSt = (cantElSt && cantElSt.value !== '') ? parseInt(cantElSt.value)||1 : _preciosAdicionales.seteoCant||1;
+    if(parseFloat(precioElSt?.value) > 0) _preciosAdicionales.seteo = parseFloat(precioElSt.value);
     cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cantSt, precio:montoSt, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
@@ -3440,7 +3441,12 @@ function abrirNuevaCotizacion(editId){
     setTimeout(function(){
       const ploteoMonto = document.getElementById('add-ploteo-precio');
       const ploteoCant = document.getElementById('add-ploteo-cant');
-      if(ploteoMonto){ ploteoMonto.style.display = itemPloteo?'inline-block':'none'; ploteoMonto.value = itemPloteo ? itemPloteo.precio : 55000; }
+      if(ploteoMonto){ 
+        ploteoMonto.style.display = itemPloteo?'inline-block':'none'; 
+        ploteoMonto.value = itemPloteo ? itemPloteo.precio : 55000;
+        if(itemPloteo) _preciosAdicionales.ploteo = itemPloteo.precio||55000;
+        if(itemPloteo) _preciosAdicionales.ploteoCant = itemPloteo.cant||1;
+      }
       if(ploteoCant){ ploteoCant.style.display = itemPloteo?'inline-block':'none'; ploteoCant.value = itemPloteo ? itemPloteo.cant : 1; }
 
       const seteoMonto = document.getElementById('add-seteo-precio');
@@ -3448,7 +3454,8 @@ function abrirNuevaCotizacion(editId){
       if(seteoMonto){ 
         seteoMonto.style.display = itemSeteo?'inline-block':'none'; 
         seteoMonto.value = itemSeteo ? itemSeteo.precio : 0;
-        if(itemSeteo && itemSeteo.precio) window._lastSeteoPrice = itemSeteo.precio;
+        if(itemSeteo) _preciosAdicionales.seteo = itemSeteo.precio||0;
+        if(itemSeteo) _preciosAdicionales.seteoCant = itemSeteo.cant||1;
       }
       if(seteoCant){ seteoCant.style.display = itemSeteo?'inline-block':'none'; seteoCant.value = itemSeteo ? itemSeteo.cant : 1; }
 
