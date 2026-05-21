@@ -3344,7 +3344,12 @@ function guardarBorrador(){
   }
   if(document.getElementById('add-seteo')?.checked){
     const cantSt = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
-    const montoSt = parseFloat(document.getElementById('add-seteo-precio')?.value)||0;
+    // Leer precio del campo o del item guardado en cotItemsTemp como fallback
+    const precioElSt = document.getElementById('add-seteo-precio');
+    const montoSt = (precioElSt && precioElSt.value !== '' && precioElSt.value !== '0')
+      ? parseFloat(precioElSt.value)||0
+      : (window._lastSeteoPrice||0);
+    if(montoSt > 0) window._lastSeteoPrice = montoSt;
     cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cantSt, precio:montoSt, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
@@ -3440,7 +3445,11 @@ function abrirNuevaCotizacion(editId){
 
       const seteoMonto = document.getElementById('add-seteo-precio');
       const seteoCant = document.getElementById('add-seteo-cant');
-      if(seteoMonto){ seteoMonto.style.display = itemSeteo?'inline-block':'none'; seteoMonto.value = itemSeteo ? itemSeteo.precio : 0; }
+      if(seteoMonto){ 
+        seteoMonto.style.display = itemSeteo?'inline-block':'none'; 
+        seteoMonto.value = itemSeteo ? itemSeteo.precio : 0;
+        if(itemSeteo && itemSeteo.precio) window._lastSeteoPrice = itemSeteo.precio;
+      }
       if(seteoCant){ seteoCant.style.display = itemSeteo?'inline-block':'none'; seteoCant.value = itemSeteo ? itemSeteo.cant : 1; }
 
       const minipcMonto = document.getElementById('add-minipc-precio');
