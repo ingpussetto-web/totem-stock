@@ -307,17 +307,15 @@
       if(et){
         const safeId = et.uid.replace(/[^a-z0-9]/gi,'_');
         celdasHTML += `<div class="label">
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-              <div class="label-brand">Totem Nube</div>
-              <div class="label-estado">EN STOCK</div>
-            </div>
-            <div class="label-nombre">${et.nombre}</div>
-            ${et.variante?`<div class="label-variante">Color: ${et.variante}</div>`:''}
+          <div class="label-header">
+            <div class="label-brand">Totem Nube</div>
+            <div class="label-estado">EN STOCK</div>
           </div>
+          <div class="label-nombre">${et.nombre}</div>
+          ${et.variante?`<div class="label-variante">● ${et.variante}</div>`:''}
           <div class="label-body">
             <div id="qrlabel-${safeId}"></div>
-            <div style="flex:1;">
+            <div class="label-uid-wrap">
               <div class="label-uid-label">UID</div>
               <div class="label-uid">${et.uid}</div>
             </div>
@@ -327,7 +325,7 @@
             <span>#${String(et.num||p+1).padStart(4,'0')}</span>
           </div>
         </div>`;
-        qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:64,height:64,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
+        qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:72,height:72,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
       } else {
         celdasHTML += `<div class="label-vacia"></div>`;
       }
@@ -338,18 +336,20 @@
       <title>Etiquetas Totem Nube</title>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
       <style>
-        body{margin:0;padding:0;}
+        body{margin:0;padding:0;font-family:Arial,sans-serif;}
         .label-sheet{width:210mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;}
-        .label{width:105mm;height:74mm;border:0.5pt solid #ccc;padding:2mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;}
+        .label{width:105mm;height:74mm;border:0.5pt solid #ddd;padding:3mm 3mm 2mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;text-align:center;}
         .label-vacia{width:105mm;height:74mm;box-sizing:border-box;}
-        .label-brand{font-size:6pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
-        .label-nombre{font-size:8pt;font-weight:700;color:#111;line-height:1.1;margin:0.5mm 0;}
-        .label-variante{font-size:7pt;color:#444;margin-bottom:0.5mm;}
-        .label-body{display:flex;align-items:center;gap:2mm;flex:1;min-height:0;}
-        .label-uid-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3mm;}
-        .label-uid{font-size:6pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.1;}
-        .label-footer{display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:0.5mm;margin-top:0.5mm;font-size:5pt;color:#888;}
-        .label-estado{font-size:5pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:1mm;padding:0.3mm 1mm;font-weight:600;}
+        .label-header{width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:1mm;}
+        .label-brand{font-size:7pt;font-weight:700;color:#666;letter-spacing:0.08em;text-transform:uppercase;}
+        .label-estado{font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:0.5mm 2mm;font-weight:700;}
+        .label-nombre{font-size:10pt;font-weight:700;color:#111;line-height:1.2;margin:0 0 1mm;}
+        .label-variante{font-size:8pt;color:#555;font-weight:600;margin-bottom:1mm;}
+        .label-body{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:2mm;}
+        .label-uid-wrap{text-align:center;}
+        .label-uid-label{font-size:5pt;color:#aaa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1mm;}
+        .label-uid{font-size:6.5pt;font-family:'Courier New',monospace;color:#444;word-break:break-all;line-height:1.2;}
+        .label-footer{width:100%;display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1mm;font-size:5pt;color:#aaa;}
         @media print{body{padding:0;margin:0;}@page{size:A4;margin:0;}}
       </style>
     </head><body>
