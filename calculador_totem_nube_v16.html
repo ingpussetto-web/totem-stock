@@ -3641,9 +3641,24 @@ function calcPagoMontos(){
   const cId = document.getElementById('cot-edit-id')?.value;
   const c = cotizaciones.find(function(x){ return x.id === cId; });
   if(!c){ el.innerHTML = ''; return; }
-  // Usar cotItemsTemp para reflejar adicionales no guardados aún
-  const itemsActuales = (c.id === document.getElementById('cot-edit-id')?.value) ? cotItemsTemp : c.items;
-  let subtotal = itemsActuales.reduce(function(s,i){ return s+(i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0); }, 0);
+  // Calcular subtotal desde cotItemsTemp (base) + adicionales activos
+  const itemsBase = cotItemsTemp.filter(function(i){
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
+  });
+  let subtotal = itemsBase.reduce(function(s,i){ return s+(i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0); }, 0);
+  // Agregar adicionales activos en tiempo real
+  if(document.getElementById('add-ploteo')?.checked){
+    subtotal += (parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000) * (parseInt(document.getElementById('add-ploteo-cant')?.value)||1);
+  }
+  if(document.getElementById('add-seteo')?.checked){
+    subtotal += (parseFloat(document.getElementById('add-seteo-precio')?.value)||0) * (parseInt(document.getElementById('add-seteo-cant')?.value)||1);
+  }
+  if(document.getElementById('add-minipc')?.checked){
+    subtotal += (parseFloat(document.getElementById('add-minipc-precio')?.value)||610600) * (parseInt(document.getElementById('add-minipc-cant')?.value)||1);
+  }
+  if(document.getElementById('add-hdmi')?.checked){
+    subtotal += (parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400) * (parseInt(document.getElementById('add-hdmi-cant')?.value)||1);
+  }
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
   if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotal += c.licMonto;
   const totalConIva = subtotal + Math.round(subtotal * 0.105);
