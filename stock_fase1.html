@@ -651,7 +651,7 @@ function renderCatalogo(){
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
         <button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>
-        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : ''}
+        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : `<button class="btn sm" onclick="imprimirEtiquetasUID(${s.id},'${s.nombre.replace(/'/g,"\\'")}')" style="margin-left:4px;border-color:var(--blue);color:var(--blue);">🏷 Etiquetas</button>`}
       </td>
     </tr>`;
   }).join('');
@@ -811,6 +811,47 @@ function renderUnidades(){
 // ─── MODALS ─────────────────────────────────────────────────────────────────
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+async function imprimirEtiquetasUID(skuId, nombre){
+  const unidades = await api(`unidades?sku_id=eq.${skuId}&estado=eq.stock&select=uid,variantes(valor)&order=uid.asc`).catch(()=>[]);
+  if(!unidades || !unidades.length){ alert('No hay unidades en stock para este SKU.'); return; }
+  const baseUrl = 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=';
+  const labelsHTML = unidades.map(u => {
+    const variante = u.variantes?.valor || '';
+    return `<div class="lbl">
+      <div class="lbl-tn">Totem Nube</div>
+      <div class="lbl-badge">🏷 UNIDAD</div>
+      <div class="lbl-nombre">${nombre}</div>
+      ${variante ? `<div class="lbl-variante">● ${variante}</div>` : ''}
+      <div class="lbl-uid">${u.uid}</div>
+      <div id="qr-${u.uid.replace(/[^a-zA-Z0-9]/g,'-')}"></div>
+    </div>`;
+  }).join('');
+  const qrScripts = unidades.map(u => {
+    const safeId = u.uid.replace(/[^a-zA-Z0-9]/g,'-');
+    return `new QRCode(document.getElementById('qr-${safeId}'),{text:'${baseUrl}${encodeURIComponent(u.uid)}',width:140,height:140,correctLevel:QRCode.CorrectLevel.M});`;
+  }).join('\n');
+  const win = window.open('','_blank','width=800,height=600');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>Etiquetas UID — ${nombre}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+    <style>
+      body{font-family:sans-serif;background:#fff;margin:0;padding:16px;}
+      .grid{display:flex;flex-wrap:wrap;gap:12px;}
+      .lbl{border:2px solid #4d9fff;border-radius:8px;padding:14px;text-align:center;width:200px;}
+      .lbl-tn{font-size:10px;color:#666;letter-spacing:0.1em;text-transform:uppercase;}
+      .lbl-badge{background:#4d9fff;color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.1em;margin:6px auto;display:inline-block;}
+      .lbl-nombre{font-size:12px;font-weight:700;margin:6px 0 4px;}
+      .lbl-variante{font-size:11px;color:#e67e00;font-family:monospace;margin-bottom:4px;}
+      .lbl-uid{font-size:8px;color:#999;font-family:monospace;margin-bottom:8px;word-break:break-all;}
+      @media print{body{padding:0;}.grid{gap:8px;}}
+    </style>
+  </head><body>
+    <div class="grid">${labelsHTML}</div>
+    <script>${qrScripts}\nsetTimeout(()=>window.print(),1000);<\/script>
+  </body></html>`);
+  win.document.close();
+}
 
 function imprimirEtiquetaCaja(codigo, nombre){
   // Generar QR del código de SKU e imprimir
