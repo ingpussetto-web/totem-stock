@@ -3756,6 +3756,9 @@ function getCotizacionData(estado){
     licEnPresupuesto: tieneLicencia ? !!document.getElementById('cot-lic-en-presupuesto')?.checked : false,
     pagoTipo: document.getElementById('cot-pago-tipo').value,
     pagoTexto: getPagoTexto(),
+    pagoSeniaPct: parseFloat(document.getElementById('pago-senia-pct')?.value)||0,
+    pagoSaldoPct: parseFloat(document.getElementById('pago-saldo-pct')?.value)||0,
+    pagoForma: document.getElementById('pago-saldo-forma')?.value||'transferencia',
   };
 }
 
@@ -3924,6 +3927,11 @@ function generarPreviewHTML(c){
   +'<div class="cot-pago">'
     +'<div class="cot-pago-label">Condiciones de pago</div>'
     +'<div>'+c.pagoTexto+'</div>'
+    +(c.pagoSeniaPct > 0 ? '<div style="margin-top:8px;display:flex;gap:24px;font-size:12px;">'
+      +(c.pagoSeniaPct > 0 ? '<span>💰 <strong>Seña:</strong> '+fmt2(totalConIva * c.pagoSeniaPct / 100)+'</span>' : '')
+      +(c.pagoSaldoPct > 0 ? '<span>💳 <strong>Saldo:</strong> '+fmt2(totalConIva * c.pagoSaldoPct / 100)+'</span>' : '')
+      +'<span style="color:#888;">Total c/IVA: '+fmt2(totalConIva)+'</span>'
+    +'</div>' : '')
   +'</div>'
   +(c.notas?'<div style="font-size:12px;color:#555;margin-top:10px;padding:10px;background:#f9f9f9;border-radius:4px;border-left:3px solid #1a3a8f;">'+c.notas+'</div>':'')
   +'<div class="cot-footer">'
