@@ -753,13 +753,18 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <!-- Ploteo -->
         <label id="add-ploteo-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
           <input type="checkbox" id="add-ploteo" onchange="toggleAdicional('ploteo')" style="width:14px;height:14px;" />
-          Ploteo personalizado —
-          <input type="number" id="add-ploteo-monto" value="55000" placeholder="$ neto" style="width:100px;font-size:12px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--panel2);color:var(--text);" onclick="event.stopPropagation()" /> + IVA
+          Ploteo personalizado
+          <input type="number" id="add-ploteo-precio" value="55000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
+          <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
+          <input type="number" id="add-ploteo-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
         </label>
         <!-- Seteo inicial software -->
         <label id="add-seteo-wrap" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
-          <input type="checkbox" id="add-seteo" style="width:14px;height:14px;" />
+          <input type="checkbox" id="add-seteo" onchange="toggleAdicional('seteo')" style="width:14px;height:14px;" />
           Seteo inicial de software
+          <input type="number" id="add-seteo-precio" value="0" placeholder="$ neto" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
+          <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
+          <input type="number" id="add-seteo-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
         </label>
         <!-- Mini PC -->
         <label id="add-minipc-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
@@ -3284,6 +3289,20 @@ function actualizarAdicionalesVisibles(){
 }
 
 function toggleAdicional(tipo){
+  if(tipo === 'ploteo'){
+    const checked = document.getElementById('add-ploteo')?.checked;
+    const cantEl = document.getElementById('add-ploteo-cant');
+    const precioEl = document.getElementById('add-ploteo-precio');
+    if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
+    if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
+  }
+  if(tipo === 'seteo'){
+    const checked = document.getElementById('add-seteo')?.checked;
+    const cantEl = document.getElementById('add-seteo-cant');
+    const precioEl = document.getElementById('add-seteo-precio');
+    if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
+    if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
+  }
   if(tipo === 'minipc'){
     const checked = document.getElementById('add-minipc')?.checked;
     const cantEl = document.getElementById('add-minipc-cant');
@@ -3314,13 +3333,19 @@ function guardarBorrador(){
   }
   // Limpiar adicionales previos para evitar duplicados
   cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
   });
 
   // Agregar adicionales seleccionados
   if(document.getElementById('add-ploteo')?.checked){
-    const montoPl = parseFloat(document.getElementById('add-ploteo-monto')?.value)||55000;
-    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:1, precio:montoPl, cat:'servicio'});
+    const cantPl = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
+    const montoPl = parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000;
+    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cantPl, precio:montoPl, cat:'servicio'});
+  }
+  if(document.getElementById('add-seteo')?.checked){
+    const cantSt = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
+    const montoSt = parseFloat(document.getElementById('add-seteo-precio')?.value)||0;
+    cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cantSt, precio:montoSt, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
     const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
@@ -3706,8 +3731,14 @@ function previsualizarCotizacion(){
     return !['ploteo','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
   });
   if(document.getElementById('add-ploteo')?.checked){
-    const montoPl = parseFloat(document.getElementById('add-ploteo-monto')?.value)||55000;
-    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:1, precio:montoPl, cat:'servicio'});
+    const cantPl = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
+    const montoPl = parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000;
+    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cantPl, precio:montoPl, cat:'servicio'});
+  }
+  if(document.getElementById('add-seteo')?.checked){
+    const cantSt = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
+    const montoSt = parseFloat(document.getElementById('add-seteo-precio')?.value)||0;
+    cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cantSt, precio:montoSt, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
     const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
