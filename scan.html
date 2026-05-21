@@ -225,8 +225,16 @@ async function renderEnStock(){
     `op_bom_items?sku_id=eq.${u.sku_id}&estado=eq.pendiente&incluido=eq.true&select=*,ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete,estado)&ordenes_produccion.estado=eq.en_produccion`
   );
 
-  // Filtrar solo las de OPs en producción
-  const itemsValidos = (bomItems||[]).filter(b=>b.ordenes_produccion?.estado==='en_produccion');
+  // Filtrar OPs en producción — si es gabinete, filtrar también por color
+  const esGabinete = variante && ['Negro','Blanco','Gris Claro','Gris Plomo'].includes(variante);
+  const itemsValidos = (bomItems||[]).filter(b=>{
+    if(b.ordenes_produccion?.estado !== 'en_produccion') return false;
+    if(esGabinete){
+      const colorOP = b.ordenes_produccion?.color_gabinete || '';
+      return colorOP === variante || colorOP === 'A definir' || colorOP === '';
+    }
+    return true;
+  });
 
   const opsHTML = itemsValidos.length
     ? itemsValidos.map(b=>{
