@@ -242,20 +242,19 @@
       <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
       <style>
         body{font-family:Arial,sans-serif;background:#fff;margin:0;padding:8mm;}
-        body{margin:0;padding:2mm;}
-        .label-sheet{width:206mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;page-break-after:always;}
-        .label-sheet:last-child{page-break-after:auto;}
-        .label{width:103mm;height:67mm;border:0.5pt solid #ccc;border-radius:1.5mm;padding:2mm 2.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;}
-        .label-vacia{width:103mm;height:67mm;page-break-inside:avoid;box-sizing:border-box;}
+        body{margin:0;padding:0;}
+        .label-sheet{width:210mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;}
+        .label{width:105mm;height:74mm;border:0.5pt solid #ccc;padding:2mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;}
+        .label-vacia{width:105mm;height:74mm;box-sizing:border-box;}
         .label-brand{font-size:6pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
-        .label-nombre{font-size:8pt;font-weight:700;color:#111;line-height:1.2;margin:1mm 0 0.5mm;}
+        .label-nombre{font-size:8pt;font-weight:700;color:#111;line-height:1.1;margin:0.5mm 0;}
         .label-variante{font-size:7pt;color:#444;margin-bottom:0.5mm;}
         .label-body{display:flex;align-items:center;gap:2mm;flex:1;min-height:0;}
         .label-uid-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3mm;}
-        .label-uid{font-size:6pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.2;}
+        .label-uid{font-size:6pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.1;}
         .label-footer{display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:0.5mm;margin-top:0.5mm;font-size:5pt;color:#888;}
-        .label-estado{font-size:5.5pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:1.5mm;padding:0.5mm 1.5mm;font-weight:600;}
-        @media print{body{padding:0;margin:0;}@page{margin:4mm;}}
+        .label-estado{font-size:5pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:1mm;padding:0.3mm 1mm;font-weight:600;}
+        @media print{body{padding:0;margin:0;}@page{size:A4;margin:0;}}
       </style>
     </head><body>
       ${hojasHTML}
