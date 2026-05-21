@@ -434,16 +434,6 @@ async function abrirBOM(opId){
     const minipcCat = await api(`categorias?nombre=eq.Mini PCs&select=id`).catch(()=>[]);
     const minipcCatId = minipcCat?.[0]?.id;
 
-    // Cargar opciones de zapatilla (4 y 6 tomas)
-    const zapatillaOpciones = [
-      { id: 89, nombre: 'Zapatilla 4 Tomas', stock: 0 },
-      { id: 90, nombre: 'Zapatilla 6 Tomas', stock: 0 }
-    ];
-    for(let z of zapatillaOpciones){
-      const st = await api(`stock?sku_id=eq.${z.id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
-      z.stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
-    }
-
     // Cargar modelos de Mini PC con stock
     let minipcModelos = [];
     if(minipcCatId){
@@ -460,16 +450,11 @@ async function abrirBOM(opId){
       item._stockDefinir = 0;
       item._variantes = [];
       item._minipcModelos = null;
-      item._zapatillaOpciones = null;
 
       if(!item.sku_id) continue;
 
       if(item.skus?.tracking === 'uid'){
-        if(item.v14_key === 'zapatilla' || item.v14_key === 'zapatilla_4t'){
-          item._zapatillaOpciones = zapatillaOpciones;
-          const zapActual = zapatillaOpciones.find(z=>z.id===item.sku_id);
-          item._stock = zapActual?.stock || 0;
-        } else if(item.skus?.categoria_id === minipcCatId && (item.v14_key === 'minipc_beelink_n95' || item.v14_key === 'minipc_beelink_celeron')){
+        if(item.skus?.categoria_id === minipcCatId){
           // Mini PC: lista de modelos con stock
           item._minipcModelos = minipcModelos;
           const modeloActual = minipcModelos.find(m=>m.id===item.sku_id);
@@ -574,17 +559,7 @@ function renderBOMItem(item){
   let varHTML = '';
   const esMiniPC = item._minipcModelos !== null && item._minipcModelos !== undefined;
 
-  const esZapatilla = item._zapatillaOpciones !== null && item._zapatillaOpciones !== undefined;
-
-  if(esZapatilla){
-    // Selector de zapatilla (4 o 6 tomas)
-    const opciones = item._zapatillaOpciones.map(z=>{
-      const sinStock = z.stock <= 0;
-      const selected = item.sku_id === z.id ? 'selected' : '';
-      return `<option value="${z.id}" ${selected}>${z.nombre}${sinStock?' — Sin stock':' ('+z.stock+' ud.)'}</option>`;
-    }).join('');
-    varHTML = `<select class="var-select" style="max-width:200px;" onchange="cambiarZapatilla(${item.id},this.value)" ${!incluido?'disabled':''}>${opciones}</select>`;
-  } else if(esMiniPC && !esCooller){
+  if(esMiniPC && !esCooller){
     // Selector de modelo de Mini PC con stock real
     const opciones = item._minipcModelos.map(m=>{
       const sinStock = m.stock === 0;
@@ -673,19 +648,6 @@ async function cambiarVariante(itemId, varId){
   }catch(e){ console.warn('Error recalculando stock variante:', e.message); }
 
   renderBOMEditor();
-}
-
-async function cambiarZapatilla(itemId, nuevoSkuId){
-  const item = currentBOMItems.find(i=>i.id===itemId);
-  if(!item) return;
-  const nuevoId = parseInt(nuevoSkuId);
-  const zap = item._zapatillaOpciones.find(z=>z.id===nuevoId);
-  if(!zap) return;
-  item.sku_id = nuevoId;
-  item.nombre = zap.nombre;
-  item._stock = zap.stock;
-  await api('op_bom_items?id=eq.'+itemId,'PATCH',{sku_id: nuevoId, nombre: zap.nombre});
-  renderBOMItems();
 }
 
 function cambiarModeloMiniPC(itemId, nuevoSkuId){
@@ -817,6 +779,35 @@ async function confirmarBOM(){
     }catch(e){ console.warn('Error registrando alertas faltantes:', e.message); }
   }
   await guardarBOM('bom_confirmada');
+
+  // Si cantidad > 1, replicar items para equipos 2..N
+  if(currentOP.cantidad > 1){
+    try{
+      const itemsEquipo1 = await api(`op_bom_items?op_id=eq.${currentOP.id}&equipo_num=eq.1&select=*`).catch(()=>[]);
+      // Borrar items de equipos 2..N si existen (evitar duplicados)
+      await api(`op_bom_items?op_id=eq.${currentOP.id}&equipo_num=gt.1`, 'DELETE').catch(()=>{});
+      // Replicar para cada equipo
+      const payload = [];
+      for(let eq = 2; eq <= currentOP.cantidad; eq++){
+        for(const item of itemsEquipo1){
+          payload.push({
+            op_id: currentOP.id,
+            sku_id: item.sku_id,
+            v14_key: item.v14_key,
+            nombre: item.nombre,
+            qty: item.qty,
+            incluido: item.incluido,
+            variante_id: item.variante_id||null,
+            estado: 'pendiente',
+            notas: item.notas,
+            equipo_num: eq
+          });
+        }
+      }
+      if(payload.length) await api('op_bom_items', 'POST', payload);
+      toast(`BOM confirmada — ${currentOP.cantidad} equipos generados ✓`);
+    }catch(e){ console.warn('Error replicando equipos:', e.message); }
+  }
 }
 
 async function liberarAProduccion(opId){
