@@ -3384,7 +3384,10 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-sistema').value = c.sistema;
     document.getElementById('cot-validez').value = c.validez||15;
     document.getElementById('cot-notas').value = c.notas||'';
-    cotItemsTemp = c.items ? [...c.items] : [];
+    // Cargar items excluyendo adicionales que se restauran desde checkboxes
+    cotItemsTemp = c.items ? c.items.filter(function(i){
+      return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
+    }) : [];
 
     // Detectar y restaurar categoría desde el primer ítem de equipo
     const primerEquipo = (c.items||[]).find(function(i){ return i.cat==='equipo'; });
@@ -3772,7 +3775,7 @@ function generarPreviewHTML(c){
   // Calculate totals
   let subtotalNeto = c.items.reduce(function(s,i){ return s+(i.precio*i.cant) + (i.minipc ? i.minipc.precio*i.cant : 0); },0);
   if(c.transporte && c.transporteMonto) subtotalNeto += c.transporteMonto;
-  if(c.ploteo && c.ploteoMonto) subtotalNeto += c.ploteoMonto;
+  // ploteo y seteo ya están incluidos en c.items
   if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotalNeto += c.licMonto;
   const totalIva = Math.round(subtotalNeto*0.105);
   const totalConIva = subtotalNeto + totalIva;
