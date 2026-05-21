@@ -3413,7 +3413,7 @@ function abrirNuevaCotizacion(editId){
     if(transp){ transp.checked = !!c.transporte; }
     if(transpMonto){ transpMonto.style.display = c.transporte?'block':'none'; transpMonto.value = c.transporteMonto||''; }
     const ploteoCheck = document.getElementById('add-ploteo');
-    const ploteoMonto = document.getElementById('add-ploteo-monto');
+    const ploteoMonto = document.getElementById('add-ploteo-precio');
     if(ploteoCheck){ ploteoCheck.checked = !!c.ploteo; }
     if(ploteoMonto){ ploteoMonto.style.display = c.ploteo?'block':'none'; ploteoMonto.value = c.ploteoMonto||55000; }
     // Licencia
@@ -3578,7 +3578,7 @@ function quitarMiniPC(idx){
 
 function togglePloteo(){
   const checked = document.getElementById('add-ploteo')?.checked;
-  const montoEl = document.getElementById('add-ploteo-monto');
+  const montoEl = document.getElementById('add-ploteo-precio');
   if(montoEl) montoEl.style.display = checked ? 'block' : 'none';
 }
 
@@ -3696,7 +3696,7 @@ function getCotizacionData(estado){
     transporte: tieneTransporte,
     transporteMonto: tieneTransporte ? parseFloat(document.getElementById('cot-transporte-monto').value)||0 : 0,
     ploteo: tienePloteo,
-    ploteoMonto: tienePloteo ? parseFloat(document.getElementById('add-ploteo-monto').value)||55000 : 0,
+    ploteoMonto: tienePloteo ? parseFloat(document.getElementById('add-ploteo-precio').value)||55000 : 0,
     licencia: tieneLicencia,
     licDesc: tieneLicencia ? document.getElementById('cot-lic-desc').value.trim() : '',
     licMonto: tieneLicencia ? parseFloat(document.getElementById('cot-lic-monto').value)||0 : 0,
