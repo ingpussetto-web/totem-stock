@@ -3641,9 +3641,10 @@ function calcPagoMontos(){
   const cId = document.getElementById('cot-edit-id')?.value;
   const c = cotizaciones.find(function(x){ return x.id === cId; });
   if(!c){ el.innerHTML = ''; return; }
-  let subtotal = c.items.reduce(function(s,i){ return s+(i.precio||0)*(i.cant||1); }, 0);
+  // Usar cotItemsTemp para reflejar adicionales no guardados aún
+  const itemsActuales = (c.id === document.getElementById('cot-edit-id')?.value) ? cotItemsTemp : c.items;
+  let subtotal = itemsActuales.reduce(function(s,i){ return s+(i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0); }, 0);
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
-  if(c.ploteo && c.ploteoMonto) subtotal += c.ploteoMonto;
   if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotal += c.licMonto;
   const totalConIva = subtotal + Math.round(subtotal * 0.105);
   const pctSenia = parseFloat(document.getElementById('pago-senia-pct')?.value) || 0;
@@ -3727,32 +3728,10 @@ function guardarCotizacion(estado){
 }
 
 function previsualizarCotizacion(){
-  // Sincronizar adicionales antes de generar preview (fix HDMI sin guardar)
-  const itemsBackup = [...cotItemsTemp];
-  // Limpiar adicionales y re-agregar del estado actual de checkboxes
+  // Limpiar adicionales de cotItemsTemp — getCotizacionData los agrega frescos
   cotItemsTemp = cotItemsTemp.filter(function(i){
     return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
   });
-  if(document.getElementById('add-ploteo')?.checked){
-    const cantPl = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
-    const montoPl = parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000;
-    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cantPl, precio:montoPl, cat:'servicio'});
-  }
-  if(document.getElementById('add-seteo')?.checked){
-    const cantSt = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
-    const montoSt = parseFloat(document.getElementById('add-seteo-precio')?.value)||0;
-    cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cantSt, precio:montoSt, cat:'servicio'});
-  }
-  if(document.getElementById('add-minipc')?.checked){
-    const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
-    const montoMp = parseFloat(document.getElementById('add-minipc-precio')?.value)||610600;
-    cotItemsTemp.push({prodId:'minipc_beelink_n95', nombre:'Player Mini PC Beelink N95 8GB', cant:cant, precio:montoMp, cat:'periferico'});
-  }
-  if(document.getElementById('add-hdmi')?.checked){
-    const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
-    const montoHd = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
-    cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:montoHd, cat:'periferico'});
-  }
   const c = getCotizacionData('borrador');
   if(!c.empresa){ alert('Completá la empresa cliente.'); return; }
   if(c.items.length===0){ alert('Agregá al menos un ítem.'); return; }
