@@ -3731,7 +3731,7 @@ function previsualizarCotizacion(){
   const itemsBackup = [...cotItemsTemp];
   // Limpiar adicionales y re-agregar del estado actual de checkboxes
   cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
   });
   if(document.getElementById('add-ploteo')?.checked){
     const cantPl = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
