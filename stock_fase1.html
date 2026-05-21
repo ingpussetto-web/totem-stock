@@ -822,39 +822,68 @@ async function imprimirEtiquetasUID(btn){
   const nombre = btn.dataset.skuNombre;
   const unidades = await api(`unidades?sku_id=eq.${skuId}&estado=eq.stock&select=uid,variantes(valor)&order=uid.asc`).catch(()=>[]);
   if(!unidades || !unidades.length){ alert('No hay unidades en stock para este SKU.'); return; }
+  const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
   const baseUrl = 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=';
-  const labelsHTML = unidades.map(u => {
-    const variante = u.variantes?.valor || '';
-    return `<div class="lbl">
-      <div class="lbl-tn">Totem Nube</div>
-      <div class="lbl-badge">🏷 UNIDAD</div>
-      <div class="lbl-nombre">${nombre}</div>
-      ${variante ? `<div class="lbl-variante">● ${variante}</div>` : ''}
-      <div class="lbl-uid">${u.uid}</div>
-      <div id="qr-${u.uid.replace(/[^a-zA-Z0-9]/g,'-')}"></div>
-    </div>`;
+
+  // Hojas de 8 etiquetas (2 columnas x 4 filas)
+  const hojas = [];
+  for(let i=0;i<unidades.length;i+=8) hojas.push(unidades.slice(i,i+8));
+
+  const hojasHTML = hojas.map((hoja, hi) => {
+    const etiqHTML = hoja.map((u,idx) => {
+      const variante = u.variantes?.valor || '';
+      const safeId = u.uid.replace(/[^a-z0-9]/gi,'_');
+      const num = idx + 1 + hi*8;
+      return `<div class="label">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div class="label-brand">Totem Nube</div>
+            <div class="label-estado">EN STOCK</div>
+          </div>
+          <div class="label-nombre">${nombre}</div>
+          ${variante ? `<div class="label-variante">Color: ${variante}</div>` : ''}
+        </div>
+        <div class="label-body">
+          <div id="qrlabel-${safeId}"></div>
+          <div style="flex:1;">
+            <div class="label-uid-label">UID</div>
+            <div class="label-uid">${u.uid}</div>
+          </div>
+        </div>
+        <div class="label-footer">
+          <span>Impreso: ${fecha}</span>
+          <span>#${String(num).padStart(4,'0')}</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="label-sheet" style="margin-bottom:8mm;${hi<hojas.length-1?'page-break-after:always;':''}">${etiqHTML}</div>`;
   }).join('');
+
   const qrScripts = unidades.map(u => {
-    const safeId = u.uid.replace(/[^a-zA-Z0-9]/g,'-');
-    return `new QRCode(document.getElementById('qr-${safeId}'),{text:'${baseUrl}${encodeURIComponent(u.uid)}',width:140,height:140,correctLevel:QRCode.CorrectLevel.M});`;
+    const safeId = u.uid.replace(/[^a-z0-9]/gi,'_');
+    return `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${u.uid}'),width:80,height:80,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});`;
   }).join('\n');
-  const win = window.open('','_blank','width=800,height=600');
+
+  const win = window.open('','_blank','width=900,height=700');
   win.document.write(`<!DOCTYPE html><html><head>
-    <title>Etiquetas UID — ${nombre}</title>
+    <title>Etiquetas — ${nombre}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
     <style>
-      body{font-family:sans-serif;background:#fff;margin:0;padding:16px;}
-      .grid{display:flex;flex-wrap:wrap;gap:12px;}
-      .lbl{border:2px solid #4d9fff;border-radius:8px;padding:14px;text-align:center;width:200px;}
-      .lbl-tn{font-size:10px;color:#666;letter-spacing:0.1em;text-transform:uppercase;}
-      .lbl-badge{background:#4d9fff;color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.1em;margin:6px auto;display:inline-block;}
-      .lbl-nombre{font-size:12px;font-weight:700;margin:6px 0 4px;}
-      .lbl-variante{font-size:11px;color:#e67e00;font-family:monospace;margin-bottom:4px;}
-      .lbl-uid{font-size:8px;color:#999;font-family:monospace;margin-bottom:8px;word-break:break-all;}
-      @media print{body{padding:0;}.grid{gap:8px;}}
+      body{font-family:Arial,sans-serif;background:#fff;margin:0;padding:8mm;}
+      .label-sheet{width:200mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;}
+      .label{width:100mm;height:71.75mm;border:0.5pt solid #ccc;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid;}
+      .label-brand{font-size:7pt;font-weight:700;color:#555;letter-spacing:0.05em;text-transform:uppercase;}
+      .label-nombre{font-size:9pt;font-weight:700;color:#111;line-height:1.2;margin:2mm 0 1mm;}
+      .label-variante{font-size:8pt;color:#444;margin-bottom:1mm;}
+      .label-body{display:flex;align-items:center;gap:3mm;flex:1;}
+      .label-uid-label{font-size:5.5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5mm;}
+      .label-uid{font-size:7pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;line-height:1.3;}
+      .label-footer{display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1mm;margin-top:1mm;font-size:5.5pt;color:#888;}
+      .label-estado{font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:1mm 2mm;font-weight:600;}
+      @media print{body{padding:0;margin:0;}}
     </style>
   </head><body>
-    <div class="grid">${labelsHTML}</div>
+    ${hojasHTML}
     <script>${qrScripts}\nsetTimeout(()=>window.print(),1000);<\/script>
   </body></html>`);
   win.document.close();
