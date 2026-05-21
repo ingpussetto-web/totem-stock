@@ -605,6 +605,11 @@ async function loadCatalogo(){
   try {
     categorias = await api('categorias?select=*&order=orden.asc');
     skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc');
+    // Conteo de unidades en stock por SKU (para botón etiquetas UID)
+    const uidConteo = await api('unidades?estado=eq.stock&select=sku_id').catch(()=>[]);
+    const uidCountMap = {};
+    (uidConteo||[]).forEach(u=>{ uidCountMap[u.sku_id] = (uidCountMap[u.sku_id]||0)+1; });
+    skus.forEach(s=>{ s._uidEnStock = uidCountMap[s.id]||0; });
     // Fill category filters
     fillCatFilters();
     renderCatalogo();
@@ -651,7 +656,7 @@ function renderCatalogo(){
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
         <button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>
-        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : `<button class="btn sm" onclick="imprimirEtiquetasUID(${s.id},'${s.nombre.replace(/'/g,"\\'")}')" style="margin-left:4px;border-color:var(--blue);color:var(--blue);">🏷 Etiquetas</button>`}
+        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : `<button class="btn sm" data-sku-id="${s.id}" data-sku-nombre="${s.nombre.replace(/"/g,'&quot;')}" onclick="imprimirEtiquetasUID(this)" ${s._uidEnStock===0 ? 'disabled' : ''} style="margin-left:4px;border-color:var(--blue);color:var(--blue);${s._uidEnStock===0 ? "opacity:0.3;cursor:default;" : ""}">🏷 Etiquetas${s._uidEnStock>0 ? " ("+s._uidEnStock+")" : ""}</button>`}
       </td>
     </tr>`;
   }).join('');
@@ -812,7 +817,9 @@ function renderUnidades(){
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
-async function imprimirEtiquetasUID(skuId, nombre){
+async function imprimirEtiquetasUID(btn){
+  const skuId = btn.dataset.skuId;
+  const nombre = btn.dataset.skuNombre;
   const unidades = await api(`unidades?sku_id=eq.${skuId}&estado=eq.stock&select=uid,variantes(valor)&order=uid.asc`).catch(()=>[]);
   if(!unidades || !unidades.length){ alert('No hay unidades en stock para este SKU.'); return; }
   const baseUrl = 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=';
