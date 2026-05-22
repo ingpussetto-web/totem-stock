@@ -173,11 +173,22 @@ function updateClock(){
 setInterval(updateClock, 1000);
 updateClock();
 
+const tabNames = {
+  'produccion': 'tn_produccion',
+  'recepcion': 'tn_recepcion',
+  'stock_fase1': 'tn_stock',
+  'scan': 'tn_scan',
+  'dashboard_produccion': 'tn_dashboard'
+};
+
 document.querySelectorAll('a.mod-card').forEach(a => {
   a.addEventListener('click', function(e) {
     e.preventDefault();
-    const url = this.href.split('?')[0] + '?v=' + Date.now();
-    window.open(url, '_blank');
+    const basePath = this.href.split('?')[0];
+    const fileName = basePath.split('/').pop().replace('.html','');
+    const tabName = tabNames[fileName] || 'tn_' + fileName;
+    const url = basePath + '?v=' + Date.now();
+    window.open(url, tabName);
   });
 });
 </script>

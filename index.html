@@ -453,12 +453,28 @@ function volverFormQR(){
   document.getElementById('qr-config-container').innerHTML = '';
 }
 
-// Anti-caché: agregar timestamp a todos los links de módulos al hacer click
+// Anti-caché: agregar timestamp y reusar pestaña por módulo
+const tabNames = {
+  'calculador_totem_nube_v16': 'tn_calculador',
+  'ops_ventas': 'tn_ops_ventas',
+  'compras': 'tn_compras',
+  'stock_fase1': 'tn_stock',
+  'recepcion': 'tn_recepcion',
+  'produccion': 'tn_produccion',
+  'inventario_inicial': 'tn_inventario',
+  'noticias': 'tn_noticias',
+  'scan': 'tn_scan',
+  'dashboard_produccion': 'tn_dashboard'
+};
+
 document.querySelectorAll('a.mod-card').forEach(a => {
   a.addEventListener('click', function(e) {
     e.preventDefault();
-    const url = this.href.split('?')[0] + '?v=' + Date.now();
-    window.open(url, '_blank');
+    const basePath = this.href.split('?')[0];
+    const fileName = basePath.split('/').pop().replace('.html','');
+    const tabName = tabNames[fileName] || 'tn_' + fileName;
+    const url = basePath + '?v=' + Date.now();
+    window.open(url, tabName);
   });
 });
 </script>
