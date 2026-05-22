@@ -277,7 +277,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
         <select class="filter" id="oc-estado" onchange="renderOCs()">
           <option value="">Todos los estados</option>
           <option value="borrador">Borrador</option>
-          <option value="aprobada">Aprobada</option>
+          <option value="aprobada" selected>Aprobada</option>
           <option value="recibida_parcial">Recepción parcial</option>
           <option value="color_pendiente">⚠ Color pendiente</option>
           <option value="cerrada">Cerrada</option>
@@ -667,14 +667,7 @@ function showPage(id){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.getElementById('nav-'+id)?.classList.add('active');
-  if(id==='ocs'){
-    const filtroEl = document.getElementById('oc-estado');
-    if(filtroEl && !filtroEl._inicializado){
-      filtroEl.value = 'aprobada';
-      filtroEl._inicializado = true;
-    }
-    loadOCs();
-  }
+  if(id==='ocs') loadOCs();
   if(id==='proveedores') loadProveedores();
   if(id==='config') loadConfig();
   if(id==='desvios') loadDesvios();
