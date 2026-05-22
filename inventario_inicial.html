@@ -446,7 +446,7 @@ function irPaso1(){
   setStep(1);
 }
 
-function irPaso2(){
+async function irPaso2(){
   const skuId = document.getElementById('sel-sku').value;
   if(!skuId) return;
   const sku = skus.find(s=>String(s.id)===skuId);
