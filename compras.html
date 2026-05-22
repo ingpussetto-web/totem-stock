@@ -667,7 +667,14 @@ function showPage(id){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.getElementById('nav-'+id)?.classList.add('active');
-  if(id==='ocs') loadOCs();
+  if(id==='ocs'){
+    const filtroEl = document.getElementById('oc-estado');
+    if(filtroEl && !filtroEl._inicializado){
+      filtroEl.value = 'aprobada';
+      filtroEl._inicializado = true;
+    }
+    loadOCs();
+  }
   if(id==='proveedores') loadProveedores();
   if(id==='config') loadConfig();
   if(id==='desvios') loadDesvios();
@@ -1035,7 +1042,7 @@ async function loadOCs(){
 function renderOCs(){
   const search=document.getElementById('oc-search')?.value.toLowerCase()||'';
   const estadoFil=document.getElementById('oc-estado')?.value||'';
-  let rows=ocs.filter(o=>{
+  let rows=[...ocs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).filter(o=>{
     if(search&&!o.oc_numero?.toLowerCase().includes(search)&&!o.proveedores?.razon_social?.toLowerCase().includes(search)) return false;
     if(estadoFil==='color_pendiente'){
       // Mostrar solo OCs con items A definir pendientes
