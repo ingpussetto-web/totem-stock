@@ -228,6 +228,23 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       <div id="panel2" style="display:none">
         <div class="card">
           <div class="card-title">Cantidad contada en depósito</div>
+          <div id="stock-actual-info" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:8px;">
+            <div style="font-size:9px;color:var(--green);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Stock actual en sistema</div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap;">
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">Unidades registradas</div>
+                <div id="sai-cantidad" style="font-size:20px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace;">—</div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">Último UID</div>
+                <div id="sai-ultimo-uid" style="font-size:12px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace;">—</div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">Próximo a generar</div>
+                <div id="sai-proximo" style="font-size:12px;font-weight:600;color:var(--amber);font-family:'DM Mono',monospace;">—</div>
+              </div>
+            </div>
+          </div>
           <div id="seleccion-resumen" style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);"></div>
           <div class="form-row">
             <div class="form-group">
@@ -444,6 +461,20 @@ function irPaso2(){
   // Generar prefijo automático
   const prefijo = generarPrefijo(sku.codigo, varObj?.valor);
   document.getElementById('inp-prefijo').value = prefijo;
+
+  // Mostrar stock actual en sistema
+  try{
+    const existentes = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc`);
+    const cantidad = existentes?.length || 0;
+    const ultimoUid = existentes?.[0]?.uid || '';
+    const match = ultimoUid.match(/-(\d+)$/);
+    const lastNum = match ? parseInt(match[1]) : 0;
+    const proximo = prefijo + '-' + String(lastNum+1).padStart(4,'0');
+    document.getElementById('sai-cantidad').textContent = cantidad;
+    document.getElementById('sai-ultimo-uid').textContent = cantidad ? ultimoUid : 'Ninguno aún';
+    document.getElementById('sai-proximo').textContent = proximo;
+    document.getElementById('stock-actual-info').style.display = 'block';
+  }catch(e){ document.getElementById('stock-actual-info').style.display = 'none'; }
   
   document.getElementById('inp-cantidad').value = 1;
   generarUidPreview();
