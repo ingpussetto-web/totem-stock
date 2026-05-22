@@ -151,31 +151,38 @@
 
   // ─── PASO 2: asignar posiciones ────────────────────────────────────────────
   function renderPaso2(){
-    let celdasHTML = '';
-    for(let p=0;p<8;p++){
-      const etiqIdx = Object.keys(_grilla).map(Number).find(k=>_grilla[k]===p);
-      // etiqIdx es el idx de etiqueta asignado a posicion p
-      const asignada = Object.entries(_grilla).find(([idx,pos])=>pos===p);
-      if(asignada){
-        const et = _etiquetas[parseInt(asignada[0])];
-        celdasHTML += `<div class="etiq-celda asignada" onclick="tnClickCelda(${p})" title="Click para quitar">
-          <span class="etiq-celda-num">${p+1}</span>
-          <div class="etiq-celda-content">
-            <div class="etiq-celda-cnombre">${et.nombre.length>20?et.nombre.substring(0,18)+'…':et.nombre}</div>
-            ${et.variante?`<div class="etiq-celda-cvar">● ${et.variante}</div>`:''}
-            <div class="etiq-celda-cremove">✕ quitar</div>
-          </div>
-        </div>`;
-      } else {
-        celdasHTML += `<div class="etiq-celda" onclick="tnClickCelda(${p})">
-          <span class="etiq-celda-num">${p+1}</span>
-          <span class="etiq-celda-empty">+ asignar</span>
-        </div>`;
+    const total = _seleccionadas.size;
+    const totalHojas = Math.max(1, Math.ceil(total / 8));
+    let hojasHTML = '';
+    for(let h=0;h<totalHojas;h++){
+      let celdasHTML = '';
+      for(let p=0;p<8;p++){
+        const posGlobal = h*8 + p;
+        const asignada = Object.entries(_grilla).find(([idx,pos])=>pos===posGlobal);
+        if(asignada){
+          const et = _etiquetas[parseInt(asignada[0])];
+          celdasHTML += `<div class="etiq-celda asignada" onclick="tnClickCelda(${posGlobal})" title="Click para quitar">
+            <span class="etiq-celda-num">${posGlobal+1}</span>
+            <div class="etiq-celda-content">
+              <div class="etiq-celda-cnombre">${et.nombre.length>20?et.nombre.substring(0,18)+'…':et.nombre}</div>
+              ${et.variante?`<div class="etiq-celda-cvar">● ${et.variante}</div>`:''}
+              <div class="etiq-celda-cremove">✕ quitar</div>
+            </div>
+          </div>`;
+        } else {
+          celdasHTML += `<div class="etiq-celda" onclick="tnClickCelda(${posGlobal})">
+            <span class="etiq-celda-num">${posGlobal+1}</span>
+            <span class="etiq-celda-empty">+ asignar</span>
+          </div>`;
+        }
       }
+      hojasHTML += `<div style="margin-bottom:${h<totalHojas-1?'12px':'0'};">
+        ${totalHojas>1?`<div style="font-size:9px;color:#3a4055;font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:6px;">Hoja ${h+1} de ${totalHojas}</div>`:''}
+        <div class="etiq-grilla">${celdasHTML}</div>
+      </div>`;
     }
 
     const asignadas = Object.keys(_grilla).length;
-    const total = _seleccionadas.size;
     const sinAsignar = total - asignadas;
 
     return `
