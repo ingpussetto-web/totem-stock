@@ -316,36 +316,41 @@
     const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
     const baseUrl = 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=';
 
-    let celdasHTML = '';
+    const maxHoja = Math.max(...etiquetas.map(e=>e._hoja||0));
+    let sheetsHTML = '';
     let qrScripts = '';
 
-    for(let p=0;p<8;p++){
-      const et = etiquetas.find(e=>e._pos===p);
-      if(et){
-        const safeId = et.uid.replace(/[^a-z0-9]/gi,'_');
-        celdasHTML += `<div class="label">
-          <div class="label-header">
-            <div class="label-brand">Totem Nube</div>
-            <div class="label-estado">EN STOCK</div>
-          </div>
-          <div class="label-nombre">${et.nombre}</div>
-          ${et.variante?`<div class="label-variante">● ${et.variante}</div>`:''}
-          <div class="label-body">
-            <div id="qrlabel-${safeId}"></div>
-            <div class="label-uid-wrap">
-              <div class="label-uid-label">UID</div>
-              <div class="label-uid">${et.uid}</div>
+    for(let h=0;h<=maxHoja;h++){
+      let celdasHTML = '';
+      for(let p=0;p<8;p++){
+        const et = etiquetas.find(e=>(e._hoja||0)===h && e._pos===p);
+        if(et){
+          const safeId = et.uid.replace(/[^a-z0-9]/gi,'_');
+          celdasHTML += `<div class="label">
+            <div class="label-header">
+              <div class="label-brand">Totem Nube</div>
+              <div class="label-estado">EN STOCK</div>
             </div>
-          </div>
-          <div class="label-footer">
-            <span>Impreso: ${fecha}</span>
-            <span>#${String(et.num||p+1).padStart(4,'0')}</span>
-          </div>
-        </div>`;
-        qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:72,height:72,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
-      } else {
-        celdasHTML += `<div class="label-vacia"></div>`;
+            <div class="label-nombre">${et.nombre}</div>
+            ${et.variante?`<div class="label-variante">● ${et.variante}</div>`:''}
+            <div class="label-body">
+              <div id="qrlabel-${safeId}"></div>
+              <div class="label-uid-wrap">
+                <div class="label-uid-label">UID</div>
+                <div class="label-uid">${et.uid}</div>
+              </div>
+            </div>
+            <div class="label-footer">
+              <span>Impreso: ${fecha}</span>
+              <span>#${String(et.num||p+1).padStart(4,'0')}</span>
+            </div>
+          </div>`;
+          qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:72,height:72,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
+        } else {
+          celdasHTML += `<div class="label-vacia"></div>`;
+        }
       }
+      sheetsHTML += `<div class="label-sheet" style="${h<maxHoja?'page-break-after:always;':''}">${celdasHTML}</div>`;
     }
 
     const win = window.open('','_blank','width=900,height=700');
@@ -370,7 +375,7 @@
         @media print{body{padding:0;margin:0;}@page{size:A4;margin:0;}}
       </style>
     </head><body>
-      <div class="label-sheet">${celdasHTML}</div>
+      ${sheetsHTML}
       <script>${qrScripts}setTimeout(()=>window.print(),1000);<\/script>
     </body></html>`);
     win.document.close();
