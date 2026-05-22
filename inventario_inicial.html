@@ -575,6 +575,11 @@ async function registrarYEtiquetas(){
     
     // Insertar en Supabase
     await api('unidades', 'POST', unidades);
+
+    // Marcar alertas como leídas para este SKU
+    try{
+      await api(`alertas_gerencia?sku_id=eq.${skuId}&leida=eq.false&tipo=in.(faltante_generacion_op,desvio_produccion)`, 'PATCH', {leida: true}).catch(()=>{});
+    }catch(e){ console.warn('Error marcando alertas:', e); }
     
     // Mostrar resultado
     document.getElementById('resultado-registro').innerHTML = `

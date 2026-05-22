@@ -699,6 +699,19 @@ async function confirmarRecepcion(){
       }
     }
 
+    // Marcar alertas como leídas para los SKUs ingresados
+    try{
+      const skusIngresados = recepcionItems
+        .filter(ri => ri.cantidad_recibida > 0 && ri.sku_id)
+        .map(ri => ri.sku_id);
+      if(skusIngresados.length){
+        // Marcar alertas faltantes de estos SKUs como leídas
+        for(const skuId of [...new Set(skusIngresados)]){
+          await api(`alertas_gerencia?sku_id=eq.${skuId}&leida=eq.false&tipo=in.(faltante_generacion_op,desvio_produccion)`, 'PATCH', {leida: true}).catch(()=>{});
+        }
+      }
+    }catch(e){ console.warn('Error marcando alertas:', e); }
+
     // Mostrar resultado
     mostrarResultado(recNum, esParcial, hayDesvios);
 
