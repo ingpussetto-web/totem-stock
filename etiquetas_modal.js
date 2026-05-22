@@ -179,10 +179,11 @@
     const sinAsignar = total - asignadas;
 
     return `
-      <div class="etiq-paso">Paso <span>2 de 2</span> — Asigná cada etiqueta a una posición</div>
-      <div class="etiq-grilla-wrap">
-        <div class="etiq-grilla">${celdasHTML}</div>
+      <div class="etiq-paso" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Paso <span style="color:#00e5a0;">2 de 2</span> — Asigná cada etiqueta a una posición</span>
+        <button onclick="tnAsignarTodas()" style="font-size:11px;padding:4px 12px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);color:#00e5a0;border-radius:6px;cursor:pointer;font-family:'DM Mono',monospace;">✓ Asignar todas</button>
       </div>
+      <div class="etiq-grilla-wrap">${hojasHTML}</div>
       <div class="etiq-aviso">${sinAsignar>0?`⚠ ${sinAsignar} etiqueta${sinAsignar!==1?'s':''} sin posición`:''}</div>
       <div class="etiq-actions">
         <button class="etiq-btn etiq-btn-back" onclick="tnVolverPaso1()">← Volver</button>
@@ -217,6 +218,16 @@
   };
 
   // ─── HANDLERS PASO 2 ───────────────────────────────────────────────────────
+  window.tnAsignarTodas = function(){
+    _grilla = {};
+    const selArray = [..._seleccionadas];
+    const totalHojas = Math.ceil(selArray.length / 8);
+    selArray.forEach((etiqIdx, i) => {
+      _grilla[etiqIdx] = i; // posición global (hoja * 8 + pos)
+    });
+    renderPaso();
+  };
+
   window.tnClickCelda = function(pos){
     cerrarPicker();
 
@@ -277,11 +288,10 @@
 
   // ─── CONFIRMAR ─────────────────────────────────────────────────────────────
   window.tnConfirmarImpresion = function(){
-    // Construir lista de etiquetas con su posición
     const etiquetasConPos = Object.entries(_grilla).map(([idx,pos])=>({
       ..._etiquetas[parseInt(idx)],
-      _pos: pos,
-      _hoja: 0
+      _pos: pos % 8,
+      _hoja: Math.floor(pos / 8)
     }));
     cerrarModalEtiquetas();
     if(_callback) _callback(etiquetasConPos);
