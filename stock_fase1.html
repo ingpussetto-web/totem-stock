@@ -273,8 +273,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         </select>
         <select class="filter" id="stock-alerta" onchange="renderStock()">
           <option value="">Todos los estados</option>
-          <option value="ok">OK</option>
-          <option value="bajo">Stock bajo</option>
+          <option value="con_stock">Con stock</option>
           <option value="sin_stock">Sin stock</option>
         </select>
         <div class="spacer"></div>
@@ -726,7 +725,10 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
       if(d.categoria !== catNombre) return false;
     }
     if(varianteFil && d.variante!==varianteFil) return false;
-    if(alertFil && d.alerta!==alertFil) return false;
+    if(alertFil){
+      if(alertFil==='con_stock' && d.disponible<=0) return false;
+      if(alertFil==='sin_stock' && d.disponible>0) return false;
+    }
     return true;
   });
 
