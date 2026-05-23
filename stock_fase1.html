@@ -301,6 +301,14 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           </table>
         </div>
       </div>
+
+      <!-- PENDIENTES DE INGRESO -->
+      <div style="margin-top:20px;">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;margin-bottom:10px;">Pendientes de ingreso</div>
+        <div id="pendientes-ingreso-wrap">
+          <div class="loading"><div class="spinner"></div>Cargando pendientes...</div>
+        </div>
+      </div>
     </div>
 
     <!-- UNIDADES FÍSICAS -->
@@ -685,7 +693,9 @@ async function loadStock(){
     });
 
     uidRowsData = uidRows;
+    uidRowsData = uidRows;
     renderStock(stockData, uidRows);
+    loadPendientesIngreso();
   } catch(e){ console.error(e); renderStock([]); }
 }
 
@@ -760,6 +770,69 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
       : '';
     return mainRow + detalleRow;
   }).join('');
+}
+
+// ─── PENDIENTES DE INGRESO ──────────────────────────────────────────────────
+async function loadPendientesIngreso(){
+  const wrap = document.getElementById('pendientes-ingreso-wrap');
+  if(!wrap) return;
+  try{
+    // 1. OC items con saldo pendiente de recepción (estado aprobada o recibida_parcial)
+    const ocs = await api('oc_items?select=id,nombre,color,cantidad,cantidad_recibida,ordenes_compra(id,oc_numero,estado,proveedores(razon_social))&orden_compra_estado=not.eq.cerrada&orden_compra_estado=not.eq.cancelada').catch(()=>[]);
+
+    // Traer OCs aprobadas y parciales con items pendientes
+    const ocsActivas = await api("ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,proveedores(razon_social)").catch(()=>[]);
+    if(!ocsActivas?.length){
+      wrap.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:12px;">No hay pendientes de ingreso.</div>';
+      return;
+    }
+
+    const ocIds = ocsActivas.map(o=>o.id).join(',');
+    const items = await api(`oc_items?oc_id=in.(${ocIds})&select=id,nombre,color,cantidad,cantidad_recibida,oc_id`).catch(()=>[]);
+
+    // Filtrar items con saldo
+    const pendientes = items.filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
+    if(!pendientes.length){
+      wrap.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:12px;">No hay pendientes de ingreso.</div>';
+      return;
+    }
+
+    // Agrupar por OC
+    const porOC = {};
+    pendientes.forEach(i=>{
+      if(!porOC[i.oc_id]) porOC[i.oc_id] = {oc: ocsActivas.find(o=>o.id===i.oc_id), items:[]};
+      porOC[i.oc_id].items.push(i);
+    });
+
+    const html = Object.values(porOC).map(({oc, items})=>{
+      const tieneADefinir = items.some(i=>i.color==='A definir');
+      const itemsHtml = items.map(i=>{
+        const saldo = i.cantidad-(i.cantidad_recibida||0);
+        const esADefinir = i.color==='A definir';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+          <span style="flex:1;color:var(--text);">${i.nombre}</span>
+          ${i.color&&i.color!=='A definir'?`<span style="font-size:10px;color:#ffb340;font-family:'DM Mono',monospace;">● ${i.color}</span>`:''}
+          ${esADefinir?`<span style="font-size:10px;color:var(--red);font-family:'DM Mono',monospace;">⚠ Color a definir</span>`:''}
+          <span style="font-size:11px;color:var(--text3);">×${saldo} pendiente${saldo!==1?'s':''}</span>
+        </div>`;
+      }).join('');
+
+      return `<div style="background:var(--surface);border:1px solid ${tieneADefinir?'rgba(255,69,58,0.3)':'var(--border)'};border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);">${oc?.proveedores?.razon_social||'—'}</div>
+            <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${oc?.oc_numero||'—'} · ${oc?.estado==='aprobada'?'Aprobada':'Recepción parcial'}</div>
+          </div>
+          ${tieneADefinir?`<span style="font-size:10px;background:rgba(255,69,58,0.1);border:1px solid rgba(255,69,58,0.3);color:var(--red);border-radius:4px;padding:2px 8px;font-family:'DM Mono',monospace;">⚠ Color pendiente</span>`:''}
+        </div>
+        ${itemsHtml}
+      </div>`;
+    }).join('');
+
+    wrap.innerHTML = html;
+  }catch(e){
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--red);padding:12px;">Error cargando pendientes: ${e.message}</div>`;
+  }
 }
 
 // ─── STOCK DETALLE POR VARIANTE ────────────────────────────────────────────
