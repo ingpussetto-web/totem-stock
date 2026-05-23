@@ -507,6 +507,7 @@ let SUPA_KEY = localStorage.getItem('supa_key') || '';
 let categorias = [];
 let skus = [];
 let stockData = [];
+let uidRowsData = [];
 let unidades = [];
 let variantesTemp = [];
 let editingSkuId = null;
@@ -684,6 +685,7 @@ async function loadStock(){
       return {codigo:s.codigo,nombre:s.nombre,variante:null,categoria:s.categorias?.nombre||'—',cantidad:total,cantidad_reservada:reservado,disponible,stock_minimo:s.stock_minimo,alerta,tracking:'uid',sku_id:s.id};
     });
 
+    uidRowsData = uidRows;
     renderStock(stockData, uidRows);
   } catch(e){ console.error(e); renderStock([]); }
 }
@@ -710,7 +712,7 @@ function actualizarFiltroVariante(){
   varSel.style.display='block';
 }
 
-function renderStock(qtyData=stockData, uidData=[]){
+function renderStock(qtyData=stockData, uidData=uidRowsData){
   const search = document.getElementById('stock-search')?.value.toLowerCase()||'';
   const catFil = document.getElementById('stock-cat')?.value||'';
   const varianteFil = document.getElementById('stock-variante')?.value||'';
