@@ -841,6 +841,58 @@ async function loadPendientesIngreso(){
   }
 }
 
+// ─── OPs RESERVADAS ─────────────────────────────────────────────────────────
+async function mostrarOPsReservadas(skuId, variante, el){
+  // Cerrar popup previo si existe
+  document.getElementById('popup-reservadas')?.remove();
+
+  // Buscar unidades reservadas de ese SKU y variante
+  const unidades = await api(`unidades?sku_id=eq.${skuId}&estado=eq.reservado&select=uid,variantes(valor)&order=uid.asc`).catch(()=>[]);
+  const filtradas = variante && variante !== 'Sin variante'
+    ? unidades.filter(u=>u.variantes?.valor===variante)
+    : unidades;
+
+  if(!filtradas.length){
+    return;
+  }
+
+  // Buscar OPs asignadas
+  const uids = filtradas.map(u=>u.uid).join(',');
+  const bomItems = await api(`op_bom_items?uid_asignado=in.(${uids.split(',').map(u=>`"${u}"`).join(',')})&select=uid_asignado,ordenes_produccion(op_numero,cliente,estado)`).catch(()=>[]);
+
+  const opsMap = {};
+  (bomItems||[]).forEach(b=>{
+    if(b.uid_asignado && b.ordenes_produccion){
+      const op = b.ordenes_produccion;
+      if(!opsMap[op.op_numero]) opsMap[op.op_numero] = {cliente:op.cliente, estado:op.estado, uids:[]};
+      opsMap[op.op_numero].uids.push(b.uid_asignado);
+    }
+  });
+
+  const opsHTML = Object.entries(opsMap).map(([opNum, op])=>`
+    <div style="padding:6px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:12px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace;">${opNum}</div>
+      <div style="font-size:11px;color:var(--text2);">${op.cliente}</div>
+      <div style="font-size:10px;color:var(--text3);">${op.uids.length} unidad${op.uids.length!==1?'es':''} reservada${op.uids.length!==1?'s':''}</div>
+    </div>`).join('') || '<div style="font-size:11px;color:var(--text3);">Sin OP asignada</div>';
+
+  const popup = document.createElement('div');
+  popup.id = 'popup-reservadas';
+  popup.style.cssText = 'position:fixed;background:#0d1117;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:14px;z-index:9500;min-width:220px;max-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:"DM Sans",sans-serif;';
+  popup.innerHTML = `<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:10px;">● ${variante} — Reservado en OPs</div>${opsHTML}`;
+
+  // Posicionar cerca del elemento clickeado
+  const rect = el.getBoundingClientRect();
+  popup.style.top = (rect.bottom + 6) + 'px';
+  popup.style.left = rect.left + 'px';
+  document.body.appendChild(popup);
+
+  // Cerrar al click fuera
+  setTimeout(()=>{
+    document.addEventListener('click', function cerrar(){ popup.remove(); document.removeEventListener('click', cerrar); }, {once:true});
+  }, 50);
+}
+
 // ─── STOCK DETALLE POR VARIANTE ────────────────────────────────────────────
 async function toggleStockDetalle(rowId, skuId){
   const row = document.getElementById(rowId);
@@ -880,7 +932,7 @@ async function toggleStockDetalle(rowId, skuId){
       <div style="display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">
         <span style="font-size:11px;color:#ffb340;font-family:'DM Mono',monospace;min-width:100px;">● ${variante}</span>
         <span style="font-size:12px;font-weight:600;color:var(--green);">${counts.stock} disponible${counts.stock!==1?'s':''}</span>
-        ${counts.reservado?`<span style="font-size:11px;color:var(--text3);">${counts.reservado} reservado${counts.reservado!==1?'s':''}</span>`:''}
+        ${counts.reservado?`<span style="font-size:11px;color:var(--blue);cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();mostrarOPsReservadas(${skuId},'${variante}',this)">${counts.reservado} reservado${counts.reservado!==1?'s':''}</span>`:''}
       </div>`).join('');
 
     content.innerHTML = html || '<span style="color:var(--text3);">Sin variantes</span>';
