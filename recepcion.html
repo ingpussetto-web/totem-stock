@@ -1096,7 +1096,7 @@ async function loadHistorial(){
     // Cargar items de cada recepcion
     for(const r of recs){
       try{
-        const items = await api('recepcion_items?recepcion_id=eq.'+r.id+'&select=nombre,cantidad_esperada,cantidad_recibida,color_esperado,color_recibido,tiene_desvio');
+        const items = await api('recepcion_items?recepcion_id=eq.'+r.id+'&select=id,cantidad_esperada,cantidad_recibida,color_esperado,color_recibido,tiene_desvio,oc_items(nombre,skus(nombre))');
         r._items = items||[];
       }catch(e){ r._items=[]; }
     }
@@ -1111,7 +1111,8 @@ async function loadHistorial(){
         let desvioTxt = '';
         if(desvioColor) desvioTxt += ' <span style="color:var(--amber);font-size:10px;">⚠ color: '+i.color_esperado+' → '+i.color_recibido+'</span>';
         if(desvioCant) desvioTxt += ' <span style="color:var(--amber);font-size:10px;">⚠ cantidad: '+i.cantidad_recibida+'/'+i.cantidad_esperada+'</span>';
-        itemsHtml += '<div style="font-size:11px;padding:2px 0;">• '+i.nombre
+        const iNombre = i.oc_items?.skus?.nombre || i.oc_items?.nombre || '—';
+        itemsHtml += '<div style="font-size:11px;padding:2px 0;">• '+iNombre
           +(i.color_recibido?' ('+i.color_recibido+')':'')
           +' x'+i.cantidad_recibida
           +desvioTxt+'</div>';
