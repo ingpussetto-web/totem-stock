@@ -615,7 +615,7 @@ function renderBotonesAccion(){
     // Asignando insumos — mostrar Reportar faltante + Iniciar Producción
     const btnIniciar = completo
       ? '<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">&#9654; Iniciar Producción</button>'
-      : '<button class="btn" onclick="iniciarOPConPendientes()" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.12);color:var(--text3);border-color:var(--border2);">&#9654; Iniciar Producción</button>';
+      : '<button class="btn" disabled title="Completá todos los insumos antes de iniciar" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.06);color:var(--text3);border-color:var(--border);cursor:not-allowed;opacity:0.4;">&#9654; Iniciar Producción</button>';
     el.innerHTML = '<button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>' + btnIniciar;
   }
 }
