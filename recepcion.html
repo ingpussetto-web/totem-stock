@@ -1000,9 +1000,13 @@ async function verEtiquetasHistorial(recepcionId){
       const unidades = await api('unidades?sku_id=eq.'+ocItem.sku_id+'&select=uid,variantes(valor),created_at&order=uid.desc&limit='+(ri.cantidad_recibida*3));
       const unidadesFiltradas = (unidades||[]).slice(0, ri.cantidad_recibida);
       if(!unidadesFiltradas.length) continue;
+      const fechaRec = unidadesFiltradas[0]?.created_at
+        ? new Date(unidadesFiltradas[0].created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+        : '—';
       grupos.push({
         nombre: sku.nombre||ocItem.nombre||'—',
         variante: ri.color_recibido||'',
+        fecha: fechaRec,
         cantidad: unidadesFiltradas.length,
         unidades: unidadesFiltradas.map(u=>({
           uid: u.uid,
@@ -1034,6 +1038,7 @@ function mostrarSeleccionInsumos(grupos){
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:600;color:#e8eaf0;">${g.nombre}</div>
         ${g.variante?`<div style="font-size:11px;color:#ffb340;margin-top:2px;">● ${g.variante}</div>`:''}
+        <div style="font-size:10px;color:#3a4055;font-family:'DM Mono',monospace;margin-top:2px;">📅 ${g.fecha}</div>
       </div>
       <div style="font-size:20px;font-weight:700;color:#00e5a0;font-family:'DM Mono',monospace;">${g.cantidad}</div>
       <div style="font-size:10px;color:#3a4055;font-family:'DM Mono',monospace;">unidades</div>
