@@ -699,7 +699,7 @@ function actualizarFiltroVariante(){
   }
   // Obtener variantes disponibles para esa categoría
   const variantes = [...new Set(
-    [...(stockData||[])].filter(d=>d.categoria_id==catFil && d.variante && d.variante!=='—').map(d=>d.variante)
+    [...(stockData||[])].filter(d=>{const cn=categorias.find(c=>String(c.id)===catFil)?.nombre||'';return d.categoria===cn && d.variante && d.variante!=='—';}).map(d=>d.variante)
   )].sort();
   if(!variantes.length){
     varSel.style.display='none';
@@ -718,7 +718,11 @@ function renderStock(qtyData=stockData, uidData=[]){
 
   let rows = [...(qtyData||[]), ...(uidData||[])].filter(d=>{
     if(search && !d.codigo?.toLowerCase().includes(search) && !d.nombre?.toLowerCase().includes(search)) return false;
-    if(catFil && String(d.categoria_id)!==catFil) return false;
+    if(catFil){
+      // stock_disponible tiene 'categoria' (nombre), no categoria_id
+      const catNombre = categorias.find(c=>String(c.id)===catFil)?.nombre||'';
+      if(d.categoria !== catNombre) return false;
+    }
     if(varianteFil && d.variante!==varianteFil) return false;
     if(alertFil && d.alerta!==alertFil) return false;
     return true;
