@@ -224,11 +224,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       </div>
       <div class="toolbar">
         <input class="search-input" type="text" placeholder="Buscar SKU o nombre..." id="cat-search" oninput="renderCatalogo()">
-        <select class="filter" id="cat-cat" onchange="onCatChange()">
+        <select class="filter" id="cat-cat" onchange="renderCatalogo()">
           <option value="">Todas las categorías</option>
-        </select>
-        <select class="filter" id="cat-var" onchange="renderCatalogo()" style="display:none;">
-          <option value="">Todas las variantes</option>
         </select>
         <select class="filter" id="cat-track" onchange="renderCatalogo()">
           <option value="">Todos los tipos</option>
@@ -633,43 +630,14 @@ function fillCatFilters(){
   fillUidSkuSelect();
 }
 
-function onCatChange(){
-  const catFil = document.getElementById('cat-cat')?.value||'';
-  const varSelect = document.getElementById('cat-var');
-  if(varSelect){
-    if(catFil){
-      // Obtener variantes únicas de SKUs de esa categoría
-      const variantesUnicas = [...new Set(
-        skus.filter(s=>String(s.categoria_id)===catFil && s.activo)
-          .flatMap(s=>(s.variantes||[]).map(v=>v.valor))
-          .filter(Boolean)
-      )].sort();
-      if(variantesUnicas.length){
-        varSelect.innerHTML = '<option value="">Todas las variantes</option>'
-          + variantesUnicas.map(v=>`<option value="${v}">${v}</option>`).join('');
-        varSelect.style.display = '';
-      } else {
-        varSelect.style.display = 'none';
-        varSelect.value = '';
-      }
-    } else {
-      varSelect.style.display = 'none';
-      varSelect.value = '';
-    }
-  }
-  renderCatalogo();
-}
-
 function renderCatalogo(){
   const search = document.getElementById('cat-search')?.value.toLowerCase()||'';
   const catFil = document.getElementById('cat-cat')?.value||'';
   const trackFil = document.getElementById('cat-track')?.value||'';
-  const varFil = document.getElementById('cat-var')?.value||'';
   let rows = skus.filter(s=>{
     if(search && !s.codigo.toLowerCase().includes(search) && !s.nombre.toLowerCase().includes(search)) return false;
     if(catFil && String(s.categoria_id)!==catFil) return false;
     if(trackFil && s.tracking!==trackFil) return false;
-    if(varFil && !(s.variantes||[]).some(v=>v.valor===varFil)) return false;
     return s.activo;
   });
   const tbody = document.getElementById('cat-tbody');
