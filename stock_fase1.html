@@ -735,9 +735,11 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">◻</div>No hay datos de stock</div></td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(d=>`<tr>
+  tbody.innerHTML = rows.map(d=>{
+    const rowId = 'stock-det-'+d.codigo.replace(/[^a-z0-9]/gi,'_');
+    const mainRow = `<tr style="cursor:${d.tracking==='uid'?'pointer':'default'}" ${d.tracking==='uid'?`onclick="toggleStockDetalle('${rowId}',${d.sku_id})"`:''}>
     <td class="td-mono" style="font-size:11.5px">${d.codigo}</td>
-    <td class="td-main">${d.nombre}</td>
+    <td class="td-main">${d.nombre} ${d.tracking==='uid'?'<span style="font-size:10px;color:var(--text3);">▼</span>':''}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${d.variante||'—'}</td>
     <td style="font-size:11px;color:var(--text3)">${d.categoria||'—'}</td>
     <td class="td-num" style="color:${d.disponible<=0?'var(--red)':d.disponible<=d.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${d.disponible}</td>
@@ -746,11 +748,64 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     <td>${badgeAlerta(d.alerta)}</td>
     <td class="td-actions">
       ${d.tracking==='uid'
-        ? `<button class="btn sm" onclick="showPage('unidades')">Ver UIDs</button>`
+        ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
         : `<button class="btn sm" onclick="openAdj(${d.id},'${d.codigo} ${d.variante||''}',${d.cantidad})">Ajustar</button>`
       }
     </td>
-  </tr>`).join('');
+  </tr>`;
+    const detalleRow = d.tracking==='uid'
+      ? `<tr id="${rowId}" style="display:none;"><td colspan="9" style="padding:0 16px 12px;background:var(--surface2);"><div id="${rowId}-content" style="font-size:12px;color:var(--text2);padding:8px 0;">Cargando variantes...</div></td></tr>`
+      : '';
+    return mainRow + detalleRow;
+  }).join('');
+}
+
+// ─── STOCK DETALLE POR VARIANTE ────────────────────────────────────────────
+async function toggleStockDetalle(rowId, skuId){
+  const row = document.getElementById(rowId);
+  if(!row) return;
+  const visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'table-row';
+  if(visible) return;
+
+  const content = document.getElementById(rowId+'-content');
+  if(!content) return;
+
+  try{
+    // Traer unidades en stock agrupadas por variante
+    const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variantes(valor)&order=variantes(valor).asc`);
+    const enStock = (unidades||[]).filter(u=>u.estado==='stock');
+    const reservadas = (unidades||[]).filter(u=>u.estado==='reservado');
+
+    if(!enStock.length && !reservadas.length){
+      content.innerHTML = '<span style="color:var(--text3);">Sin unidades registradas</span>';
+      return;
+    }
+
+    // Agrupar por variante
+    const grupos = {};
+    enStock.forEach(u=>{
+      const v = u.variantes?.valor||'Sin variante';
+      if(!grupos[v]) grupos[v] = {stock:0, reservado:0};
+      grupos[v].stock++;
+    });
+    reservadas.forEach(u=>{
+      const v = u.variantes?.valor||'Sin variante';
+      if(!grupos[v]) grupos[v] = {stock:0, reservado:0};
+      grupos[v].reservado++;
+    });
+
+    const html = Object.entries(grupos).map(([variante, counts])=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:11px;color:#ffb340;font-family:'DM Mono',monospace;min-width:100px;">● ${variante}</span>
+        <span style="font-size:12px;font-weight:600;color:var(--green);">${counts.stock} disponible${counts.stock!==1?'s':''}</span>
+        ${counts.reservado?`<span style="font-size:11px;color:var(--text3);">${counts.reservado} reservado${counts.reservado!==1?'s':''}</span>`:''}
+      </div>`).join('');
+
+    content.innerHTML = html || '<span style="color:var(--text3);">Sin variantes</span>';
+  }catch(e){
+    content.innerHTML = '<span style="color:var(--red);">Error cargando variantes</span>';
+  }
 }
 
 // ─── UNIDADES ───────────────────────────────────────────────────────────────
