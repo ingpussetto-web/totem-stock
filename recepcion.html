@@ -1113,13 +1113,11 @@ async function loadHistorial(){
         if(desvioCant) desvioTxt += ' <span style="color:var(--amber);font-size:10px;">⚠ cantidad: '+i.cantidad_recibida+'/'+i.cantidad_esperada+'</span>';
         const iNombre = i.oc_items?.skus?.nombre || i.oc_items?.nombre || '—';
         const iVariante = i.color_recibido ? ' <span style="color:#ffb340;font-size:10px;">● '+i.color_recibido+'</span>' : '';
-        const iCantDesvio = i.cantidad_recibida < i.cantidad_esperada
-          ? ' <span style="color:var(--amber);font-size:10px;">⚠ '+i.cantidad_recibida+'/'+i.cantidad_esperada+'</span>' : '';
-        itemsHtml += '<div style="font-size:12px;padding:3px 0;">• '+iNombre+iVariante
-          +' <span style="color:var(--text3);">×'+i.cantidad_recibida+'</span>'+iCantDesvio
-          +''
-          +' x'+i.cantidad_recibida
-          +desvioTxt+'</div>';
+        const iEsCompleto = i.cantidad_recibida >= i.cantidad_esperada;
+        const iCantTxt = iEsCompleto
+          ? ' <span style="color:var(--green);font-size:10px;">×'+i.cantidad_recibida+' ✓</span>'
+          : ' <span style="color:var(--amber);font-size:10px;">×'+i.cantidad_recibida+' de '+i.cantidad_esperada+' ⚠ parcial</span>';
+        itemsHtml += '<div style="font-size:12px;padding:3px 0;">• '+iNombre+iVariante+iCantTxt+'</div>';
       });
       const totalRecibido = r._items.reduce((s,i)=>s+(i.cantidad_recibida||0),0);
       const ocEstado = r.ordenes_compra?.estado||'';
