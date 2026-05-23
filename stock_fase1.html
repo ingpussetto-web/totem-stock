@@ -180,6 +180,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <span class="icon">◻</span> Stock actual
       </div>
       <div class="nav-item" onclick="showPage('unidades')">
+      <div class="nav-item" id="nav-pendientes" onclick="showPage('pendientes')">
+        <span class="icon">⏳</span> Pendientes ingreso
+      </div>
         <span class="icon">◈</span> Unidades físicas
       </div>
       <div class="nav-section">Sistema</div>
@@ -302,12 +305,17 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         </div>
       </div>
 
-      <!-- PENDIENTES DE INGRESO -->
-      <div style="margin-top:20px;">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;margin-bottom:10px;">Pendientes de ingreso</div>
-        <div id="pendientes-ingreso-wrap">
-          <div class="loading"><div class="spinner"></div>Cargando pendientes...</div>
-        </div>
+
+    </div>
+
+    <!-- PENDIENTES DE INGRESO -->
+    <div class="page" id="page-pendientes">
+      <div class="page-header">
+        <div class="page-title">Pendientes de ingreso</div>
+        <div class="page-sub">OCs aprobadas con saldo pendiente y gabinetes con color a definir</div>
+      </div>
+      <div id="pendientes-ingreso-wrap">
+        <div class="loading"><div class="spinner"></div>Cargando...</div>
       </div>
     </div>
 
@@ -552,6 +560,7 @@ function showPage(id){
   if(id==='dashboard') loadDashboard();
   if(id==='catalogo') loadCatalogo();
   if(id==='stock') loadStock();
+  if(id==='pendientes') loadPendientesIngreso();
   if(id==='unidades') loadUnidades();
   if(id==='config') loadConfig();
 }
@@ -777,9 +786,6 @@ async function loadPendientesIngreso(){
   const wrap = document.getElementById('pendientes-ingreso-wrap');
   if(!wrap) return;
   try{
-    // 1. OC items con saldo pendiente de recepción (estado aprobada o recibida_parcial)
-    const ocs = await api('oc_items?select=id,nombre,color,cantidad,cantidad_recibida,ordenes_compra(id,oc_numero,estado,proveedores(razon_social))&orden_compra_estado=not.eq.cerrada&orden_compra_estado=not.eq.cancelada').catch(()=>[]);
-
     // Traer OCs aprobadas y parciales con items pendientes
     const ocsActivas = await api("ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,proveedores(razon_social)").catch(()=>[]);
     if(!ocsActivas?.length){
