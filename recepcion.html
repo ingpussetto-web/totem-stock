@@ -987,42 +987,90 @@ async function verEtiquetasHistorial(recepcionId){
   try{
     // Traer items de recepción con oc_item_id
     const items = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*');
-    etiquetasGeneradas = [];
+    // Recopilar todos los insumos UID con sus unidades
+    const grupos = [];
     for(const ri of (items||[])){
       if(!ri.oc_item_id) continue;
-      // Traer sku_id desde oc_items
       const ocItemArr = await api('oc_items?id=eq.'+ri.oc_item_id+'&select=sku_id,nombre');
       const ocItem = ocItemArr?.[0];
       if(!ocItem?.sku_id) continue;
-      // Traer SKU para verificar tracking
       const skuArr = await api('skus?id=eq.'+ocItem.sku_id+'&select=id,nombre,tracking');
       const sku = skuArr?.[0];
       if(!sku || sku.tracking !== 'uid') continue;
-      // Traer unidades físicas de este SKU
-      // Filtrar solo unidades creadas en esta recepción usando la fecha
-      const recFecha = items[0]?.created_at ? new Date(items[0].created_at) : null;
       const unidades = await api('unidades?sku_id=eq.'+ocItem.sku_id+'&select=uid,variantes(valor),created_at&order=uid.desc&limit='+(ri.cantidad_recibida*3));
-      // Tomar solo las más recientes que coinciden con la cantidad recibida
       const unidadesFiltradas = (unidades||[]).slice(0, ri.cantidad_recibida);
-      unidadesFiltradas.forEach(function(u){
-        etiquetasGeneradas.push({
+      if(!unidadesFiltradas.length) continue;
+      grupos.push({
+        nombre: sku.nombre||ocItem.nombre||'—',
+        variante: ri.color_recibido||'',
+        cantidad: unidadesFiltradas.length,
+        unidades: unidadesFiltradas.map(u=>({
           uid: u.uid,
           nombre: sku.nombre||ocItem.nombre||'—',
           variante: u.variantes?.valor||ri.color_recibido||'',
           num: parseInt(u.uid.match(/-(\d+)$/)?.[1]||'0')
-        });
+        }))
       });
     }
-    if(!etiquetasGeneradas.length){
+    if(!grupos.length){
       alert('No hay etiquetas UID para esta recepción.');
       return;
     }
-    // Usar modal compartido
-    abrirModalEtiquetas(etiquetasGeneradas, tnImprimirEtiquetas);
+    // Mostrar pantalla previa de selección por insumo
+    mostrarSeleccionInsumos(grupos);
   }catch(e){
     alert('Error cargando etiquetas: '+e.message);
   }
 }
+
+function mostrarSeleccionInsumos(grupos){
+  const overlay = document.createElement('div');
+  overlay.id = 'tn-sel-insumos-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:8900;display:flex;align-items:center;justify-content:center;';
+
+  const itemsHTML = grupos.map((g,i)=>`
+    <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#111620;border:1px solid rgba(255,255,255,0.06);border-radius:8px;cursor:pointer;transition:all 0.15s;" id="grupo-label-${i}">
+      <input type="checkbox" id="grupo-check-${i}" checked onchange="tnToggleGrupo(${i})" style="width:16px;height:16px;accent-color:#00e5a0;cursor:pointer;">
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:#e8eaf0;">${g.nombre}</div>
+        ${g.variante?`<div style="font-size:11px;color:#ffb340;margin-top:2px;">● ${g.variante}</div>`:''}
+      </div>
+      <div style="font-size:20px;font-weight:700;color:#00e5a0;font-family:'DM Mono',monospace;">${g.cantidad}</div>
+      <div style="font-size:10px;color:#3a4055;font-family:'DM Mono',monospace;">unidades</div>
+    </label>`).join('');
+
+  overlay.innerHTML = `<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:24px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto;font-family:'DM Sans',sans-serif;color:#e8eaf0;">
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 4px;">🏷 Seleccionar insumos</h3>
+    <div style="font-size:12px;color:#7a8099;margin-bottom:16px;font-family:'DM Mono',monospace;">Elegí qué insumos querés etiquetar</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">${itemsHTML}</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="document.getElementById('tn-sel-insumos-overlay').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#7a8099;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+      <button onclick="tnConfirmarSeleccionInsumos()" style="flex:1;padding:10px;border-radius:8px;border:none;background:#00e5a0;color:#000;font-size:13px;font-weight:600;cursor:pointer;">Continuar →</button>
+    </div>
+  </div>`;
+
+  // Guardar grupos en variable global para acceder desde tnConfirmarSeleccionInsumos
+  window._gruposEtiquetas = grupos;
+  document.body.appendChild(overlay);
+}
+
+window.tnToggleGrupo = function(i){
+  const label = document.getElementById('grupo-label-'+i);
+  const check = document.getElementById('grupo-check-'+i);
+  if(label) label.style.borderColor = check.checked ? 'rgba(0,229,160,0.4)' : 'rgba(255,255,255,0.06)';
+};
+
+window.tnConfirmarSeleccionInsumos = function(){
+  const grupos = window._gruposEtiquetas||[];
+  const etiquetas = [];
+  grupos.forEach((g,i)=>{
+    const check = document.getElementById('grupo-check-'+i);
+    if(check && check.checked) etiquetas.push(...g.unidades);
+  });
+  document.getElementById('tn-sel-insumos-overlay').remove();
+  if(!etiquetas.length){ alert('Seleccioná al menos un insumo.'); return; }
+  abrirModalEtiquetas(etiquetas, tnImprimirEtiquetas);
+};
 
 async function loadHistorial(){
   try{
