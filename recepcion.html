@@ -688,16 +688,30 @@ async function confirmarRecepcion(){
       }]);
     }
 
-    // Ingresar al stock
+    // Guardar recId para uso posterior
+    window._recId = recId;
+    window._recNum = recNum;
+    window._esParcial = esParcial;
+    window._hayDesvios = hayDesvios;
+
+    // Separar items por tracking
+    const itemsUID = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking === 'uid');
+    const itemsCantidad = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking !== 'uid');
+
+    // Ingresar UIDs directamente
     etiquetasGeneradas = [];
-    for(const ri of recepcionItems){
-      if(ri.cantidad_recibida <= 0) continue;
-      if(ri.tracking === 'uid'){
-        await ingresarUIDs(ri, recId);
-      } else {
-        await ingresarCantidad(ri);
-      }
+    for(const ri of itemsUID){
+      await ingresarUIDs(ri, recId);
     }
+
+    // Si hay items de cantidad, mostrar modal de verificación de caja
+    if(itemsCantidad.length > 0){
+      await mostrarVerificacionCaja(itemsCantidad, recId);
+      return; // El flujo continúa desde confirmarVerificacionCaja
+    }
+
+    // Si no hay items de cantidad, mostrar resultado directamente
+    mostrarResultado(recNum, esParcial, hayDesvios);
 
     // Marcar alertas como leídas para los SKUs ingresados
     try{
@@ -1167,6 +1181,93 @@ function toast(msg){
   clearTimeout(el._t);el._t=setTimeout(()=>{el.style.opacity='0';},2800);
 }
 
+
+// ─── VERIFICACIÓN DE CAJA ────────────────────────────────────
+let _vcajaItems = [];
+let _vcajaRecId = null;
+
+async function mostrarVerificacionCaja(items, recId){
+  _vcajaItems = items;
+  _vcajaRecId = recId;
+
+  // Cargar stock actual de cada item
+  const lista = [];
+  for(const ri of items){
+    let varianteId = null;
+    if(ri.color_recibido && ri._variantes?.length){
+      const varObj = ri._variantes.find(v=>v.valor===ri.color_recibido);
+      if(varObj) varianteId = varObj.id;
+    }
+    const stockRows = varianteId
+      ? await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=eq.${varianteId}&select=id,cantidad`)
+      : await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=is.null&select=id,cantidad`);
+    const stockActual = stockRows?.[0]?.cantidad || 0;
+    lista.push({...ri, stockSistema: stockActual, varianteId});
+  }
+  _vcajaItems = lista;
+
+  // Generar HTML del modal
+  const listaHtml = lista.map((ri, idx) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${ri.nombre}${ri.color_recibido?' — '+ri.color_recibido:''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Recibido ahora: <strong style="color:var(--green)">+${ri.cantidad_recibida}</strong> · Stock en sistema: <strong>${ri.stockSistema}</strong></div>
+      <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTEO FÍSICO ACTUAL EN CAJA (antes de guardar)</label>
+      <input type="number" min="0" id="vcaja-conteo-${idx}" placeholder="Ej: ${ri.stockSistema}"
+        style="width:100%;margin-top:4px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;">
+    </div>
+  `).join('');
+
+  document.getElementById('vcaja-lista').innerHTML = listaHtml;
+  document.getElementById('vcaja-nombre').value = MI_NOMBRE || '';
+  const modal = document.getElementById('modal-verificacion-caja');
+  modal.style.display = 'flex';
+}
+
+async function confirmarVerificacionCaja(){
+  const nombre = document.getElementById('vcaja-nombre').value.trim() || 'Sin nombre';
+  const fecha = new Date().toISOString();
+  const alertas = [];
+
+  for(let idx=0; idx<_vcajaItems.length; idx++){
+    const ri = _vcajaItems[idx];
+    const conteoInput = document.getElementById(`vcaja-conteo-${idx}`);
+    const conteoFisico = parseInt(conteoInput?.value);
+
+    if(isNaN(conteoFisico)){
+      toast(`Ingresá el conteo de: ${ri.nombre}`);
+      return;
+    }
+
+    const diferencia = conteoFisico - ri.stockSistema;
+    if(diferencia !== 0){
+      const signo = diferencia > 0 ? '+' : '';
+      alertas.push({
+        tipo: 'diferencia_conteo_caja',
+        mensaje: `Diferencia en conteo de caja al recepcionar — ${ri.nombre}${ri.color_recibido?' ('+ri.color_recibido+')':''}: sistema decía ${ri.stockSistema}, conteo físico ${conteoFisico} (diferencia ${signo}${diferencia}). Registrado por: ${nombre}. Fecha: ${new Date().toLocaleString('es-AR')}.`,
+        leida: false,
+        sku_id: ri.sku_id || null
+      });
+    }
+  }
+
+  // Generar alertas si hay diferencias
+  if(alertas.length){
+    try {
+      await api('alertas_gerencia','POST', alertas);
+      toast('⚠️ Diferencias detectadas — alerta enviada a gerencia');
+    } catch(e){ console.warn('Error alertas:', e); }
+  }
+
+  // Ingresar al stock
+  for(const ri of _vcajaItems){
+    await ingresarCantidad(ri);
+  }
+
+  // Cerrar modal y mostrar resultado
+  document.getElementById('modal-verificacion-caja').style.display = 'none';
+  mostrarResultado(window._recNum, window._esParcial, window._hayDesvios);
+}
+
 // ─── INIT ────────────────────────────────────────────────────
 async function init(){
   const ok=await checkConnection();
@@ -1175,5 +1276,21 @@ async function init(){
 }
 init();
 </script>
+
+<!-- MODAL VERIFICACIÓN CAJA -->
+<div id="modal-verificacion-caja" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:90%;max-width:420px;max-height:90vh;overflow-y:auto;">
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px;">📦 Verificación de caja</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Antes de ingresar al stock, contá lo que ya hay en caja</div>
+    <div id="vcaja-lista"></div>
+    <div style="margin-top:16px;">
+      <label style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">TU NOMBRE</label>
+      <input id="vcaja-nombre" type="text" placeholder="Ej: Carlos" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="confirmarVerificacionCaja()" style="flex:1;padding:10px;background:var(--green);color:#000;font-weight:600;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Confirmar y guardar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
