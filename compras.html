@@ -879,6 +879,37 @@ async function loadDesvios(){
       }
     }catch(e){ console.warn('Alertas generación OP:', e.message); }
 
+    // ── Diferencias de conteo de caja ─────────────────────────────────────
+    try{
+      const alertasCaja = await api('alertas_gerencia?tipo=eq.diferencia_conteo_caja&leida=eq.false&order=id.desc');
+      if(alertasCaja && alertasCaja.length){
+        const cajaBadge = '<div style="margin-bottom:24px;">'
+          +'<div style="font-size:11px;font-weight:600;color:#ff5e5e;margin-bottom:8px;letter-spacing:0.05em;">📦 DIFERENCIAS EN CONTEO DE CAJA — Stock físico no coincide con sistema</div>'
+          +'<table style="width:100%;border-collapse:collapse;border:1px solid rgba(255,94,94,0.2);border-radius:8px;overflow:hidden;">'
+          +'<thead><tr style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;border-bottom:1px solid rgba(255,94,94,0.15);">'
+          +'<th style="padding:8px 16px;text-align:left;">Detalle</th>'
+          +'<th style="padding:8px;text-align:right;"></th>'
+          +'</tr></thead><tbody>'
+          + alertasCaja.map(a => {
+              const fecha = a.created_at ? new Date(a.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+              return '<tr style="border-top:1px solid rgba(255,94,94,0.1);">'
+                +'<td style="padding:10px 16px;">'
+                +'<div style="font-weight:500;color:var(--text);font-size:12px;">'+a.mensaje+'</div>'
+                +'<div style="font-size:10px;color:var(--text3);margin-top:3px;">'+fecha+'</div>'
+                +'</td>'
+                +'<td style="padding:10px;text-align:right;">'
+                +'<button class="btn" onclick="marcarAlertaLeida('+a.id+')" style="font-size:11px;padding:4px 8px;border-color:var(--border2);color:var(--text3);" title="Marcar como revisado">✓ Revisado</button>'
+                +'</td>'
+                +'</tr>';
+            }).join('')
+          +'</tbody></table></div>';
+        statsEl.innerHTML += '<div style="background:rgba(255,94,94,0.08);border:1px solid rgba(255,94,94,0.2);border-radius:8px;padding:12px 20px;">'
+          +'<div style="font-size:22px;font-weight:700;color:#ff5e5e;">'+alertasCaja.length+'</div>'
+          +'<div style="font-size:11px;color:var(--text3);">Conteos con diferencia</div></div>';
+        alertasGeneracionHTML += cajaBadge;
+      }
+    }catch(e){ console.warn('Alertas conteo caja:', e.message); }
+
     // Traer op_bom_items pendientes de OPs cerradas
     const items = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&select=*,skus(id,nombre,codigo),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)&order=id.desc');
     const cerrados = items ? items.filter(i => i.ordenes_produccion && i.ordenes_produccion.estado === 'cerrada') : [];
