@@ -234,6 +234,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <div class="nav-section">Gestión</div>
       <div class="nav-item active" onclick="showPage('ocs')" id="nav-ocs">
         <span>◈</span> Órdenes de Compra
+        <span id="badge-ocs" tyle="display:none;background:#ff3b30;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;margin-left:6px;vertical-align:middle;">!</span>
       </div>
       <div class="nav-item" onclick="showPage('proveedores')" id="nav-proveedores">
         <span>▤</span> Proveedores
@@ -241,6 +242,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
 
       <div class="nav-item" onclick="showPage('desvios')" id="nav-desvios">
         <span>⚠</span> Alertas de compra
+        <span id="badge-alertas" tyle="display:none;background:#ff3b30;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;margin-left:6px;vertical-align:middle;">!</span>
       </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')" id="nav-config">
@@ -2186,9 +2188,23 @@ function toast(msg){
 }
 
 // ─── INIT ────────────────────────────────────────────────────
+async function checkBadges(){
+  try{
+    // Badge OCs — aprobadas o recepción parcial
+    const ocsActivas = await api("ordenes_compra?estado=in.(recibida_parcial,color_pendiente)&select=id").catch(()=>[]);
+    const badgeOcs = document.getElementById('badge-ocs');
+    if(badgeOcs) badgeOcs.style.display = ocsActivas?.length ? 'inline-block' : 'none';
+
+    // Badge Alertas — alertas no leídas
+    const alertas = await api("alertas_gerencia?leida=eq.false&select=id&limit=1").catch(()=>[]);
+    const badgeAlertas = document.getElementById('badge-alertas');
+    if(badgeAlertas) badgeAlertas.style.display = alertas?.length ? 'inline-block' : 'none';
+  }catch(e){}
+}
+
 async function init(){
   const ok=await checkConnection();
-  if(ok){await loadData();loadOCs();}
+  if(ok){await loadData();loadOCs();checkBadges();}
   else if(!SUPA_URL||!SUPA_KEY) showPage('config');
 }
 init();

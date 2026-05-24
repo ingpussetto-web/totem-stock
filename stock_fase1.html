@@ -181,9 +181,11 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       </div>
       <div class="nav-item" id="nav-pendientes" onclick="showPage('pendientes')">
         <span class="icon">⏳</span> Pendientes ingreso
+        <span id="badge-pendientes" style="display:none;background:#ff3b30;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;margin-left:6px;vertical-align:middle;">!</span>
       </div>
       <div class="nav-item" onclick="showPage('unidades')">
         <span class="icon">◈</span> Unidades físicas
+      </div>
       </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')">
@@ -561,6 +563,7 @@ function showPage(id){
   if(id==='catalogo') loadCatalogo();
   if(id==='stock') loadStock();
   if(id==='pendientes') loadPendientesIngreso();
+  if(id==='dashboard'){ loadDashboard(); checkPendientesIngreso(); }
   if(id==='unidades') loadUnidades();
   if(id==='config') loadConfig();
 }
@@ -836,9 +839,26 @@ async function loadPendientesIngreso(){
     }).join('');
 
     wrap.innerHTML = html;
+    // Mostrar badge rojo en el menú
+    const badge = document.getElementById('badge-pendientes');
+    if(badge) badge.style.display = 'inline-flex';
   }catch(e){
     wrap.innerHTML = `<div style="font-size:12px;color:var(--red);padding:12px;">Error cargando pendientes: ${e.message}</div>`;
   }
+}
+
+// ─── CHECK BADGE PENDIENTES ─────────────────────────────────────────────────
+async function checkPendientesIngreso(){
+  try{
+    const ocsActivas = await api("ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id").catch(()=>[]);
+    const badge = document.getElementById('badge-pendientes');
+    if(!badge) return;
+    if(ocsActivas?.length > 0){
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }catch(e){}
 }
 
 // ─── OPs RESERVADAS ─────────────────────────────────────────────────────────
