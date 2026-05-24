@@ -557,13 +557,15 @@ function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  event?.currentTarget?.classList.add('active');
+  // Marcar nav-item correcto por onclick
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')===`showPage('${id}')`) n.classList.add('active');
+  });
   // Load data for page
-  if(id==='dashboard') loadDashboard();
+  if(id==='dashboard'){ loadDashboard(); checkPendientesIngreso(); }
   if(id==='catalogo') loadCatalogo();
   if(id==='stock') loadStock();
   if(id==='pendientes') loadPendientesIngreso();
-  if(id==='dashboard'){ loadDashboard(); checkPendientesIngreso(); }
   if(id==='unidades') loadUnidades();
   if(id==='config') loadConfig();
 }
@@ -1322,7 +1324,7 @@ async function init(){
   // Load config from localStorage
   const ok = await checkConnection();
   if(ok){
-    loadDashboard();
+    showPage('dashboard');
     // Pre-load categorías y skus
     categorias = await api('categorias?select=*&order=orden.asc').catch(()=>[]);
     skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc&activo=eq.true').catch(()=>[]);
