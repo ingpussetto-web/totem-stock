@@ -411,7 +411,7 @@ async function abrirRecepcion(ocId){
     ocActual = ocActual[0];
 
     // Items sin precio — solo nombre, cantidad, color y SKU
-    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)`);
+    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)&timestamp=${Date.now()}`);
     // Filtrar solo items con saldo pendiente (excluir los ya recibidos completamente)
     itemsActual = (todosItems||[]).filter(i => (i.cantidad - (i.cantidad_recibida||0)) > 0);
 
@@ -482,7 +482,7 @@ function renderItemsRecepcion(){
 
     return `<div class="rec-item" id="rec-item-${i}">
       <div class="rec-item-nombre">${item.nombre}
-        ${item.skus?.tracking==='uid'?'<span style="font-size:10px;color:var(--blue);margin-left:6px;font-family:\'DM Mono\',monospace;">UID</span>':''}
+        ${item.skus?.tracking==='uid'?'<span style="font-size:10px;color:var(--blue);margin-left:6px;font-family:\'DM Mono\',monospace;">UID</span>':'<span style="font-size:10px;color:var(--green);margin-left:6px;font-family:\'DM Mono\',monospace;">CAJA</span>'}
       </div>
       ${historialBloque}
       <div class="rec-item-grid">
@@ -719,15 +719,11 @@ async function confirmarRecepcion(){
         .filter(ri => ri.cantidad_recibida > 0 && ri.sku_id)
         .map(ri => ri.sku_id);
       if(skusIngresados.length){
-        // Marcar alertas faltantes de estos SKUs como leídas
         for(const skuId of [...new Set(skusIngresados)]){
           await api(`alertas_gerencia?sku_id=eq.${skuId}&leida=eq.false&tipo=in.(faltante_generacion_op,desvio_produccion)`, 'PATCH', {leida: true}).catch(()=>{});
         }
       }
     }catch(e){ console.warn('Error marcando alertas:', e); }
-
-    // Mostrar resultado
-    mostrarResultado(recNum, esParcial, hayDesvios);
 
   }catch(e){toast('Error: '+e.message);console.error(e);}
 }
