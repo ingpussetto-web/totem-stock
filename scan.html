@@ -283,17 +283,42 @@ async function renderReservado(){
 
   // Buscar a qué OP está asignado
   const bomItems = await api(
-    `op_bom_items?uid_asignado=eq.${encodeURIComponent(u.uid)}&select=*,ordenes_produccion(op_numero,cliente,producto_nombre,color_gabinete)`
+    `op_bom_items?uid_asignado=eq.${encodeURIComponent(u.uid)}&select=*,ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete)`
   );
 
   const bom = bomItems?.[0];
   const op = bom?.ordenes_produccion;
   const fechaAsig = u.updated_at ? new Date(u.updated_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-  // Extraer quién asignó de las notas del bom_item
   let asignadoPor = '—';
   if(bom && bom.notas){
     const matchAP = bom.notas.match(/Asignado por: ([^—]+)/);
     if(matchAP) asignadoPor = matchAP[1].split(' —')[0].trim();
+  }
+
+  // Conteo de este SKU en la OP: total y asignados
+  let progresoBadge = '';
+  if(op?.id && u.sku_id){
+    try {
+      const todosLosItems = await api(
+        `op_bom_items?op_id=eq.${op.id}&sku_id=eq.${u.sku_id}&incluido=eq.true&select=id,uid_asignado,equipo_num`
+      );
+      const total = todosLosItems?.length || 0;
+      const asignados = (todosLosItems||[]).filter(i => i.uid_asignado && i.uid_asignado !== 'CANTIDAD-DESCONTADA').length;
+      const faltan = total - asignados;
+      const completo = faltan === 0;
+      const equipoNum = bom?.equipo_num || '—';
+      const colorProg = completo ? 'var(--green)' : 'var(--amber)';
+      const iconProg = completo ? '✅' : '⚠️';
+      const txtProg = completo
+        ? `Todos los ${total} escaneados`
+        : `${asignados} de ${total} escaneados — faltan ${faltan}`;
+      progresoBadge = `
+      <div style="margin-top:10px;padding:10px 12px;background:${completo?'var(--green-dim)':'var(--amber-dim)'};border:1px solid ${completo?'var(--green-border)':'var(--amber-border)'};border-radius:8px;">
+        <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:4px;">PROGRESO EN ESTA OP</div>
+        <div style="font-size:13px;font-weight:600;color:${colorProg};">${iconProg} ${txtProg}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">Equipo asignado: #${equipoNum}</div>
+      </div>`;
+    } catch(e){ console.warn('No se pudo calcular progreso:', e); }
   }
 
   document.getElementById('container').innerHTML = `
@@ -317,6 +342,7 @@ async function renderReservado(){
       ${op.color_gabinete?`<div class="asig-row"><div class="asig-key">Color</div><div class="asig-val" style="color:var(--amber)">${op.color_gabinete}</div></div>`:''}
       <div class="asig-row"><div class="asig-key">Asignado por</div><div class="asig-val">${asignadoPor}</div></div>
       <div class="asig-row"><div class="asig-key">Fecha</div><div class="asig-val">${fechaAsig}</div></div>
+      ${progresoBadge}
     </div>` : ''}
   `;
 }
