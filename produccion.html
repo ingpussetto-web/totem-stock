@@ -961,7 +961,7 @@ async function ejecutarCierreOP(notas){
       .map(i=>i.uid_asignado);
 
     for(const uid of uidsAsignados){
-      await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', {estado:'producido'});
+      await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', {estado:'producido', op_id: currentOP.id});
     }
 
     // Cerrar OP

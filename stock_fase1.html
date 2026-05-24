@@ -186,6 +186,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       <div class="nav-item" onclick="showPage('unidades')">
         <span class="icon">◈</span> Unidades físicas
       </div>
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')">
         <span class="icon">⚙</span> Configuración
@@ -344,6 +345,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <option value="producido">Producido</option>
           <option value="baja">Baja</option>
         </select>
+        <input type="date" class="filter" id="uid-fecha-desde" onchange="renderUnidades()" title="Fecha desde" style="font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;cursor:pointer;">
+        <input type="date" class="filter" id="uid-fecha-hasta" onchange="renderUnidades()" title="Fecha hasta" style="font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;cursor:pointer;">
         <div class="spacer"></div>
         <button class="btn green" onclick="openModalUidConPass()">+ Registrar unidad</button>
       </div>
@@ -358,6 +361,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
                 <th>Variante</th>
                 <th>N° Serie</th>
                 <th>Estado</th>
+                <th>OP / Cliente</th>
                 <th>Fecha ingreso</th>
                 <th></th>
               </tr>
@@ -965,7 +969,7 @@ async function toggleStockDetalle(rowId, skuId){
 // ─── UNIDADES ───────────────────────────────────────────────────────────────
 async function loadUnidades(){
   try {
-    unidades = await api('unidades?select=*,skus(codigo,nombre,categoria_id,categorias(nombre)),variantes(valor)&order=created_at.desc');
+    unidades = await api('unidades?select=*,skus(codigo,nombre,categoria_id,categorias(nombre)),variantes(valor),ordenes_produccion(op_numero,cliente)&order=created_at.desc');
     if(!skus.length) skus = await api('skus?select=*,categorias(nombre)&tracking=eq.uid&activo=eq.true');
     // Traer OPs asignadas a unidades reservadas
     try {
@@ -1003,30 +1007,41 @@ function renderUnidades(){
   const catFil = document.getElementById('uid-cat')?.value||'';
   const skuFil = document.getElementById('uid-sku')?.value||'';
   const estadoFil = document.getElementById('uid-estado')?.value||'';
+  const fechaDesde = document.getElementById('uid-fecha-desde')?.value||'';
+  const fechaHasta = document.getElementById('uid-fecha-hasta')?.value||'';
   let rows = unidades.filter(u=>{
     if(search && !u.uid.toLowerCase().includes(search) && !(u.nro_serie||'').toLowerCase().includes(search)) return false;
     if(catFil && String(u.skus?.categoria_id)!==catFil) return false;
     if(skuFil && String(u.sku_id)!==skuFil) return false;
     if(estadoFil && u.estado!==estadoFil) return false;
+    if(fechaDesde && u.created_at < fechaDesde) return false;
+    if(fechaHasta && u.created_at.substring(0,10) > fechaHasta) return false;
     return true;
   });
   const tbody = document.getElementById('uid-tbody');
   if(!rows.length){
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">◈</div>No hay unidades registradas</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">◈</div>No hay unidades registradas</div></td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(u=>`<tr>
+  tbody.innerHTML = rows.map(u=>{
+    const op = u.ordenes_produccion;
+    const opInfo = op?.op_numero
+      ? `<div style="font-size:11px;font-family:monospace;color:var(--text2);">${op.op_numero}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${op.cliente||'—'}</div>`
+      : u.estado==='reservado'&&u._op_numero
+        ? `<div style="font-size:11px;font-family:monospace;color:var(--text2);">${u._op_numero}</div>`
+        : '—';
+    return `<tr>
     <td class="td-mono td-main" style="font-size:12px">${u.uid}</td>
     <td class="td-mono" style="font-size:11px">${u.skus?.codigo||'—'}</td>
     <td>${u.skus?.nombre||'—'}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.variantes?.valor||'—'}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.nro_serie||'—'}</td>
-    <td>${badgeEstado(u.estado)}${u.estado==='reservado'&&u._op_numero?`<div style="font-size:10px;margin-top:3px;"><a href="produccion.html?op=${encodeURIComponent(u._op_numero)}" target="_blank" style="color:var(--accent);text-decoration:none;font-family:monospace;" title="Ver OP en producción">📋 ${u._op_numero}</a></div>`:''}</td>
+    <td>${badgeEstado(u.estado)}</td>
+    <td>${opInfo}</td>
     <td style="font-size:11px;color:var(--text3)">${formatDate(u.created_at)}</td>
-    <td class="td-actions">
-      <!-- Baja solo disponible desde index de Gerencia -->
-    </td>
-  </tr>`).join('');
+    <td class="td-actions"></td>
+  </tr>`;
+  }).join('');
 }
 
 // ─── MODALS ─────────────────────────────────────────────────────────────────
