@@ -411,7 +411,7 @@ async function abrirRecepcion(ocId){
     ocActual = ocActual[0];
 
     // Items sin precio — solo nombre, cantidad, color y SKU
-    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)&timestamp=${Date.now()}`);
+    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)`);
     // Filtrar solo items con saldo pendiente (excluir los ya recibidos completamente)
     itemsActual = (todosItems||[]).filter(i => (i.cantidad - (i.cantidad_recibida||0)) > 0);
 
