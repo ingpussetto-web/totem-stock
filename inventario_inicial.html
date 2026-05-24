@@ -168,6 +168,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       <div class="nav-item" onclick="showPage('resumen')">
         <span>▤</span> Resumen inventario
       </div>
+      <div class="nav-item" onclick="showPage('caja')">
+        <span>📦</span> Insumos de caja
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')">
         <span>⚙</span> Configuración
@@ -284,6 +287,48 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       </div>
     </div>
 
+    <!-- INSUMOS DE CAJA -->
+    <div class="page" id="page-caja">
+      <div class="page-header">
+        <div class="page-title">Insumos de caja</div>
+        <div class="page-sub">Registrá el stock existente de insumos que se guardan por cantidad</div>
+      </div>
+
+      <div style="max-width:520px;">
+        <div style="margin-bottom:16px;">
+          <label class="form-label">Categoría</label>
+          <select class="form-select" id="caja-cat" onchange="loadCajaSkus()">
+            <option value="">— Seleccioná categoría —</option>
+          </select>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label class="form-label">Insumo (SKU)</label>
+          <select class="form-select" id="caja-sku" onchange="loadCajaStockActual()">
+            <option value="">— Seleccioná insumo —</option>
+          </select>
+        </div>
+
+        <div id="caja-stock-info" style="display:none;margin-bottom:16px;padding:12px 14px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:8px;">
+          <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px;">STOCK ACTUAL EN SISTEMA</div>
+          <div id="caja-stock-num" style="font-size:24px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace;">0</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">unidades registradas</div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label class="form-label">Cantidad a registrar</label>
+          <input class="form-input" type="number" id="caja-cantidad" min="1" value="1" placeholder="Ej: 10">
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label class="form-label">Registrado por</label>
+          <input class="form-input" type="text" id="caja-nombre" placeholder="Ej: Carlos">
+        </div>
+
+        <button class="btn solid-green lg" onclick="guardarStockCaja()" style="width:100%;">Guardar stock en sistema →</button>
+        <div id="caja-resultado" style="margin-top:14px;display:none;"></div>
+      </div>
+    </div>
+
     <!-- RESUMEN -->
     <div class="page" id="page-resumen">
       <div class="page-header">
@@ -370,7 +415,10 @@ function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  event?.currentTarget?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')===`showPage('${id}')`) n.classList.add('active');
+  });
+  if(id==='caja') initCajaPage();
   if(id==='resumen') loadResumen();
   if(id==='config') loadConfig();
 }
@@ -763,6 +811,91 @@ function toast(msg){
   const el=document.getElementById('toast');
   el.textContent=msg; el.style.opacity='1';
   clearTimeout(el._t); el._t=setTimeout(()=>{el.style.opacity='0';},2800);
+}
+
+// ─── INSUMOS DE CAJA ─────────────────────────────────────────
+let cajasSkus = [];
+
+async function initCajaPage(){
+  // Cargar categorías con SKUs de cantidad
+  const skusCantidad = await api('skus?select=id,nombre,categoria_id,categorias(nombre)&tracking=eq.cantidad&activo=eq.true&order=nombre.asc').catch(()=>[]);
+  cajasSkus = skusCantidad || [];
+
+  // Llenar categorías únicas
+  const cats = {};
+  cajasSkus.forEach(s => {
+    if(s.categoria_id && s.categorias?.nombre) cats[s.categoria_id] = s.categorias.nombre;
+  });
+
+  const catSel = document.getElementById('caja-cat');
+  catSel.innerHTML = '<option value="">— Seleccioná categoría —</option>'
+    + Object.entries(cats).map(([id,nombre]) => `<option value="${id}">${nombre}</option>`).join('');
+
+  document.getElementById('caja-sku').innerHTML = '<option value="">— Seleccioná insumo —</option>';
+  document.getElementById('caja-stock-info').style.display = 'none';
+  document.getElementById('caja-resultado').style.display = 'none';
+
+  // Prellenar nombre
+  const nombre = localStorage.getItem('rec_nombre') || '';
+  document.getElementById('caja-nombre').value = nombre;
+}
+
+function loadCajaSkus(){
+  const catId = document.getElementById('caja-cat').value;
+  const skuSel = document.getElementById('caja-sku');
+  const filtrados = cajasSkus.filter(s => String(s.categoria_id) === catId);
+  skuSel.innerHTML = '<option value="">— Seleccioná insumo —</option>'
+    + filtrados.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+  document.getElementById('caja-stock-info').style.display = 'none';
+}
+
+async function loadCajaStockActual(){
+  const skuId = document.getElementById('caja-sku').value;
+  if(!skuId) return;
+  const stockRows = await api(`stock?sku_id=eq.${skuId}&variante_id=is.null&select=cantidad`).catch(()=>[]);
+  const cantidad = stockRows?.[0]?.cantidad || 0;
+  document.getElementById('caja-stock-num').textContent = cantidad;
+  document.getElementById('caja-stock-info').style.display = 'block';
+}
+
+async function guardarStockCaja(){
+  const skuId = document.getElementById('caja-sku').value;
+  const cantidad = parseInt(document.getElementById('caja-cantidad').value) || 0;
+  const nombre = document.getElementById('caja-nombre').value.trim() || 'Sin nombre';
+
+  if(!skuId){ toast('Seleccioná un insumo'); return; }
+  if(cantidad <= 0){ toast('Ingresá una cantidad válida'); return; }
+
+  try{
+    // Buscar si ya existe fila de stock
+    const stockRows = await api(`stock?sku_id=eq.${skuId}&variante_id=is.null&select=id,cantidad`);
+    if(stockRows?.length){
+      const nueva = (stockRows[0].cantidad || 0) + cantidad;
+      await api(`stock?id=eq.${stockRows[0].id}`, 'PATCH', {cantidad: nueva, updated_at: new Date().toISOString()});
+    } else {
+      await api('stock', 'POST', [{sku_id: parseInt(skuId), variante_id: null, cantidad}]);
+    }
+
+    // Guardar nombre para próxima vez
+    localStorage.setItem('rec_nombre', nombre);
+
+    // Mostrar resultado
+    const skuNombre = cajasSkus.find(s => String(s.id) === skuId)?.nombre || '—';
+    document.getElementById('caja-resultado').style.display = 'block';
+    document.getElementById('caja-resultado').innerHTML = `
+      <div style="padding:14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:8px;">
+        <div style="font-size:13px;font-weight:600;color:var(--green);">✅ Stock registrado</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${skuNombre} — +${cantidad} unidades</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">Registrado por: ${nombre}</div>
+      </div>`;
+
+    // Actualizar stock actual mostrado
+    await loadCajaStockActual();
+
+    // Limpiar cantidad
+    document.getElementById('caja-cantidad').value = 1;
+
+  }catch(e){ toast('Error: ' + e.message); console.error(e); }
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
