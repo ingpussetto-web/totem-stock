@@ -184,10 +184,14 @@ const tabNames = {
 document.querySelectorAll('a.mod-card').forEach(a => {
   a.addEventListener('click', function(e) {
     e.preventDefault();
-    const basePath = this.href.split('?')[0];
+    const fullHref = this.href;
+    const basePath = fullHref.split('?')[0];
     const fileName = basePath.split('/').pop().replace('.html','');
     const tabName = tabNames[fileName] || 'tn_' + fileName;
-    const url = basePath + '?v=' + Date.now();
+    // Preservar parámetros existentes (ej: mode=readonly)
+    const existingParams = fullHref.includes('?') ? fullHref.split('?')[1] : '';
+    const params = existingParams ? existingParams + '&v=' + Date.now() : 'v=' + Date.now();
+    const url = basePath + '?' + params;
     window.open(url, tabName);
   });
 });
