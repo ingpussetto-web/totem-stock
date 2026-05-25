@@ -5959,6 +5959,14 @@ async function saveToSheets(){
     await stockAPI('config_cotizador?key=eq.periodo', 'PATCH', { value: periodoVal });
 
     // ── Proyectos ──────────────────────────────────────────────────────────
+    // Borrar proyectos eliminados de Supabase
+    const idsActivos = proyectos.map(p=>p.id).filter(id=>id && Number.isInteger(Number(id)) && !String(id).includes('-'));
+    const proyDB = await stockAPI('proyectos_cotizador?select=id').catch(()=>[]);
+    for(const row of (proyDB||[])){
+      if(!idsActivos.includes(row.id)){
+        await stockAPI('proyectos_cotizador?id=eq.'+row.id, 'DELETE').catch(()=>{});
+      }
+    }
     for(const p of proyectos){
       const idNumerico = p.id && Number.isInteger(Number(p.id)) && !String(p.id).includes('-');
       if(idNumerico){
