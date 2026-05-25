@@ -236,14 +236,26 @@ async function renderEnStock(){
     return true;
   });
 
-  const opsHTML = itemsValidos.length
-    ? itemsValidos.map(b=>{
+  // Agrupar por OP — tomar el primer item pendiente de cada OP
+  const opsPorId = {};
+  itemsValidos.forEach(b=>{
+    const opId = b.ordenes_produccion?.id;
+    if(opId && !opsPorId[opId]){
+      opsPorId[opId] = b;
+    }
+  });
+  const opsAgrupadas = Object.values(opsPorId);
+
+  const opsHTML = opsAgrupadas.length
+    ? opsAgrupadas.map(b=>{
         const op = b.ordenes_produccion;
+        const pendientesEnOP = itemsValidos.filter(x=>x.ordenes_produccion?.id===op.id).length;
         return `<div class="op-item">
           <div class="op-item-numero">${op.op_numero}</div>
           <div class="op-item-cliente">${op.cliente}</div>
           <div class="op-item-producto">${op.producto_nombre}</div>
           ${op.color_gabinete?`<div class="op-item-color">● Color: ${op.color_gabinete}</div>`:''}
+          ${pendientesEnOP>1?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">Quedan ${pendientesEnOP} unidades por asignar en esta OP</div>`:''}
           <button class="btn-asignar" onclick="prepararAsignacion(${b.id}, ${op.id}, '${op.op_numero}', '${op.cliente}')">
             Asignar a esta OP
           </button>
@@ -498,25 +510,34 @@ let pendingBomId = null;
 let pendingOpId = null;
 
 function prepararAsignacion(bomId, opId, opNumero, cliente){
-  const nombre = document.getElementById('inp-nombre')?.value.trim();
-  if(!nombre){
-    toast('Ingresá tu nombre antes de asignar');
-    document.getElementById('inp-nombre')?.focus();
-    return;
-  }
-
   pendingBomId = bomId;
   pendingOpId = opId;
+
+  // Obtener nombre actual (puede completarse en el confirm)
+  const nombreActual = document.getElementById('inp-nombre')?.value.trim() || '';
 
   document.getElementById('confirm-title').textContent = 'Confirmar asignación';
   document.getElementById('confirm-body').innerHTML =
     `<strong>${unidadActual.skus?.nombre}</strong> ${unidadActual.variantes?.valor?'('+unidadActual.variantes.valor+')':''}<br><br>` +
-    `→ <strong>${opNumero}</strong><br>` +
-    `Cliente: ${cliente}<br><br>` +
-    `Asignado por: <strong>${nombre}</strong>`;
+    `→ <strong>${opNumero}</strong> · ${cliente}<br><br>` +
+    `<label style="font-size:12px;color:var(--text3);">Tu nombre:</label><br>` +
+    `<input id="confirm-nombre" type="text" value="${nombreActual}" placeholder="Ej: Juan García" ` +
+    `style="width:100%;margin-top:6px;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;">`;
 
-  document.getElementById('confirm-yes').onclick = () => ejecutarAsignacion(nombre);
-  document.getElementById('confirm-overlay').classList.add('open');
+  document.getElementById('confirm-yes').onclick = () => {
+    const nombre = document.getElementById('confirm-nombre')?.value.trim();
+    if(!nombre){ toast('Ingresá tu nombre'); return; }
+    // Sincronizar con el campo principal
+    const inp = document.getElementById('inp-nombre');
+    if(inp) inp.value = nombre;
+    ejecutarAsignacion(nombre);
+  };
+  
+  const overlay = document.getElementById('confirm-overlay');
+  if(overlay){
+    overlay.classList.add('open');
+    overlay.style.display = 'flex';
+  }
 }
 
 function closeConfirm(){
