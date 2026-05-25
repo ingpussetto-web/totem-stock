@@ -431,7 +431,7 @@ async function loadPendientes(){
 async function abrirConteoPendiente(recId){
   try{
     // Traer items de esa recepción
-    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*,variantes(id,valor)`);
+    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*`);
     // Traer SKUs por separado para cada item
     const itemsCantidad = [];
     for(const ri of (recItems||[])){
