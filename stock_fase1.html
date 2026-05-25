@@ -993,14 +993,16 @@ async function loadUnidades(){
     if(!skus.length) skus = await api('skus?select=*,categorias(nombre)&tracking=eq.uid&activo=eq.true');
     // Traer OPs asignadas a unidades reservadas
     try {
-      const bomAsignados = await api('op_bom_items?uid_asignado=not.is.null&select=uid_asignado,op_id,ordenes_produccion(op_numero)');
+      const bomAsignados = await api('op_bom_items?uid_asignado=not.is.null&select=uid_asignado,op_id,ordenes_produccion(op_numero,cliente)');
       const opMap = {};
+      const opClienteMap = {};
       (bomAsignados||[]).forEach(function(b){
         if(b.uid_asignado && b.ordenes_produccion?.op_numero){
           opMap[b.uid_asignado] = b.ordenes_produccion.op_numero;
+          opClienteMap[b.uid_asignado] = b.ordenes_produccion.cliente;
         }
       });
-      unidades.forEach(function(u){ u._op_numero = opMap[u.uid] || null; });
+      unidades.forEach(function(u){ u._op_numero = opMap[u.uid] || null; u._op_cliente = opClienteMap[u.uid] || null; });
     } catch(e){ console.warn('No se pudo cargar OPs reservadas:', e); }
     // Poblar categorías
     const catSel = document.getElementById('uid-cat');
@@ -1046,9 +1048,9 @@ function renderUnidades(){
   tbody.innerHTML = rows.map(u=>{
     const op = u.ordenes_produccion;
     const opInfo = op?.op_numero
-      ? `<div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--green);font-weight:600;">${op.op_numero}</div><div style="font-size:11px;color:var(--text);margin-top:2px;">${op.cliente||'—'}</div>`
+      ? `<div style="font-size:11px;font-family:monospace;color:var(--text2);">${op.op_numero}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${op.cliente||'—'}</div>`
       : u.estado==='reservado'&&u._op_numero
-        ? `<div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--accent);font-weight:600;">${u._op_numero}</div>`
+        ? `<div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--green);font-weight:600;">${u._op_numero}</div><div style="font-size:11px;color:var(--text);margin-top:2px;">${u._op_cliente||'—'}</div>`
         : '—';
     return `<tr>
     <td class="td-mono td-main" style="font-size:12px">${u.uid}</td>
