@@ -460,7 +460,10 @@ function renderOPs(lista, vista){
           <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
           <div class="op-meta">${fecha}${o.color_gabinete?' · '+o.color_gabinete:''}</div>
         </div>
-        ${esTerminada ? '<span style="font-size:11px;color:var(--green);font-weight:600;padding:3px 8px;border:1px solid var(--green);border-radius:4px;white-space:nowrap;">✓ Terminada</span>' : ''}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          ${esTerminada ? '<span style="font-size:11px;color:var(--green);font-weight:600;padding:3px 8px;border:1px solid var(--green);border-radius:4px;white-space:nowrap;">✓ Terminada</span>' : ''}
+          ${o.v14_orden ? `<button onclick="event.stopPropagation();verDocOP('${o.v14_orden}','${o.cliente}')" style="font-size:10px;padding:4px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;">📄 Ver Doc. OP</button>` : ''}
+        </div>
       </div>
       ${!esTerminada ? `<div class="op-progress-mini">
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -1052,6 +1055,107 @@ async function init(){
   } else if(!SUPA_URL||!SUPA_KEY) showPage('config');
 }
 init();
+</script>
+
+<!-- MODAL DOC OP -->
+<div id="modal-doc-op" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9500;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:680px;margin:auto;position:relative;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #ddd;background:#f8f9fa;border-radius:8px 8px 0 0;">
+      <div style="font-size:13px;font-weight:600;color:#333;">📄 Documento de Orden de Producción</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="imprimirDocOP()" style="padding:6px 14px;background:#1a3a6b;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">🖨 Imprimir</button>
+        <button onclick="cerrarDocOP()" style="padding:6px 14px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">✕ Cerrar</button>
+      </div>
+    </div>
+    <div id="doc-op-contenido" style="padding:0;"></div>
+  </div>
+</div>
+
+<script>
+async function verDocOP(v14Orden, cliente){
+  const cotNumero = 'COT-' + v14Orden;
+  try{
+    const rows = await api('doc_op_config?cot_numero=eq.' + encodeURIComponent(cotNumero) + '&select=*');
+    if(!rows || !rows.length){
+      toast('No hay Doc. OP guardado para esta cotización');
+      return;
+    }
+    const d = rows[0].datos;
+    
+    // Generar HTML del documento (mismo formato que el calculador)
+    const html = generarHtmlDocOP(d, cotNumero);
+    document.getElementById('doc-op-contenido').innerHTML = html;
+    const modal = document.getElementById('modal-doc-op');
+    modal.style.display = 'flex';
+  }catch(e){ toast('Error: ' + e.message); console.error(e); }
+}
+
+function generarHtmlDocOP(d, cotNumero){
+  const si = v => v && v !== 'NO' && v !== 'No aplica' && v !== 'Sin Mini PC' && v !== '' ? v : null;
+  return `<div style="padding:24px;font-family:Arial,sans-serif;font-size:13px;color:#333;">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:18px;font-weight:700;color:#1a3a6b;">ORDEN DE PRODUCCIÓN</div>
+      <div style="font-size:12px;color:#666;">${cotNumero}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Cliente / Empresa</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.cliente||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Contacto</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.contacto||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Producto</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.producto||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Cantidad</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.cantidad||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Fecha Aprobación</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.fecha_aprobacion||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Fecha Compromiso</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.fecha_compromiso||'—'}</td></tr>
+      ${d.transporte?'<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Transporte</td><td style="padding:6px 8px;border:1px solid #ddd;">✓ Incluye transporte</td></tr>':''}
+    </table>
+    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Estructura</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Material</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.material||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Forma</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.forma||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Tamaño Pantalla</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.pantalla||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Táctil</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.tactil||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Color Tótem</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.color||'—'}</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Plano Especial</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.plano||'—'}</td></tr>
+      ${d.obs_estructura?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Observaciones</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.obs_estructura}</td></tr>`:''}
+    </table>
+    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Accesorios y Equipamiento</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      ${si(d.mini_pc)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Mini PC</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.mini_pc}</td></tr>`:''}
+      ${si(d.sistema_operativo)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Sistema Operativo</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.sistema_operativo}</td></tr>`:''}
+      ${si(d.windows)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Lic. Windows</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.windows}</td></tr>`:''}
+      ${si(d.impresora)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Impresora Térmica</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.impresora}</td></tr>`:''}
+      ${si(d.camara)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Cámara Web</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.camara}</td></tr>`:''}
+      ${si(d.lector_qr)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Lector QR</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.lector_qr}</td></tr>`:''}
+      ${si(d.player)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Player HDMI</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.player}${d.cantidad_players?' × '+d.cantidad_players:''}</td></tr>`:''}
+      ${si(d.tipo_pantalla)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Tipo Pantalla</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.tipo_pantalla}</td></tr>`:''}
+      ${d.otros_accesorios?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Otros</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.otros_accesorios}</td></tr>`:''}
+    </table>
+    ${(d.ploteo_vidrio||d.ploteo_totem||d.obs_ploteo)?`
+    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Ploteo / Gráfica</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      ${si(d.ploteo_vidrio)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Ploteo Vidrio</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.ploteo_vidrio}</td></tr>`:''}
+      ${si(d.ploteo_totem)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Ploteo Tótem</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.ploteo_totem}</td></tr>`:''}
+      ${d.obs_ploteo?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Obs. Ploteo</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.obs_ploteo}</td></tr>`:''}
+    </table>`:''}
+    ${(d.config_software||d.ajustes_medida||d.obs_adicionales)?`
+    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Software y Adicionales</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      ${d.config_software?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Config. Software</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.config_software}</td></tr>`:''}
+      ${d.ajustes_medida?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Ajustes Medida</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.ajustes_medida}</td></tr>`:''}
+      ${d.obs_adicionales?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Obs. Adicionales</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.obs_adicionales}</td></tr>`:''}
+    </table>`:''}
+  </div>`;
+}
+
+function imprimirDocOP(){
+  const contenido = document.getElementById('doc-op-contenido').innerHTML;
+  const win = window.open('', '_blank');
+  win.document.write('<html><head><title>Doc. OP</title><style>body{font-family:Arial,sans-serif;margin:20px;}@media print{button{display:none;}}</style></head><body>' + contenido + '</body></html>');
+  win.document.close();
+  win.print();
+}
+
+function cerrarDocOP(){
+  document.getElementById('modal-doc-op').style.display = 'none';
+}
 </script>
 </body>
 </html>
