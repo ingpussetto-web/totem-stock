@@ -1077,71 +1077,116 @@ async function verDocOP(v14Orden, cliente){
   try{
     const rows = await api('doc_op_config?cot_numero=eq.' + encodeURIComponent(cotNumero) + '&select=*');
     if(!rows || !rows.length){
-      toast('No hay Doc. OP guardado para esta cotización');
+      toast('No hay Doc. OP guardado para esta cotización — guardalo primero desde el calculador');
       return;
     }
     const d = rows[0].datos;
-    
-    // Generar HTML del documento (mismo formato que el calculador)
     const html = generarHtmlDocOP(d, cotNumero);
     document.getElementById('doc-op-contenido').innerHTML = html;
+    // Deshabilitar todos los campos para solo lectura
+    document.querySelectorAll('#doc-op-contenido input, #doc-op-contenido select, #doc-op-contenido textarea').forEach(el => {
+      el.disabled = true;
+      el.style.opacity = '1';
+      el.style.cursor = 'default';
+    });
     const modal = document.getElementById('modal-doc-op');
     modal.style.display = 'flex';
   }catch(e){ toast('Error: ' + e.message); console.error(e); }
 }
 
 function generarHtmlDocOP(d, cotNumero){
-  const si = v => v && v !== 'NO' && v !== 'No aplica' && v !== 'Sin Mini PC' && v !== '' ? v : null;
-  return `<div style="padding:24px;font-family:Arial,sans-serif;font-size:13px;color:#333;">
-    <div style="text-align:center;margin-bottom:16px;">
-      <div style="font-size:18px;font-weight:700;color:#1a3a6b;">ORDEN DE PRODUCCIÓN</div>
-      <div style="font-size:12px;color:#666;">${cotNumero}</div>
+  const v = (val, fallback='') => val || fallback;
+  const opRef = cotNumero.replace('COT-','OP-');
+  
+  const fila3 = (l1,v1,l2,v2,l3,v3) => `
+    <div><label style="font-size:10px;color:#888;text-transform:uppercase;">${l1}</label>
+      <input type="text" value="${v(v1)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+    <div><label style="font-size:10px;color:#888;text-transform:uppercase;">${l2}</label>
+      <input type="text" value="${v(v2)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+    <div><label style="font-size:10px;color:#888;text-transform:uppercase;">${l3}</label>
+      <input type="text" value="${v(v3)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>`;
+
+  const seccion = (titulo, contenido) => `
+    <div style="margin-bottom:14px;padding:12px;background:#f5f7fa;border-radius:6px;">
+      <div style="font-size:11px;font-weight:700;color:#1a3a6b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;border-bottom:1px solid #ddd;padding-bottom:6px;">${titulo}</div>
+      ${contenido}
+    </div>`;
+
+  return `<div style="background:#fff;color:#111;border-radius:0 0 8px 8px;padding:28px 32px;font-family:Arial,sans-serif;font-size:13px;">
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a3a6b;padding-bottom:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-size:17px;font-weight:700;color:#1a3a6b;letter-spacing:0.04em;">DOC. OP — ORDEN DE PRODUCCIÓN</div>
+        <div style="font-size:10px;color:#888;margin-top:2px;">R-OP-01.1 · Rev.: 03</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">N° referencia (cotización):</div>
+        <div style="font-size:13px;font-weight:700;color:#1a3a6b;padding:2px 10px;border:1px solid #ddd;border-radius:4px;background:#f5f7fa;">${opRef}</div>
+        ${d.codigo_op_interno?`<div style="font-size:11px;color:#888;margin-top:8px;margin-bottom:4px;">Código OP interno:</div>
+        <div style="font-size:14px;font-weight:700;color:#fff;background:#1a3a6b;border-radius:4px;padding:4px 10px;">${d.codigo_op_interno}</div>`:''}
+      </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Cliente / Empresa</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.cliente||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Contacto</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.contacto||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Producto</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.producto||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Cantidad</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.cantidad||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Fecha Aprobación</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.fecha_aprobacion||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Fecha Compromiso</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.fecha_compromiso||'—'}</td></tr>
-      ${d.transporte?'<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Transporte</td><td style="padding:6px 8px;border:1px solid #ddd;">✓ Incluye transporte</td></tr>':''}
-    </table>
-    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Estructura</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Material</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.material||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Forma</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.forma||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Tamaño Pantalla</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.pantalla||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Táctil</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.tactil||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Color Tótem</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.color||'—'}</td></tr>
-      <tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Plano Especial</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.plano||'—'}</td></tr>
-      ${d.obs_estructura?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Observaciones</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.obs_estructura}</td></tr>`:''}
-    </table>
-    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Accesorios y Equipamiento</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      ${si(d.mini_pc)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Mini PC</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.mini_pc}</td></tr>`:''}
-      ${si(d.sistema_operativo)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Sistema Operativo</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.sistema_operativo}</td></tr>`:''}
-      ${si(d.windows)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Lic. Windows</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.windows}</td></tr>`:''}
-      ${si(d.impresora)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Impresora Térmica</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.impresora}</td></tr>`:''}
-      ${si(d.camara)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Cámara Web</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.camara}</td></tr>`:''}
-      ${si(d.lector_qr)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Lector QR</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.lector_qr}</td></tr>`:''}
-      ${si(d.player)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Player HDMI</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.player}${d.cantidad_players?' × '+d.cantidad_players:''}</td></tr>`:''}
-      ${si(d.tipo_pantalla)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Tipo Pantalla</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.tipo_pantalla}</td></tr>`:''}
-      ${d.otros_accesorios?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Otros</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.otros_accesorios}</td></tr>`:''}
-    </table>
-    ${(d.ploteo_vidrio||d.ploteo_totem||d.obs_ploteo)?`
-    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Ploteo / Gráfica</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      ${si(d.ploteo_vidrio)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Ploteo Vidrio</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.ploteo_vidrio}</td></tr>`:''}
-      ${si(d.ploteo_totem)?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Ploteo Tótem</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.ploteo_totem}</td></tr>`:''}
-      ${d.obs_ploteo?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Obs. Ploteo</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.obs_ploteo}</td></tr>`:''}
-    </table>`:''}
-    ${(d.config_software||d.ajustes_medida||d.obs_adicionales)?`
-    <div style="font-weight:700;color:#1a3a6b;margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Software y Adicionales</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-      ${d.config_software?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;width:35%;">Config. Software</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.config_software}</td></tr>`:''}
-      ${d.ajustes_medida?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Ajustes Medida</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.ajustes_medida}</td></tr>`:''}
-      ${d.obs_adicionales?`<tr><td style="padding:6px 8px;border:1px solid #ddd;background:#f0f4ff;font-weight:600;">Obs. Adicionales</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.obs_adicionales}</td></tr>`:''}
-    </table>`:''}
+
+    <!-- Datos proyecto -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;padding:12px;background:#f5f7fa;border-radius:6px;">
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cliente / Empresa</label>
+        <input type="text" value="${v(d.cliente)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Fecha Aprobación</label>
+        <input type="text" value="${v(d.fecha_aprobacion)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Nombre Ref. / Tel</label>
+        <input type="text" value="${v(d.contacto)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Producto</label>
+        <input type="text" value="${v(d.producto)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cantidad</label>
+        <input type="text" value="${v(d.cantidad)}" style="width:80px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">📅 Fecha compromiso cliente</label>
+        <input type="text" value="${v(d.fecha_compromiso)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      ${d.transporte?'<div style="grid-column:1/-1;padding:8px 10px;background:#e8f5e9;border-radius:6px;border:1px solid #a5d6a7;font-size:12px;color:#2e7d32;">✅ <strong>Transporte incluido</strong></div>':''}
+    </div>
+
+    ${seccion('Estructura', `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      ${fila3('Material',d.material,'Forma',d.forma,'Tamaño pantalla',d.pantalla)}
+      ${fila3('Táctil',d.tactil,'Color tótem',d.color,'Plano especial',d.plano)}
+    </div>
+    ${d.obs_estructura?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones estructura</label>
+      <textarea rows="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.obs_estructura}</textarea></div>`:''}
+    `)}
+
+    ${seccion('Accesorios y equipamiento', `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      ${fila3('Mini PC',d.mini_pc,'Sistema Operativo',d.sistema_operativo,'Lic. Windows activada',d.windows)}
+      ${fila3('Impresora térmica',d.impresora,'Lector QR',d.lector_qr,'Cámara web',d.camara)}
+    </div>
+    ${d.player?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Lleva player</label>
+        <input type="text" value="${v(d.player)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cantidad players</label>
+        <input type="text" value="${v(d.cantidad_players)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+    </div>`:''}
+    ${d.tipo_pantalla?`<div style="margin-top:10px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Tipo de pantalla</label>
+      <input type="text" value="${v(d.tipo_pantalla)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>`:''}
+    ${d.otros_accesorios?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Otros accesorios / Propiedad del cliente</label>
+      <textarea rows="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.otros_accesorios}</textarea></div>`:''}
+    `)}
+
+    ${seccion('Vidrio y Ploteo', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Ploteo vidrio</label>
+        <input type="text" value="${v(d.ploteo_vidrio)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Ploteo tótem</label>
+        <input type="text" value="${v(d.ploteo_totem)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+    </div>
+    ${d.obs_ploteo?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones ploteo</label>
+      <textarea rows="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.obs_ploteo}</textarea></div>`:''}
+    `)}
+
+    ${seccion('Software', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Configuración software</label>
+        <input type="text" value="${v(d.config_software)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+      <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Requiere ajustes a medida</label>
+        <input type="text" value="${v(d.ajustes_medida)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
+    </div>
+    ${d.obs_adicionales?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones adicionales del proyecto</label>
+      <textarea rows="3" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.obs_adicionales}</textarea></div>`:''}
+    `)}
   </div>`;
 }
 
