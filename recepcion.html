@@ -431,14 +431,23 @@ async function loadPendientes(){
 async function abrirConteoPendiente(recId){
   try{
     // Traer items de esa recepción
-    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*,skus(id,codigo,nombre,tracking),variantes(id,valor)`);
-    const itemsCantidad = (recItems||[]).filter(ri => ri.skus?.tracking === 'cantidad').map(ri => ({
-      sku_id: ri.sku_id,
-      nombre: ri.skus?.nombre || '—',
-      cantidad_recibida: ri.cantidad_recibida,
-      color_recibido: ri.variantes?.valor || null,
-      _variantes: []
-    }));
+    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*,variantes(id,valor)`);
+    // Traer SKUs por separado para cada item
+    const itemsCantidad = [];
+    for(const ri of (recItems||[])){
+      if(!ri.sku_id) continue;
+      const skuData = await api(`skus?id=eq.${ri.sku_id}&select=id,codigo,nombre,tracking`);
+      const sku = skuData?.[0];
+      if(sku?.tracking === 'cantidad'){
+        itemsCantidad.push({
+          sku_id: ri.sku_id,
+          nombre: sku.nombre || '—',
+          cantidad_recibida: ri.cantidad_recibida,
+          color_recibido: ri.variantes?.valor || null,
+          _variantes: []
+        });
+      }
+    }
 
     if(!itemsCantidad.length){
       toast('No hay insumos de caja en esta recepción');
