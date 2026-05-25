@@ -680,7 +680,7 @@ function renderCatalogo(){
       <td>${varChips||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
-        <button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>
+        ${IS_READONLY ? '' : `<button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>`}
         ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : `<button class="btn sm" data-sku-id="${s.id}" data-sku-nombre="${s.nombre.replace(/"/g,'&quot;')}" onclick="imprimirEtiquetasUID(this)" ${s._uidEnStock===0 ? 'disabled' : ''} style="margin-left:4px;border-color:var(--blue);color:var(--blue);${s._uidEnStock===0 ? "opacity:0.3;cursor:default;" : ""}">🏷 Etiquetas${s._uidEnStock>0 ? " ("+s._uidEnStock+")" : ""}</button>`}
       </td>
     </tr>`;
@@ -777,7 +777,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     <td class="td-actions">
       ${d.tracking==='uid'
         ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
-        : `<button class="btn sm" onclick="openAdj(${d.id},'${d.codigo} ${d.variante||''}',${d.cantidad})">Ajustar</button>`
+        : IS_READONLY ? '' : `<button class="btn sm" onclick="openAdj(${d.id},'${d.codigo} ${d.variante||''}',${d.cantidad})">Ajustar</button>`
       }
     </td>
   </tr>`;
@@ -1354,6 +1354,18 @@ function toast(msg){
 }
 
 // ─── INIT ───────────────────────────────────────────────────────────────────
+// ─── MODO READONLY ───────────────────────────────────────────
+const IS_READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
+if(IS_READONLY){
+  // Agregar banner de solo lectura
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(255,179,64,0.15);border-bottom:1px solid rgba(255,179,64,0.3);padding:6px 16px;text-align:center;font-size:11px;color:var(--amber);font-family:"DM Mono",monospace;letter-spacing:0.05em;';
+    banner.textContent = '👁 MODO SOLO LECTURA — Área de producción';
+    document.body.prepend(banner);
+  });
+}
+
 async function init(){
   // Load config from localStorage
   const ok = await checkConnection();
