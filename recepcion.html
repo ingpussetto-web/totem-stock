@@ -1307,6 +1307,15 @@ async function confirmarVerificacionCaja(){
     } catch(e){ console.warn('Error alertas:', e); }
   }
 
+  // Verificar que no se ingresó ya (evitar doble suma)
+  const recEstado = await api(`recepciones?id=eq.${_vcajaRecId}&select=estado`).catch(()=>[]);
+  if(recEstado?.[0]?.estado === 'confirmada'){
+    toast('Este conteo ya fue confirmado');
+    document.getElementById('modal-verificacion-caja').style.display = 'none';
+    showPage('pendientes'); loadPendientes();
+    return;
+  }
+
   // Ingresar al stock
   for(const ri of _vcajaItems){
     await ingresarCantidad(ri);
@@ -1317,8 +1326,17 @@ async function confirmarVerificacionCaja(){
     await api(`recepciones?id=eq.${_vcajaRecId}`, 'PATCH', {estado: 'confirmada'}).catch(()=>{});
   }
 
-  // Cerrar modal y mostrar resultado
+  // Cerrar modal
   document.getElementById('modal-verificacion-caja').style.display = 'none';
+
+  // Si viene de conteo pendiente (no hay recNum), volver a pendientes
+  if(!window._recNum){
+    toast('✅ Conteo confirmado — stock actualizado');
+    showPage('pendientes');
+    loadPendientes();
+    return;
+  }
+
   mostrarResultado(window._recNum, window._esParcial, window._hayDesvios);
 }
 
