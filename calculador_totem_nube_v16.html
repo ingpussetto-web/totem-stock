@@ -5959,18 +5959,36 @@ async function saveToSheets(){
     await stockAPI('config_cotizador?key=eq.periodo', 'PATCH', { value: periodoVal });
 
     // ── Proyectos ──────────────────────────────────────────────────────────
-    // Borrar proyectos eliminados de Supabase
-    const idsActivos = proyectos.map(p=>p.id).filter(id=>id && Number.isInteger(Number(id)) && !String(id).includes('-'));
-    const proyDB = await stockAPI('proyectos_cotizador?select=id').catch(()=>[]);
+    // Traer todos los proyectos de DB para comparar
+    const proyDB = await stockAPI('proyectos_cotizador?select=id,orden').catch(()=>[]);
+    const ordenesActivos = proyectos.map(p=>p.orden).filter(Boolean);
+    
+    // Borrar proyectos eliminados de Supabase (por orden)
     for(const row of (proyDB||[])){
-      if(!idsActivos.includes(row.id)){
+      if(!ordenesActivos.includes(row.orden)){
         await stockAPI('proyectos_cotizador?id=eq.'+row.id, 'DELETE').catch(()=>{});
       }
     }
+    
+    // Borrar duplicados — dejar solo el de menor id por orden
+    const ordenesVistos = {};
+    for(const row of (proyDB||[])){
+      if(ordenesVistos[row.orden]){
+        // Duplicado — borrar el de mayor id
+        const idABorrar = Math.max(row.id, ordenesVistos[row.orden]);
+        await stockAPI('proyectos_cotizador?id=eq.'+idABorrar, 'DELETE').catch(()=>{});
+      } else {
+        ordenesVistos[row.orden] = row.id;
+      }
+    }
+
     for(const p of proyectos){
-      const idNumerico = p.id && Number.isInteger(Number(p.id)) && !String(p.id).includes('-');
-      if(idNumerico){
-        await stockAPI('proyectos_cotizador?id=eq.'+p.id, 'PATCH', {
+      // Buscar por orden en DB (más confiable que por id local)
+      const enDB = (proyDB||[]).find(r=>r.orden===p.orden);
+      if(enDB){
+        // Actualizar usando el id de DB
+        p.id = enDB.id; // sincronizar id local con DB
+        await stockAPI('proyectos_cotizador?id=eq.'+enDB.id, 'PATCH', {
           orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio,
           estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items)
         });
