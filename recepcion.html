@@ -356,7 +356,10 @@ async function checkConnection(){
 async function loadPendientes(){
   try{
     // OCs aprobadas o con recepción parcial — SIN datos de proveedor ni precio
+    // OCs con entrega pendiente
     const ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago,proveedores(razon_social)&order=created_at.asc');
+    // Recepciones pendientes de conteo
+    const recsPendientes = await api('recepciones?estado=eq.pendiente_conteo&select=id,recepcion_numero,oc_id,created_at,ordenes_compra(oc_numero,proveedores(razon_social))').catch(()=>[]);
 
     // Contar items por OC
     for(let oc of ocs){
@@ -375,12 +378,34 @@ async function loadPendientes(){
     document.getElementById('m-desvios').textContent = desviosHoy?.length||0;
 
     const el = document.getElementById('pendientes-list');
-    if(!ocs.length){
+
+    // Sección conteos pendientes
+    let htmlConteos = '';
+    if(recsPendientes && recsPendientes.length){
+      htmlConteos = `<div style="margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:600;color:var(--amber);letter-spacing:0.08em;margin-bottom:8px;">⏳ CONTEOS PENDIENTES — Stock no disponible hasta completar</div>
+        ${recsPendientes.map(r=>{
+          const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+          return `<div class="oc-card" style="border-color:rgba(255,160,0,0.3);cursor:pointer;" onclick="abrirConteoPendiente(${r.id})">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div class="oc-numero">${r.recepcion_numero} · ${fecha}</div>
+                <div style="font-size:14px;font-weight:600;margin:2px 0;">${r.ordenes_compra?.proveedores?.razon_social||'—'}</div>
+                <div style="font-size:12px;color:var(--text2);">${r.ordenes_compra?.oc_numero||'—'}</div>
+              </div>
+              <span class="badge amber">Conteo pendiente</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    if(!ocs.length && !recsPendientes?.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Sin entregas pendientes</div>';
       return;
     }
 
-    el.innerHTML = ocs.map(oc=>{
+    el.innerHTML = htmlConteos + ocs.map(oc=>{
       const fecha = new Date(oc.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
       const diasAtras = Math.floor((Date.now()-new Date(oc.created_at))/(1000*60*60*24));
       const esParcial = oc.estado==='recibida_parcial';
@@ -400,6 +425,29 @@ async function loadPendientes(){
   }catch(e){
     document.getElementById('pendientes-list').innerHTML='<div class="empty">Error cargando pendientes</div>';
   }
+}
+
+// ─── ABRIR CONTEO PENDIENTE ──────────────────────────────────
+async function abrirConteoPendiente(recId){
+  try{
+    // Traer items de esa recepción
+    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*,skus(id,codigo,nombre,tracking),variantes(id,valor)`);
+    const itemsCantidad = (recItems||[]).filter(ri => ri.skus?.tracking === 'cantidad').map(ri => ({
+      sku_id: ri.sku_id,
+      nombre: ri.skus?.nombre || '—',
+      cantidad_recibida: ri.cantidad_recibida,
+      color_recibido: ri.variantes?.valor || null,
+      _variantes: []
+    }));
+
+    if(!itemsCantidad.length){
+      toast('No hay insumos de caja en esta recepción');
+      return;
+    }
+
+    window._vcajaRecId = recId;
+    await mostrarVerificacionCaja(itemsCantidad, recId);
+  }catch(e){ toast('Error: '+e.message); console.error(e); }
 }
 
 // ─── ABRIR RECEPCIÓN ────────────────────────────────────────
@@ -1259,9 +1307,38 @@ async function confirmarVerificacionCaja(){
     await ingresarCantidad(ri);
   }
 
+  // Marcar recepción como confirmada
+  if(_vcajaRecId){
+    await api(`recepciones?id=eq.${_vcajaRecId}`, 'PATCH', {estado: 'confirmada'}).catch(()=>{});
+  }
+
   // Cerrar modal y mostrar resultado
   document.getElementById('modal-verificacion-caja').style.display = 'none';
   mostrarResultado(window._recNum, window._esParcial, window._hayDesvios);
+}
+
+// ─── POSPONER CONTEO ──────────────────────────────────────────
+async function posponerConteo(){
+  try{
+    // Marcar recepción como pendiente_conteo
+    await api(`recepciones?id=eq.${_vcajaRecId}`, 'PATCH', {estado: 'pendiente_conteo'});
+
+    // Cerrar modal
+    document.getElementById('modal-verificacion-caja').style.display = 'none';
+
+    // Mostrar resultado con aviso
+    const contenedor = document.getElementById('recepcion-contenido') || document.querySelector('.main');
+    document.querySelector('main').innerHTML = `
+      <div style="max-width:560px;margin:60px auto;text-align:center;">
+        <div style="font-size:40px;margin-bottom:16px;">⏳</div>
+        <div style="font-size:18px;font-weight:600;margin-bottom:8px;">Recepción registrada</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:24px;">El conteo de caja quedó pendiente. El stock se actualizará cuando realices el conteo.</div>
+        <div style="padding:12px 16px;background:rgba(255,160,0,0.08);border:1px solid rgba(255,160,0,0.3);border-radius:8px;font-size:12px;color:var(--amber);margin-bottom:24px;">
+          ⚠️ Los insumos NO estarán disponibles en producción hasta completar el conteo
+        </div>
+        <button class="btn solid-green" onclick="showPage('pendientes');loadPendientes();">Volver a pendientes</button>
+      </div>`;
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 // ─── INIT ────────────────────────────────────────────────────
@@ -1284,6 +1361,7 @@ init();
       <input id="vcaja-nombre" type="text" placeholder="Ej: Carlos" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
     </div>
     <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="posponerConteo()" style="flex:1;padding:10px;background:var(--surface2);color:var(--text2);font-weight:600;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;">Realizar conteo luego</button>
       <button onclick="confirmarVerificacionCaja()" style="flex:1;padding:10px;background:var(--green);color:#000;font-weight:600;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Confirmar y guardar</button>
     </div>
   </div>

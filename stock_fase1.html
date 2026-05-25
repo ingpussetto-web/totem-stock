@@ -793,6 +793,27 @@ async function loadPendientesIngreso(){
   const wrap = document.getElementById('pendientes-ingreso-wrap');
   if(!wrap) return;
   try{
+    // ── Conteos pendientes de caja ──
+    const recsPend = await api('recepciones?estado=eq.pendiente_conteo&select=id,recepcion_numero,created_at,ordenes_compra(oc_numero,proveedores(razon_social))').catch(()=>[]);
+    let htmlConteosPend = '';
+    if(recsPend?.length){
+      htmlConteosPend = `<div style="background:rgba(255,160,0,0.06);border:1px solid rgba(255,160,0,0.3);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:0.08em;margin-bottom:10px;">⏳ CONTEOS DE CAJA PENDIENTES</div>
+        ${recsPend.map(r=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,160,0,0.15);font-size:12px;">
+            <div>
+              <span style="color:var(--text);font-weight:500;">${r.ordenes_compra?.proveedores?.razon_social||'—'}</span>
+              <span style="color:var(--text3);font-family:'DM Mono',monospace;margin-left:8px;">${r.recepcion_numero}</span>
+            </div>
+            <span style="font-size:10px;background:rgba(255,160,0,0.1);border:1px solid rgba(255,160,0,0.3);color:var(--amber);border-radius:4px;padding:2px 8px;">Stock no disponible</span>
+          </div>`).join('')}
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;">Andá a Recepción para completar el conteo y liberar el stock.</div>
+      </div>`;
+      // Badge rojo
+      const badge = document.getElementById('badge-pendientes');
+      if(badge) badge.style.display = 'inline-flex';
+    }
+
     // Traer OCs aprobadas y parciales con items pendientes
     const ocsActivas = await api("ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,proveedores(razon_social)").catch(()=>[]);
     if(!ocsActivas?.length){
@@ -842,7 +863,7 @@ async function loadPendientesIngreso(){
       </div>`;
     }).join('');
 
-    wrap.innerHTML = html;
+    wrap.innerHTML = htmlConteosPend + html;
     // Mostrar badge rojo en el menú
     const badge = document.getElementById('badge-pendientes');
     if(badge) badge.style.display = 'inline-flex';
