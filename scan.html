@@ -567,7 +567,7 @@ async function ejecutarAsignacion(nombre){
     unidadActual.estado = 'reservado';
     unidadActual.updated_at = new Date().toISOString();
     toast('✓ Asignado correctamente');
-    setTimeout(()=>renderReservado(), 800);
+    await renderReservado();
 
   }catch(e){
     toast('Error: '+e.message);
