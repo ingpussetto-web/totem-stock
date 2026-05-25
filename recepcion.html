@@ -431,22 +431,18 @@ async function loadPendientes(){
 async function abrirConteoPendiente(recId){
   try{
     // Traer items de esa recepción
-    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*`);
-    // Traer SKUs por separado para cada item
+    const recItems = await api(`recepcion_items?recepcion_id=eq.${recId}&select=*,oc_items(id,sku_id,skus(id,nombre,tracking))`);
     const itemsCantidad = [];
     for(const ri of (recItems||[])){
-      if(!ri.sku_id) continue;
-      const skuData = await api(`skus?id=eq.${ri.sku_id}&select=id,codigo,nombre,tracking`);
-      const sku = skuData?.[0];
-      if(sku?.tracking === 'cantidad'){
-        itemsCantidad.push({
-          sku_id: ri.sku_id,
-          nombre: sku.nombre || '—',
-          cantidad_recibida: ri.cantidad_recibida,
-          color_recibido: ri.variantes?.valor || null,
-          _variantes: []
-        });
-      }
+      const sku = ri.oc_items?.skus;
+      if(!sku || sku.tracking !== 'cantidad') continue;
+      itemsCantidad.push({
+        sku_id: ri.oc_items?.sku_id,
+        nombre: sku.nombre || '—',
+        cantidad_recibida: ri.cantidad_recibida,
+        color_recibido: ri.color_recibido || null,
+        _variantes: []
+      });
     }
 
     if(!itemsCantidad.length){
