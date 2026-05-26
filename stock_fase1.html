@@ -681,7 +681,7 @@ function renderCatalogo(){
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
         ${IS_READONLY ? '' : `<button class="btn sm" onclick="openModalSku(${s.id})">Editar</button>`}
-        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"\'")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : `<button class="btn sm" data-sku-id="${s.id}" data-sku-nombre="${s.nombre.replace(/"/g,'&quot;')}" onclick="imprimirEtiquetasUID(this)" ${s._uidEnStock===0 ? 'disabled' : ''} style="margin-left:4px;border-color:var(--blue);color:var(--blue);${s._uidEnStock===0 ? "opacity:0.3;cursor:default;" : ""}">🏷 Etiquetas${s._uidEnStock>0 ? " ("+s._uidEnStock+")" : ""}</button>`}
+        ${s.tracking !== 'uid' ? `<button class="btn sm" onclick="imprimirEtiquetaCaja('${s.codigo}','${s.nombre.replace(/'/g,"&apos;").replace(/"/g,"&quot;")}')" style="margin-left:4px;border-color:var(--amber);color:var(--amber);">📦 Etiqueta</button>` : `<button class="btn sm" data-sku-id="${s.id}" data-sku-nombre="${s.nombre.replace(/"/g,'&quot;')}" onclick="imprimirEtiquetasUID(this)" ${s._uidEnStock===0 ? 'disabled' : ''} style="margin-left:4px;border-color:var(--blue);color:var(--blue);${s._uidEnStock===0 ? "opacity:0.3;cursor:default;" : ""}">🏷 Etiquetas${s._uidEnStock>0 ? " ("+s._uidEnStock+")" : ""}</button>`}
       </td>
     </tr>`;
   }).join('');
@@ -1085,6 +1085,7 @@ async function imprimirEtiquetasUID(btn){
 }
 
 function imprimirEtiquetaCaja(codigo, nombre){
+  nombre = nombre.replace(/&apos;/g,"'").replace(/&quot;/g,'"');
   // Generar QR del código de SKU e imprimir
   const win = window.open('','_blank','width=400,height=500');
   win.document.write(`<!DOCTYPE html><html><head>
