@@ -921,31 +921,61 @@ async function loadDesvios(){
       return;
     }
 
-    // ── Alertas tempranas: OPs abiertas con stock 0 ────────────────────────
+    // ── Alertas tempranas: demanda de OPs >= stock_min y stock disponible < stock_min ──
     let alertasHTML = '';
     try{
-      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,skus(id,nombre,codigo),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
+      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,skus(id,nombre,codigo,stock_min),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
       const alertas = (opsAbiertas||[]).filter(i => i.ordenes_produccion && ['pendiente','en_proceso'].includes(i.ordenes_produccion.estado));
       if(alertas.length){
         const skuIds = [...new Set(alertas.map(i=>i.sku_id))].join(',');
         const stockItems = await api('stock_disponible?sku_id=in.('+skuIds+')&select=sku_id,disponible').catch(()=>[]);
         const stockMap = {};
         (stockItems||[]).forEach(s=>{ stockMap[s.sku_id] = s.disponible; });
-        const conStock0 = alertas.filter(i => (stockMap[i.sku_id]||0) <= 0);
-        if(conStock0.length){
+
+        // Agrupar demanda total por SKU (suma qty de todas las OPs activas)
+        const demandaMap = {};   // sku_id → {qty_total, items:[]}
+        alertas.forEach(item => {
+          const sid = item.sku_id;
+          if(!demandaMap[sid]) demandaMap[sid] = { qty_total: 0, items: [] };
+          demandaMap[sid].qty_total += (item.qty || 1);
+          demandaMap[sid].items.push(item);
+        });
+
+        // Filtrar: stock disponible < stock_min Y demanda total >= stock_min
+        const skusAlerta = Object.entries(demandaMap).filter(([sid, data]) => {
+          const sku = (data.items[0].skus) || {};
+          const stockMin = sku.stock_min || 1;
+          const disponible = stockMap[sid] || 0;
+          return disponible < stockMin && data.qty_total >= stockMin;
+        });
+
+        if(skusAlerta.length){
+          // Aplanar items de los SKUs que disparan alerta
+          const itemsAlerta = skusAlerta.flatMap(([sid, data]) => data.items);
           alertasHTML = '<div style="margin-bottom:20px;">'
-            +'<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:8px;letter-spacing:0.05em;">⚡ ALERTAS TEMPRANAS — Stock 0 comprometido en OPs abiertas</div>'
+            +'<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:8px;letter-spacing:0.05em;">⚡ ALERTAS TEMPRANAS — Demanda de OPs activas supera stock mínimo</div>'
             +'<table style="width:100%;border-collapse:collapse;border:1px solid rgba(255,179,64,0.2);border-radius:8px;overflow:hidden;"><thead>'
             +'<tr style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;border-bottom:1px solid rgba(255,179,64,0.15);">'
-            +'<th style="padding:8px 16px;text-align:left;">Insumo</th><th style="padding:8px;text-align:left;">OP</th>'
-            +'<th style="padding:8px;text-align:left;">Cliente</th><th style="padding:8px;"></th></tr></thead><tbody>'
-            + conStock0.map(item => {
+            +'<th style="padding:8px 16px;text-align:left;">Insumo</th>'
+            +'<th style="padding:8px;text-align:center;">Stock mín.</th>'
+            +'<th style="padding:8px;text-align:center;">Disponible</th>'
+            +'<th style="padding:8px;text-align:center;">Demanda OPs</th>'
+            +'<th style="padding:8px;text-align:left;">OP</th>'
+            +'<th style="padding:8px;text-align:left;">Cliente</th>'
+            +'<th style="padding:8px;"></th></tr></thead><tbody>'
+            + itemsAlerta.map(item => {
                 const sku = item.skus||{};
                 const op = item.ordenes_produccion||{};
                 const variante = item.variantes ? item.variantes.valor : '';
                 const nombre = sku.nombre||item.nombre||'—';
+                const stockMin = sku.stock_min || 1;
+                const disponible = stockMap[item.sku_id] || 0;
+                const demanda = demandaMap[item.sku_id]?.qty_total || 0;
                 return '<tr style="border-top:1px solid rgba(255,179,64,0.1);">'
                   +'<td style="padding:10px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'+(variante?'<div style="font-size:11px;color:var(--text3);">'+variante+'</div>':'')+'</td>'
+                  +'<td style="padding:10px;text-align:center;font-family:DM Mono,monospace;color:var(--text2);">'+stockMin+'</td>'
+                  +'<td style="padding:10px;text-align:center;font-family:DM Mono,monospace;color:'+(disponible>0?'var(--green)':'#ff5e5e')+';">'+disponible+'</td>'
+                  +'<td style="padding:10px;text-align:center;font-family:DM Mono,monospace;color:#ffb340;font-weight:600;">'+demanda+'</td>'
                   +'<td style="padding:10px;font-family:DM Mono,monospace;font-size:12px;color:#ffb340;">'+(op.op_numero||'—')+'</td>'
                   +'<td style="padding:10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
                   +'<td style="padding:10px;text-align:right;"><button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="'+encodeURIComponent(variante)+'" onclick="generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;">🛒 Comprar</button></td>'
@@ -953,7 +983,7 @@ async function loadDesvios(){
               }).join('')
             +'</tbody></table></div>';
           statsEl.innerHTML += '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">'
-            +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+conStock0.length+'</div>'
+            +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+skusAlerta.length+'</div>'
             +'<div style="font-size:11px;color:var(--text3);">Alertas tempranas</div></div>';
         }
       }
