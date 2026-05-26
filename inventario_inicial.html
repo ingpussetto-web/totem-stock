@@ -6,6 +6,7 @@
 <title>Totem Nube — Inventario Inicial</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="etiquetas_modal.js"></script>
 <style>
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
@@ -277,7 +278,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <div class="card-title">Etiquetas generadas</div>
           <div id="resultado-registro" style="margin-bottom:16px;"></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="btn solid" onclick="imprimirEtiquetas()">🖨 Imprimir etiquetas</button>
+            <button class="btn solid" onclick="abrirModalEtiquetas(etiquetasActuales, tnImprimirEtiquetas)">🖨 Imprimir etiquetas</button>
             <button class="btn primary" onclick="inventariarMas()">+ Inventariar otro insumo</button>
           </div>
         </div>
@@ -677,13 +678,12 @@ async function registrarYEtiquetas(){
         ${varObj ? `— <strong>${varObj.valor}</strong>` : ''}
       </div>`;
     
-    // Generar vista previa de etiquetas
-    generarVistaEtiquetas();
-    
+    // Abrir modal de posicionamiento de etiquetas
     document.getElementById('panel2').style.display='none';
     document.getElementById('panel3').style.display='block';
     setStep(3);
     toast(`${cantidad} UID${cantidad>1?'s':''} registrados ✓`);
+    setTimeout(()=>{ abrirModalEtiquetas(etiquetasActuales, tnImprimirEtiquetas); }, 200);
     
   } catch(e){
     toast('Error: '+(e.message.includes('unique')?'Algunos UIDs ya existen — revisá el prefijo':e.message));
