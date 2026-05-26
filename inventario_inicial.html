@@ -251,15 +251,16 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <div id="seleccion-resumen" style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);"></div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">¿Cuántas unidades contaste?</label>
-              <input class="form-input" type="number" id="inp-cantidad" min="1" max="200" value="1" oninput="generarUidPreview()">
+              <label class="form-label">¿Cuántas unidades contaste en total?</label>
+              <input class="form-input" type="number" id="inp-cantidad" min="0" max="500" value="1" oninput="generarUidPreview()">
             </div>
             <div class="form-group">
               <label class="form-label">Prefijo UID (auto)</label>
               <input class="form-input" type="text" id="inp-prefijo" readonly style="color:var(--text3);">
             </div>
           </div>
-          <div class="form-group">
+          <div id="diff-aviso" style="display:none;margin-bottom:10px;"></div>
+          <div class="form-group" id="uid-preview-group">
             <label class="form-label">UIDs que se van a generar</label>
             <div class="uid-preview" id="uid-preview"></div>
           </div>
@@ -522,9 +523,10 @@ async function irPaso2(){
     document.getElementById('sai-ultimo-uid').textContent = cantidad ? ultimoUid : 'Ninguno aún';
     document.getElementById('sai-proximo').textContent = proximo;
     document.getElementById('stock-actual-info').style.display = 'block';
-  }catch(e){ document.getElementById('stock-actual-info').style.display = 'none'; }
+    window._unidadesRegistradas = cantidad;
+  }catch(e){ document.getElementById('stock-actual-info').style.display = 'none'; window._unidadesRegistradas = 0; }
   
-  document.getElementById('inp-cantidad').value = 1;
+  document.getElementById('inp-cantidad').value = window._unidadesRegistradas || 1;
   generarUidPreview();
   
   document.getElementById('panel1').style.display='none';
@@ -544,9 +546,16 @@ function generarPrefijo(codigo, variante){
 }
 
 async function generarUidPreview(){
-  const cantidad = parseInt(document.getElementById('inp-cantidad').value)||1;
+  const totalContado = parseInt(document.getElementById('inp-cantidad').value)||0;
   const prefijo = document.getElementById('inp-prefijo').value;
-  
+  const registradas = window._unidadesRegistradas || 0;
+  const diferencia = totalContado - registradas;
+
+  const avisoEl = document.getElementById('diff-aviso');
+  const previewGroup = document.getElementById('uid-preview-group');
+  const btnRegistrar = document.getElementById('btn-registrar');
+  const preview = document.getElementById('uid-preview');
+
   // Buscar el último número usado para este prefijo
   let lastNum = 0;
   try {
@@ -557,10 +566,39 @@ async function generarUidPreview(){
       if(match) lastNum = parseInt(match[1]);
     }
   } catch(e){}
-  
-  const preview = document.getElementById('uid-preview');
+
+  // Caso: menos de lo registrado → alerta, no generar
+  if(diferencia < 0){
+    avisoEl.style.display = 'block';
+    avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(255,94,94,0.1);border:1px solid rgba(255,94,94,0.3);border-radius:8px;color:#ff5e5e;font-size:13px;">
+      ⚠️ Conteo menor al registrado: contaste <strong>${totalContado}</strong> pero hay <strong>${registradas}</strong> en sistema. Verificá antes de continuar.
+    </div>`;
+    previewGroup.style.display = 'none';
+    btnRegistrar.disabled = true;
+    return;
+  }
+
+  // Caso: igual → sin nuevas etiquetas
+  if(diferencia === 0){
+    avisoEl.style.display = 'block';
+    avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:8px;color:var(--green);font-size:13px;">
+      ✓ Conteo coincide con el sistema (${registradas} unidades). No hay nuevas etiquetas para generar.
+    </div>`;
+    previewGroup.style.display = 'none';
+    btnRegistrar.disabled = true;
+    return;
+  }
+
+  // Caso: más de lo registrado → generar diferencia
+  avisoEl.style.display = 'block';
+  avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:8px;color:var(--amber);font-size:13px;">
+    + ${diferencia} unidad${diferencia>1?'es':''} nueva${diferencia>1?'s':''} respecto al sistema (${registradas} registradas → ${totalContado} contadas)
+  </div>`;
+  previewGroup.style.display = 'block';
+  btnRegistrar.disabled = false;
+
   preview.innerHTML = '';
-  for(let i=1;i<=Math.min(cantidad,30);i++){
+  for(let i=1;i<=Math.min(diferencia,30);i++){
     const num = String(lastNum+i).padStart(4,'0');
     const uid = prefijo+'-'+num;
     const chip = document.createElement('div');
@@ -568,11 +606,11 @@ async function generarUidPreview(){
     chip.textContent=uid;
     preview.appendChild(chip);
   }
-  if(cantidad>30){
+  if(diferencia>30){
     const chip = document.createElement('div');
     chip.className='uid-chip';
     chip.style.color='var(--text3)';
-    chip.textContent=`... y ${cantidad-30} más`;
+    chip.textContent=`... y ${diferencia-30} más`;
     preview.appendChild(chip);
   }
 }
@@ -583,9 +621,12 @@ async function registrarYEtiquetas(){
   const sku = skus.find(s=>String(s.id)===skuId);
   const varId = document.getElementById('sel-variante').value||null;
   const varObj = variantesActuales.find(v=>String(v.id)===varId)||null;
-  const cantidad = parseInt(document.getElementById('inp-cantidad').value)||1;
+  const totalContado = parseInt(document.getElementById('inp-cantidad').value)||0;
+  const registradas = window._unidadesRegistradas || 0;
+  const cantidad = totalContado - registradas; // solo las nuevas
   const prefijo = document.getElementById('inp-prefijo').value;
   
+  if(cantidad <= 0){ toast('No hay unidades nuevas para registrar'); return; }
   const btn = document.getElementById('btn-registrar');
   btn.disabled=true;
   btn.textContent='Registrando...';
