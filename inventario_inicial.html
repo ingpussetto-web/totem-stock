@@ -317,8 +317,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         </div>
 
         <div style="margin-bottom:16px;">
-          <label class="form-label">Cantidad a registrar</label>
-          <input class="form-input" type="number" id="caja-cantidad" min="1" value="1" placeholder="Ej: 10">
+          <label class="form-label">¿Cuántas unidades contaste en total?</label>
+          <input class="form-input" type="number" id="caja-cantidad" min="0" value="0" placeholder="Ej: 38" oninput="calcularDifCaja()">
+          <div id="caja-diff-aviso" style="display:none;margin-top:8px;"></div>
         </div>
 
         <div style="margin-bottom:20px;">
@@ -326,7 +327,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <input class="form-input" type="text" id="caja-nombre" placeholder="Ej: Carlos">
         </div>
 
-        <button class="btn solid-green lg" onclick="guardarStockCaja()" style="width:100%;">Guardar stock en sistema →</button>
+        <button class="btn solid-green lg" id="btn-guardar-caja" onclick="guardarStockCaja()" style="width:100%;" disabled>Guardar stock en sistema →</button>
         <div id="caja-resultado" style="margin-top:14px;display:none;"></div>
       </div>
     </div>
@@ -897,24 +898,58 @@ async function loadCajaStockActual(){
   const cantidad = stockRows?.[0]?.cantidad || 0;
   document.getElementById('caja-stock-num').textContent = cantidad;
   document.getElementById('caja-stock-info').style.display = 'block';
+  document.getElementById('caja-cantidad').value = cantidad;
+  window._cajaStockActual = cantidad;
+  calcularDifCaja();
+}
+
+function calcularDifCaja(){
+  const totalContado = parseInt(document.getElementById('caja-cantidad').value) || 0;
+  const actual = window._cajaStockActual || 0;
+  const diff = totalContado - actual;
+  const avisoEl = document.getElementById('caja-diff-aviso');
+  const btnGuardar = document.getElementById('btn-guardar-caja');
+
+  if(totalContado === 0 && actual === 0){ avisoEl.style.display='none'; if(btnGuardar) btnGuardar.disabled=true; return; }
+
+  if(diff < 0){
+    avisoEl.style.display='block';
+    avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(255,94,94,0.1);border:1px solid rgba(255,94,94,0.3);border-radius:8px;color:#ff5e5e;font-size:12px;">
+      ⚠️ Conteo menor al registrado: contaste <strong>${totalContado}</strong> pero hay <strong>${actual}</strong> en sistema. Verificá antes de continuar.
+    </div>`;
+    if(btnGuardar) btnGuardar.disabled = true;
+  } else if(diff === 0){
+    avisoEl.style.display='block';
+    avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:8px;color:var(--green);font-size:12px;">
+      ✓ Conteo coincide con el sistema (${actual} unidades). Sin cambios.
+    </div>`;
+    if(btnGuardar) btnGuardar.disabled = true;
+  } else {
+    avisoEl.style.display='block';
+    avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:8px;color:var(--amber);font-size:12px;">
+      + ${diff} unidad${diff>1?'es':''} nueva${diff>1?'s':''} (${actual} en sistema → ${totalContado} contadas)
+    </div>`;
+    if(btnGuardar) btnGuardar.disabled = false;
+  }
 }
 
 async function guardarStockCaja(){
   const skuId = document.getElementById('caja-sku').value;
-  const cantidad = parseInt(document.getElementById('caja-cantidad').value) || 0;
+  const totalContado = parseInt(document.getElementById('caja-cantidad').value) || 0;
+  const actual = window._cajaStockActual || 0;
+  const diff = totalContado - actual;
   const nombre = document.getElementById('caja-nombre').value.trim() || 'Sin nombre';
 
   if(!skuId){ toast('Seleccioná un insumo'); return; }
-  if(cantidad <= 0){ toast('Ingresá una cantidad válida'); return; }
+  if(diff <= 0){ toast('No hay diferencia para registrar'); return; }
 
   try{
-    // Buscar si ya existe fila de stock
+    // Buscar si ya existe fila de stock y setear el total contado directamente
     const stockRows = await api(`stock?sku_id=eq.${skuId}&variante_id=is.null&select=id,cantidad`);
     if(stockRows?.length){
-      const nueva = (stockRows[0].cantidad || 0) + cantidad;
-      await api(`stock?id=eq.${stockRows[0].id}`, 'PATCH', {cantidad: nueva, updated_at: new Date().toISOString()});
+      await api(`stock?id=eq.${stockRows[0].id}`, 'PATCH', {cantidad: totalContado, updated_at: new Date().toISOString()});
     } else {
-      await api('stock', 'POST', [{sku_id: parseInt(skuId), variante_id: null, cantidad}]);
+      await api('stock', 'POST', [{sku_id: parseInt(skuId), variante_id: null, cantidad: totalContado}]);
     }
 
     // Guardar nombre para próxima vez
@@ -926,15 +961,12 @@ async function guardarStockCaja(){
     document.getElementById('caja-resultado').innerHTML = `
       <div style="padding:14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:8px;">
         <div style="font-size:13px;font-weight:600;color:var(--green);">✅ Stock registrado</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${skuNombre} — +${cantidad} unidades</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${skuNombre} — total: ${totalContado} unidades (+${diff} nuevas)</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;">Registrado por: ${nombre}</div>
       </div>`;
 
     // Actualizar stock actual mostrado
     await loadCajaStockActual();
-
-    // Limpiar cantidad
-    document.getElementById('caja-cantidad').value = 1;
 
   }catch(e){ toast('Error: ' + e.message); console.error(e); }
 }
