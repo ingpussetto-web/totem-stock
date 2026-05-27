@@ -284,22 +284,28 @@ select.filter:focus{outline:none;border-color:var(--green);}
       </div>
     </div>
 
-    <div class="bom-section">
-      <div class="bom-section-title">🖥 Agregar player</div>
-      <div id="players-lista" style="margin-bottom:8px;"></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select id="player-tipo" style="flex:1;min-width:140px;">
-          <option value="">— Tipo de player —</option>
-          <option value="hdmi">HDMI Inalámbrico</option>
-          <option value="minipc">Mini PC</option>
-        </select>
-        <input type="number" id="player-qty" value="1" min="1" max="10" style="width:60px;" placeholder="Cant">
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;">
-          <input type="checkbox" id="player-fuente" style="width:14px;height:14px;"> + Fuente
-        </label>
-        <button class="btn" style="border-color:#4d9fff;color:#4d9fff;" onclick="agregarPlayer()">+ Agregar player</button>
+    <div class="bom-section" style="border:1px solid rgba(77,159,255,0.2);border-radius:8px;padding:12px;background:rgba(77,159,255,0.04);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="bom-section-title" style="color:#4d9fff;margin:0;">🖥 Items players</div>
+        <button class="btn" style="border-color:#4d9fff;color:#4d9fff;font-size:11px;padding:3px 10px;" onclick="toggleSeccionPlayers()">+ Agregar item player</button>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px;">La opción "+ Fuente" solo aplica para Mini PC sin fuente incluida.</div>
+
+      <!-- Formulario agregar item player (oculto por defecto) -->
+      <div id="player-form" style="display:none;margin-bottom:10px;padding:10px;background:rgba(77,159,255,0.06);border-radius:6px;border:1px solid rgba(77,159,255,0.15);">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Seleccioná el insumo player a agregar:</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="player-sku-sel" style="flex:1;min-width:180px;">
+            <option value="">— Seleccioná insumo —</option>
+          </select>
+          <input type="number" id="player-qty" value="1" min="1" max="20" style="width:60px;" placeholder="Cant">
+          <button class="btn" style="border-color:#4d9fff;color:#4d9fff;" onclick="agregarItemPlayer()">+ Agregar</button>
+        </div>
+      </div>
+
+      <!-- Lista de items players agregados -->
+      <div id="players-lista">
+        <div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">Sin items players agregados aún</div>
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -697,53 +703,70 @@ function renderColorChips(){
   });
 }
 
-function agregarPlayer(){
-  const tipo = document.getElementById('player-tipo').value;
-  const qty = parseInt(document.getElementById('player-qty').value)||1;
-  const conFuente = document.getElementById('player-fuente').checked;
+// SKUs permitidos para players (Mini PCs, HDMI, fuentes)
+const PLAYER_KEYWORDS = ['mini-pc','mini pc','hdmi-inalambrico','hdmi inalambrico','fuente-xxv','fuente xxv'];
 
-  if(!tipo){ toast('Seleccioná el tipo de player'); return; }
+function toggleSeccionPlayers(){
+  const form = document.getElementById('player-form');
+  const visible = form.style.display !== 'none';
+  form.style.display = visible ? 'none' : 'block';
+  if(!visible) poblarSelectPlayers();
+}
 
-  const ts = Date.now();
+function poblarSelectPlayers(){
+  const sel = document.getElementById('player-sku-sel');
+  if(!sel) return;
+  // Filtrar solo SKUs relevantes para players
+  const skusPlayer = (allSkus||[]).filter(s => {
+    const cod = (s.codigo||'').toLowerCase();
+    const nom = (s.nombre||'').toLowerCase();
+    return PLAYER_KEYWORDS.some(k => cod.includes(k) || nom.includes(k));
+  });
+  sel.innerHTML = '<option value="">— Seleccioná insumo —</option>'
+    + skusPlayer.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+}
 
-  if(tipo === 'hdmi'){
-    // Buscar SKU de HDMI Inalámbrico
-    const sku = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes('hdmi-inalambrico')) 
-              || allSkus.find(s => s.nombre && s.nombre.toLowerCase().includes('hdmi inalambrico'));
-    const nombre = sku ? sku.nombre : 'HDMI Inalámbrico';
-    currentBOMItems.push({
-      id: 'player-hdmi-'+ts, op_id: currentOP.id, sku_id: sku?.id||null,
-      v14_key: null, nombre, qty, incluido: true, estado: 'pendiente',
-      notas: '🖥 PLAYER HDMI', skus: sku||{nombre}, _variantes: [], _isNew: true
-    });
-  } else {
-    // Mini PC player
-    const skuPC = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes('mini-pc-beelink'))
-                || allSkus.find(s => s.nombre && s.nombre.toLowerCase().includes('mini pc') && s.nombre.toLowerCase().includes('beelink'));
-    const nombrePC = skuPC ? skuPC.nombre : 'Mini PC (Player)';
-    currentBOMItems.push({
-      id: 'player-minipc-'+ts, op_id: currentOP.id, sku_id: skuPC?.id||null,
-      v14_key: null, nombre: nombrePC, qty, incluido: true, estado: 'pendiente',
-      notas: '🖥 PLAYER MINI PC', skus: skuPC||{nombre:nombrePC}, _variantes: [], _isNew: true
-    });
-    // Fuente si aplica
-    if(conFuente){
-      const skuFuente = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes('fuente') && s.codigo.toLowerCase().includes('mini-pc'))
-                      || allSkus.find(s => s.nombre && s.nombre.toLowerCase().includes('fuente') && s.nombre.toLowerCase().includes('mini pc'));
-      const nombreF = skuFuente ? skuFuente.nombre : 'Fuente xxV xxA (para Mini PC)';
-      currentBOMItems.push({
-        id: 'player-fuente-'+ts, op_id: currentOP.id, sku_id: skuFuente?.id||null,
-        v14_key: null, nombre: nombreF, qty, incluido: true, estado: 'pendiente',
-        notas: '🖥 FUENTE PLAYER', skus: skuFuente||{nombre:nombreF}, _variantes: [], _isNew: true
-      });
-    }
+function renderPlayersLista(){
+  const lista = document.getElementById('players-lista');
+  if(!lista) return;
+  const playerItems = currentBOMItems.filter(i => i.notas && i.notas.startsWith('🖥'));
+  if(!playerItems.length){
+    lista.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">Sin items players agregados aún</div>';
+    return;
   }
+  lista.innerHTML = playerItems.map(item => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(77,159,255,0.06);border-radius:6px;margin-bottom:4px;border:1px solid rgba(77,159,255,0.12);">
+      <div>
+        <span style="font-size:12px;color:var(--text);">${item.nombre}</span>
+        <span style="font-size:10px;color:#4d9fff;margin-left:8px;">×${item.qty}</span>
+      </div>
+      <button onclick="quitarItemPlayer('${item.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px;">✕</button>
+    </div>`).join('');
+}
 
-  renderBOMEditor();
-  document.getElementById('player-tipo').value='';
+function agregarItemPlayer(){
+  const sel = document.getElementById('player-sku-sel');
+  const qty = parseInt(document.getElementById('player-qty').value)||1;
+  const skuId = parseInt(sel.value);
+  if(!skuId){ toast('Seleccioná un insumo'); return; }
+  const sku = allSkus.find(s => s.id === skuId);
+  if(!sku){ toast('Insumo no encontrado'); return; }
+  const ts = Date.now();
+  currentBOMItems.push({
+    id: 'player-'+ts, op_id: currentOP.id, sku_id: sku.id,
+    v14_key: null, nombre: sku.nombre, qty, incluido: true, estado: 'pendiente',
+    notas: '🖥 PLAYER', skus: sku, _variantes: [], _isNew: true
+  });
+  renderPlayersLista();
+  sel.value='';
   document.getElementById('player-qty').value='1';
-  document.getElementById('player-fuente').checked=false;
-  toast('Player agregado ✓');
+  toast('Item player agregado ✓');
+}
+
+function quitarItemPlayer(id){
+  const idx = currentBOMItems.findIndex(i => i.id === id);
+  if(idx >= 0) currentBOMItems.splice(idx,1);
+  renderPlayersLista();
 }
 
 function agregarInsumoExtra(){
