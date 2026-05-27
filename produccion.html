@@ -657,12 +657,56 @@ function renderCheckItem(item, estado, variante){
       </div>
       <div class="check-qty">×${item.qty}</div>
       ${estado==='asignado'
-        ? `<span style="background:var(--green);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✓ Asignado</span>`
+        ? `<span style="background:var(--green);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✓ Asignado</span>
+           <button style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:2px 6px;" onclick="toggleDetalleAsig(${item.id}, '${item.uid_asignado}')">▾</button>`
         : skusConAlerta.has(item.sku_id)
           ? `<span style="background:rgba(255,179,64,0.15);color:var(--amber);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,179,64,0.3);">⚠ Faltante · Compras notificado</span>`
           : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="asignarManual(${item.id})">Asignar</button>`
       }
+    </div>
+    <div id="detalle-asig-${item.id}" style="display:none;margin:4px 10px 8px 36px;padding:8px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);font-size:11px;color:var(--text2);">
+      <div style="color:var(--text3);font-size:10px;margin-bottom:4px;font-family:'DM Mono',monospace;">DETALLE DE ASIGNACIÓN</div>
+      <div id="detalle-asig-content-${item.id}">Cargando...</div>
     </div>`;
+}
+
+async function toggleDetalleAsig(itemId, uid){
+  const div = document.getElementById('detalle-asig-'+itemId);
+  if(!div) return;
+  const visible = div.style.display !== 'none';
+  if(visible){ div.style.display='none'; return; }
+  div.style.display='block';
+  const content = document.getElementById('detalle-asig-content-'+itemId);
+
+  try{
+    let rows = [];
+    if(uid && uid !== 'CANTIDAD-DESCONTADA' && !uid.endsWith('-CAJA')){
+      rows = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=uid,estado,asignado_por,fecha_asignacion,op_id`).catch(()=>[]);
+    }
+    const item = bomItems.find(i=>i.id===itemId);
+    const op = currentOP;
+    let html = '';
+    html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 12px;">`;
+    html += `<span style="color:var(--text3);">UID</span><span style="font-family:'DM Mono',monospace;color:var(--text);">${uid||'—'}</span>`;
+    html += `<span style="color:var(--text3);">Equipo</span><span>${item?.equipo_num ? 'Equipo '+item.equipo_num : '—'}</span>`;
+    if(rows?.length){
+      const u = rows[0];
+      if(u.asignado_por) html += `<span style="color:var(--text3);">Asignado por</span><span>${u.asignado_por}</span>`;
+      if(u.fecha_asignacion){
+        const f = new Date(u.fecha_asignacion);
+        html += `<span style="color:var(--text3);">Fecha</span><span>${f.toLocaleDateString('es-AR')} ${f.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span>`;
+      }
+    } else if(uid === 'CANTIDAD-DESCONTADA'){
+      html += `<span style="color:var(--text3);">Tipo</span><span>Insumo de caja — descontado de stock</span>`;
+    } else if(uid?.endsWith('-CAJA')){
+      html += `<span style="color:var(--text3);">Tipo</span><span>Asignado desde caja</span>`;
+    }
+    if(item?.notas) html += `<span style="color:var(--text3);">Notas</span><span>${item.notas}</span>`;
+    html += '</div>';
+    content.innerHTML = html;
+  }catch(e){
+    content.innerHTML = '<span style="color:var(--text3);">No se pudo cargar el detalle</span>';
+  }
 }
 
 function toggleEquipo(eq){
