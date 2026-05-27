@@ -755,8 +755,7 @@ function renderChecklist(){
           </div>
         </div>
         <div id="eq-body-${eq}" style="padding:8px;">
-          ${items.length===0?'<div style="text-align:center;padding:12px;color:var(--green);font-size:12px;">✓ Todos asignados</div>':
-          items.map(item=>{
+          ${itemsEq.map(item=>{
             const estado = item.estado||'pendiente';
             const variante = item.variantes?.valor||'';
             return renderCheckItem(item, estado, variante);
