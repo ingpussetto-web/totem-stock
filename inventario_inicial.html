@@ -538,13 +538,14 @@ async function irPaso2(){
 }
 
 function generarPrefijo(codigo, variante){
-  let pref = codigo.substring(0,18);
+  // Usar código completo para evitar colisiones entre SKUs con prefijos similares
+  let pref = codigo;
   if(variante){
     const varMap = {'Negro':'NEG','Blanco':'BLA','Gris Plomo':'GRP','Gris Claro':'GRC','Azul':'AZU','Rojo':'ROJ','Verde':'VER','A definir':'DEF','XPrinter':'XPR','3 N Star':'NST','Nitcom':'NIT','Garnic':'GAR','Philips':'PHI','Roku':'ROK'};
     const varCod = varMap[variante] || variante.substring(0,3).toUpperCase();
     pref = pref + '-' + varCod;
   }
-  return pref.substring(0,22);
+  return pref;
 }
 
 async function generarUidPreview(){
