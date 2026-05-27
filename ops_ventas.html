@@ -284,6 +284,24 @@ select.filter:focus{outline:none;border-color:var(--green);}
       </div>
     </div>
 
+    <div class="bom-section">
+      <div class="bom-section-title">🖥 Agregar player</div>
+      <div id="players-lista" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="player-tipo" style="flex:1;min-width:140px;">
+          <option value="">— Tipo de player —</option>
+          <option value="hdmi">HDMI Inalámbrico</option>
+          <option value="minipc">Mini PC</option>
+        </select>
+        <input type="number" id="player-qty" value="1" min="1" max="10" style="width:60px;" placeholder="Cant">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="player-fuente" style="width:14px;height:14px;"> + Fuente
+        </label>
+        <button class="btn" style="border-color:#4d9fff;color:#4d9fff;" onclick="agregarPlayer()">+ Agregar player</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;">La opción "+ Fuente" solo aplica para Mini PC sin fuente incluida.</div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-bom')">Cancelar</button>
       <div style="display:flex;gap:8px;">
@@ -677,6 +695,55 @@ function renderColorChips(){
   document.querySelectorAll('.color-chip').forEach(c=>{
     c.classList.toggle('selected', c.textContent===selectedColor);
   });
+}
+
+function agregarPlayer(){
+  const tipo = document.getElementById('player-tipo').value;
+  const qty = parseInt(document.getElementById('player-qty').value)||1;
+  const conFuente = document.getElementById('player-fuente').checked;
+
+  if(!tipo){ toast('Seleccioná el tipo de player'); return; }
+
+  const ts = Date.now();
+
+  if(tipo === 'hdmi'){
+    // Buscar SKU de HDMI Inalámbrico
+    const sku = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes('hdmi-inalambrico')) 
+              || allSkus.find(s => s.nombre && s.nombre.toLowerCase().includes('hdmi inalambrico'));
+    const nombre = sku ? sku.nombre : 'HDMI Inalámbrico';
+    currentBOMItems.push({
+      id: 'player-hdmi-'+ts, op_id: currentOP.id, sku_id: sku?.id||null,
+      v14_key: null, nombre, qty, incluido: true, estado: 'pendiente',
+      notas: '🖥 PLAYER HDMI', skus: sku||{nombre}, _variantes: [], _isNew: true
+    });
+  } else {
+    // Mini PC player
+    const skuPC = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes('mini-pc-beelink'))
+                || allSkus.find(s => s.nombre && s.nombre.toLowerCase().includes('mini pc') && s.nombre.toLowerCase().includes('beelink'));
+    const nombrePC = skuPC ? skuPC.nombre : 'Mini PC (Player)';
+    currentBOMItems.push({
+      id: 'player-minipc-'+ts, op_id: currentOP.id, sku_id: skuPC?.id||null,
+      v14_key: null, nombre: nombrePC, qty, incluido: true, estado: 'pendiente',
+      notas: '🖥 PLAYER MINI PC', skus: skuPC||{nombre:nombrePC}, _variantes: [], _isNew: true
+    });
+    // Fuente si aplica
+    if(conFuente){
+      const skuFuente = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes('fuente') && s.codigo.toLowerCase().includes('mini-pc'))
+                      || allSkus.find(s => s.nombre && s.nombre.toLowerCase().includes('fuente') && s.nombre.toLowerCase().includes('mini pc'));
+      const nombreF = skuFuente ? skuFuente.nombre : 'Fuente xxV xxA (para Mini PC)';
+      currentBOMItems.push({
+        id: 'player-fuente-'+ts, op_id: currentOP.id, sku_id: skuFuente?.id||null,
+        v14_key: null, nombre: nombreF, qty, incluido: true, estado: 'pendiente',
+        notas: '🖥 FUENTE PLAYER', skus: skuFuente||{nombre:nombreF}, _variantes: [], _isNew: true
+      });
+    }
+  }
+
+  renderBOMEditor();
+  document.getElementById('player-tipo').value='';
+  document.getElementById('player-qty').value='1';
+  document.getElementById('player-fuente').checked=false;
+  toast('Player agregado ✓');
 }
 
 function agregarInsumoExtra(){
