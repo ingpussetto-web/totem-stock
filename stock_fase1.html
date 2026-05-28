@@ -298,7 +298,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
                 <th style="text-align:right">Reservado</th>
                 <th style="text-align:right">Total</th>
                 <th>Estado</th>
-                <th></th>
+                <th style="text-align:center;">🏷 Etiquetado</th>
               </tr>
             </thead>
             <tbody id="stock-tbody">
@@ -745,14 +745,20 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
   const varianteFil = document.getElementById('stock-variante')?.value||'';
   const alertFil = document.getElementById('stock-alerta')?.value||'';
 
-  // Mapa de etiquetado: sku_id+variante → etiquetado
+  // Mapa de etiquetado: sku_id+variante → {etiquetado, variante_id}
   const etiquetadoMap = {};
+  const varianteIdMap = {}; // para hacer PATCH
   (skus||[]).forEach(s=>{
-    (s.variantes||[]).forEach(v=>{
-      etiquetadoMap[s.id+'_'+(v.valor||'')] = v.etiquetado||false;
-      etiquetadoMap[s.id+'_'] = v.etiquetado||false; // sin variante
-    });
-    if(!s.variantes?.length) etiquetadoMap[s.id+'_'] = false;
+    if(s.variantes?.length){
+      s.variantes.forEach(v=>{
+        const key = s.id+'_'+(v.valor||'');
+        etiquetadoMap[key] = v.etiquetado||false;
+        varianteIdMap[key] = v.id;
+      });
+    } else {
+      // SKU sin variantes (tracking=cantidad) — usar sku_id como clave
+      etiquetadoMap[s.id+'_'] = false;
+    }
   });
 
   let rows = [...(qtyData||[]), ...(uidData||[])].filter(d=>{
@@ -788,16 +794,15 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     <td class="td-num" style="color:var(--text3)">${d.cantidad_reservada||0}</td>
     <td class="td-num">${d.cantidad||0}</td>
     <td>${badgeAlerta(d.alerta)}</td>
-    <td class="td-actions" style="display:flex;gap:6px;align-items:center;">
+    <td class="td-actions" style="text-align:center;">
       ${d.tracking==='uid'
         ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
-        : IS_READONLY ? '' : `<button class="btn sm" onclick="openAdj(${d.id},'${d.codigo} ${d.variante||''}',${d.cantidad})">Ajustar</button>`
+        : ''
       }
-      ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'var(--green)':'var(--text3)'};" title="Marcar como etiquetado">
+      ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
         <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''} 
           onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
-          style="width:13px;height:13px;accent-color:var(--green);">
-        🏷
+          style="width:15px;height:15px;accent-color:var(--green);cursor:pointer;">
       </label>` : ''}
     </td>
   </tr>`;
@@ -811,19 +816,19 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
 // ─── ETIQUETADO ─────────────────────────────────────────────────────────────
 async function toggleEtiquetado(skuId, variante, etiquetado){
   try{
-    // Buscar la variante_id correspondiente
-    const sku = skus.find(s=>s.id===skuId);
-    if(sku?.variantes?.length){
-      const v = sku.variantes.find(v=>(v.valor||'')===(variante||''));
-      if(v){
-        await api(`variantes?id=eq.${v.id}`, 'PATCH', {etiquetado});
-        // Actualizar mapa local
-        v.etiquetado = etiquetado;
-        toast(etiquetado ? '🏷 Marcado como etiquetado' : 'Marcado como pendiente');
-        return;
-      }
+    const key = skuId+'_'+(variante||'');
+    const varId = varianteIdMap[key];
+    if(varId){
+      await api(`variantes?id=eq.${varId}`, 'PATCH', {etiquetado});
+      etiquetadoMap[key] = etiquetado;
+      // Actualizar color del label sin re-renderizar
+      const label = event.target.closest('label');
+      if(label) label.title = etiquetado ? 'Etiquetado' : 'Pendiente etiqueta';
+      toast(etiquetado ? '🏷 Etiquetado' : '⚠ Pendiente etiqueta');
+    } else {
+      // SKU sin variantes — crear una variante dummy o manejar con otra tabla
+      toast('Este insumo no tiene variantes — no se puede marcar etiquetado aún');
     }
-    toast('No se encontró la variante');
   }catch(e){ toast('Error: '+e.message); }
 }
 
