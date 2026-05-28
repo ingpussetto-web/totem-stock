@@ -279,6 +279,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <option value="">Todos los estados</option>
           <option value="con_stock">Con stock</option>
           <option value="sin_stock">Sin stock</option>
+          <option value="pendiente_etiqueta">⚠ Pendiente etiqueta</option>
+          <option value="etiquetado">✓ Etiquetado</option>
         </select>
         <div class="spacer"></div>
         <button class="btn" onclick="loadStock()">↻ Actualizar</button>
@@ -743,10 +745,19 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
   const varianteFil = document.getElementById('stock-variante')?.value||'';
   const alertFil = document.getElementById('stock-alerta')?.value||'';
 
+  // Mapa de etiquetado: sku_id+variante → etiquetado
+  const etiquetadoMap = {};
+  (skus||[]).forEach(s=>{
+    (s.variantes||[]).forEach(v=>{
+      etiquetadoMap[s.id+'_'+(v.valor||'')] = v.etiquetado||false;
+      etiquetadoMap[s.id+'_'] = v.etiquetado||false; // sin variante
+    });
+    if(!s.variantes?.length) etiquetadoMap[s.id+'_'] = false;
+  });
+
   let rows = [...(qtyData||[]), ...(uidData||[])].filter(d=>{
     if(search && !d.codigo?.toLowerCase().includes(search) && !d.nombre?.toLowerCase().includes(search)) return false;
     if(catFil){
-      // stock_disponible tiene 'categoria' (nombre), no categoria_id
       const catNombre = categorias.find(c=>String(c.id)===catFil)?.nombre||'';
       if(d.categoria !== catNombre) return false;
     }
@@ -754,6 +765,9 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     if(alertFil){
       if(alertFil==='con_stock' && d.disponible<=0) return false;
       if(alertFil==='sin_stock' && d.disponible>0) return false;
+      const etiq = etiquetadoMap[d.sku_id+'_'+(d.variante||'')];
+      if(alertFil==='pendiente_etiqueta' && etiq) return false;
+      if(alertFil==='etiquetado' && !etiq) return false;
     }
     return true;
   });
@@ -774,11 +788,17 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     <td class="td-num" style="color:var(--text3)">${d.cantidad_reservada||0}</td>
     <td class="td-num">${d.cantidad||0}</td>
     <td>${badgeAlerta(d.alerta)}</td>
-    <td class="td-actions">
+    <td class="td-actions" style="display:flex;gap:6px;align-items:center;">
       ${d.tracking==='uid'
         ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
         : IS_READONLY ? '' : `<button class="btn sm" onclick="openAdj(${d.id},'${d.codigo} ${d.variante||''}',${d.cantidad})">Ajustar</button>`
       }
+      ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'var(--green)':'var(--text3)'};" title="Marcar como etiquetado">
+        <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''} 
+          onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
+          style="width:13px;height:13px;accent-color:var(--green);">
+        🏷
+      </label>` : ''}
     </td>
   </tr>`;
     const detalleRow = d.tracking==='uid'
@@ -786,6 +806,25 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
       : '';
     return mainRow + detalleRow;
   }).join('');
+}
+
+// ─── ETIQUETADO ─────────────────────────────────────────────────────────────
+async function toggleEtiquetado(skuId, variante, etiquetado){
+  try{
+    // Buscar la variante_id correspondiente
+    const sku = skus.find(s=>s.id===skuId);
+    if(sku?.variantes?.length){
+      const v = sku.variantes.find(v=>(v.valor||'')===(variante||''));
+      if(v){
+        await api(`variantes?id=eq.${v.id}`, 'PATCH', {etiquetado});
+        // Actualizar mapa local
+        v.etiquetado = etiquetado;
+        toast(etiquetado ? '🏷 Marcado como etiquetado' : 'Marcado como pendiente');
+        return;
+      }
+    }
+    toast('No se encontró la variante');
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 // ─── PENDIENTES DE INGRESO ──────────────────────────────────────────────────
@@ -1376,7 +1415,7 @@ async function init(){
     showPage('dashboard');
     // Pre-load categorías y skus
     categorias = await api('categorias?select=*&order=orden.asc').catch(()=>[]);
-    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc&activo=eq.true').catch(()=>[]);
+    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor,etiquetado)&order=codigo.asc&activo=eq.true').catch(()=>[]);
     fillCatFilters();
   } else {
     // Si no hay config, ir a config page
