@@ -721,7 +721,12 @@ const PLAYER_KEYWORDS = ['mini-pc','mini pc','hdmi-inalambrico','hdmi inalambric
 
 async function cargarDesdeBOMMaestra(){
   if(!currentOP) return;
-  const productoV14 = currentOP.producto_v14;
+  // op_progreso no tiene producto_v14 — traerlo directo de ordenes_produccion
+  let productoV14 = currentOP.producto_v14;
+  if(!productoV14){
+    const opData = await api('ordenes_produccion?id=eq.'+currentOP.id+'&select=producto_v14').catch(()=>[]);
+    productoV14 = opData?.[0]?.producto_v14;
+  }
   if(!productoV14){ toast('No se puede determinar el producto base'); return; }
 
   try{
