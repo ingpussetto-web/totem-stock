@@ -269,6 +269,12 @@ select.filter:focus{outline:none;border-color:var(--green);}
       </div>
     </div>
 
+    <!-- Botón cargar BOM Maestra (visible cuando BOM está vacía) -->
+    <div id="btn-cargar-bom-wrap" style="display:none;text-align:center;padding:16px;background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.2);border-radius:8px;margin-bottom:12px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">La BOM está vacía. Cargá los insumos desde la plantilla del producto.</div>
+      <button class="btn" style="border-color:var(--amber);color:var(--amber);" onclick="cargarDesdeBOMMaestra()">🔄 Cargar BOM Maestra</button>
+    </div>
+
     <!-- BOM items por categoría -->
     <div id="bom-editor"></div>
 
@@ -529,6 +535,13 @@ async function abrirBOM(opId){
     // Render BOM
     renderBOMEditor();
 
+    // Mostrar botón cargar BOM maestra si está vacía
+    const btnWrap = document.getElementById('btn-cargar-bom-wrap');
+    if(btnWrap) btnWrap.style.display = currentBOMItems.filter(i=>i.sku_id).length === 0 ? 'block' : 'none';
+
+    // Renderizar players existentes
+    renderPlayersLista();
+
     // Fill SKU selector para agregar extras
     if(!allSkus.length){
       allSkus = await api('skus?select=id,codigo,nombre,categorias(nombre)&activo=eq.true&order=nombre.asc');
@@ -705,6 +718,87 @@ function renderColorChips(){
 
 // SKUs permitidos para players (Mini PCs, HDMI, fuentes)
 const PLAYER_KEYWORDS = ['mini-pc','mini pc','hdmi-inalambrico','hdmi inalambrico','fuente-xxv','fuente xxv'];
+
+async function cargarDesdeBOMMaestra(){
+  if(!currentOP) return;
+  const productoV14 = currentOP.producto_v14;
+  if(!productoV14){ toast('No se puede determinar el producto base'); return; }
+
+  try{
+    // Cargar items de BOM Maestra
+    const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoV14)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre))').catch(()=>[]);
+    
+    if(!rows?.length){
+      toast('No hay BOM Maestra guardada para este producto');
+      return;
+    }
+
+    // Buscar periféricos (players) en proyectos_cotizador asociados a esta OP
+    let playersDetectados = [];
+    try{
+      const proyecto = await api('proyectos_cotizador?op_id=eq.'+currentOP.id+'&select=periferico_v14,periferico_nombre,periferico_cant').catch(()=>[]);
+      if(proyecto?.[0]?.periferico_v14){
+        // Buscar el SKU del periférico
+        const skuPlayer = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes(proyecto[0].periferico_v14.toLowerCase()));
+        playersDetectados.push({
+          nombre: proyecto[0].periferico_nombre || skuPlayer?.nombre || proyecto[0].periferico_v14,
+          qty: proyecto[0].periferico_cant || currentOP.cantidad || 1,
+          sku: skuPlayer
+        });
+      }
+    }catch(e){}
+
+    // Construir items BOM desde la maestra
+    const ts = Date.now();
+    currentBOMItems = rows.map((r,idx) => ({
+      id: 'bom-'+ts+'-'+idx,
+      op_id: currentOP.id,
+      sku_id: r.sku_id,
+      v14_key: r.v14_key,
+      nombre: r.skus?.nombre || r.nombre,
+      qty: r.qty || 1,
+      incluido: true,
+      estado: 'pendiente',
+      notas: null,
+      skus: r.skus || {},
+      _variantes: [],
+      _stock: 0,
+      _stockDefinir: 0,
+      _minipcModelos: null,
+      _isNew: true
+    }));
+
+    // Agregar players detectados automáticamente
+    playersDetectados.forEach((p,idx) => {
+      currentBOMItems.push({
+        id: 'player-auto-'+ts+'-'+idx,
+        op_id: currentOP.id,
+        sku_id: p.sku?.id || null,
+        v14_key: null,
+        nombre: p.nombre,
+        qty: p.qty,
+        incluido: true,
+        estado: 'pendiente',
+        notas: '🖥 PLAYER',
+        skus: p.sku || {nombre: p.nombre},
+        _variantes: [],
+        _stock: 0,
+        _isNew: true
+      });
+    });
+
+    // Ocultar botón y re-renderizar
+    document.getElementById('btn-cargar-bom-wrap').style.display = 'none';
+    renderBOMEditor();
+    renderPlayersLista();
+
+    const msg = playersDetectados.length 
+      ? `BOM cargada ✓ — ${rows.length} insumos + ${playersDetectados.length} player(s) detectado(s) de la orden de venta`
+      : `BOM cargada ✓ — ${rows.length} insumos`;
+    toast(msg);
+
+  }catch(e){ toast('Error: '+e.message); console.error(e); }
+}
 
 function toggleSeccionPlayers(){
   const form = document.getElementById('player-form');
