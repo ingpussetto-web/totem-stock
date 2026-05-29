@@ -485,8 +485,32 @@ async function abrirOP(opId){
     // Cargar alertas activas de faltantes para esta OP
     skusConAlerta = new Set();
     try{
-      const alertas = await api(`alertas_gerencia?tipo=eq.faltante_generacion_op&op_id=eq.${opId}&leida=eq.false&select=sku_id`);
-      (alertas||[]).forEach(a=>{ if(a.sku_id) skusConAlerta.add(a.sku_id); });
+      const alertas = await api(`alertas_gerencia?tipo=eq.faltante_generacion_op&op_id=eq.${opId}&leida=eq.false&select=id,sku_id`);
+      if(alertas?.length){
+        // Verificar stock actual de cada SKU alertado
+        const skuIds = [...new Set(alertas.map(a=>a.sku_id).filter(Boolean))];
+        const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
+        const stockMap = {};
+        (stockItems||[]).forEach(s=>{ stockMap[s.sku_id] = s.disponible; });
+
+        // Para UIDs: contar unidades en stock
+        const unidadesItems = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
+        const uidMap = {};
+        (unidadesItems||[]).forEach(u=>{ uidMap[u.sku_id] = (uidMap[u.sku_id]||0)+1; });
+
+        // Limpiar alertas donde ya hay stock
+        const aLimpiar = alertas.filter(a => {
+          const disp = (stockMap[a.sku_id]||0) + (uidMap[a.sku_id]||0);
+          return disp > 0;
+        });
+        if(aLimpiar.length){
+          await Promise.all(aLimpiar.map(a => api('alertas_gerencia?id=eq.'+a.id,'PATCH',{leida:true}).catch(()=>{})));
+        }
+
+        // Solo agregar al set los que siguen sin stock
+        alertas.filter(a => !aLimpiar.find(l=>l.id===a.id))
+               .forEach(a=>{ if(a.sku_id) skusConAlerta.add(a.sku_id); });
+      }
     }catch(e){ console.warn('Error cargando alertas:', e.message); }
 
     // Mostrar header
