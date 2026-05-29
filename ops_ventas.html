@@ -896,6 +896,13 @@ function agregarInsumoExtra(){
 }
 
 async function guardarBOM(estado){
+  // Calcular qty de players por equipo (total / cantidad equipos)
+  const cantEquipos = currentOP.cantidad || 1;
+  currentBOMItems.forEach(item => {
+    if(item.notas && item.notas.startsWith('🖥') && item._isNew){
+      item._qtyPorEquipo = Math.ceil(item.qty / cantEquipos);
+    }
+  });
   try{
     // Actualizar OP
     await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
@@ -907,13 +914,16 @@ async function guardarBOM(estado){
     // Actualizar cada item existente
     for(const item of currentBOMItems){
       if(item._isNew){
+        // Para players: guardar qty por equipo (se replicará para cada equipo)
+        const esPlayer = item.notas && item.notas.startsWith('🖥');
+        const qtyAGuardar = esPlayer ? (item._qtyPorEquipo || item.qty) : item.qty;
         // Insertar nuevo
         await api('op_bom_items', 'POST', [{
           op_id: currentOP.id,
           sku_id: item.sku_id,
           v14_key: item.v14_key,
           nombre: item.nombre,
-          qty: item.qty,
+          qty: qtyAGuardar,
           incluido: item.incluido,
           variante_id: item.variante_id||null,
           estado: 'pendiente',
@@ -967,6 +977,30 @@ async function confirmarBOM(){
       await api('alertas_gerencia', 'POST', alertas);
     }catch(e){ console.warn('Error registrando alertas faltantes:', e.message); }
   }
+  // Validar que players sean divisibles por cantidad de equipos
+  const cantEquipos = currentOP.cantidad || 1;
+  const playersItems = currentBOMItems.filter(i => i.notas && i.notas.startsWith('🖥') && i.sku_id);
+  if(playersItems.length && cantEquipos > 1){
+    const noDiv = playersItems.filter(i => i.qty % cantEquipos !== 0);
+    if(noDiv.length){
+      const lista = noDiv.map(i=>`• ${i.nombre}: ${i.qty} unidades (${cantEquipos} equipos → ${i.qty/cantEquipos} por equipo)`).join('
+');
+      if(!confirm(`⚠ Los siguientes players no se dividen exactamente entre ${cantEquipos} equipos:
+
+${lista}
+
+Se redondeará hacia arriba. ¿Confirmás igual?`)) return;
+    } else {
+      const dist = playersItems.map(i=>`• ${i.nombre}: ${i.qty/cantEquipos} por equipo`).join('
+');
+      if(!confirm(`Los players se distribuirán así por equipo:
+
+${dist}
+
+¿Confirmás?`)) return;
+    }
+  }
+
   await guardarBOM('bom_confirmada');
 
   // Si cantidad > 1, replicar items para equipos 2..N

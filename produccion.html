@@ -741,10 +741,27 @@ function renderChecklist(){
     // Vista por equipo
     el.innerHTML = equipoNums.map(eq=>{
       const itemsEq = bomItems.filter(i=>(i.equipo_num||1)===eq);
+      // Separar insumos normales de players
+      const itemsNormales = itemsEq.filter(i => !i.notas || !i.notas.startsWith('🖥'));
+      const itemsPlayers = itemsEq.filter(i => i.notas && i.notas.startsWith('🖥'));
       const asignados = itemsEq.filter(i=>i.estado==='asignado').length;
       const total = itemsEq.length;
       const completo = asignados === total;
-      const items = verSoloFaltantes ? itemsEq.filter(i=>i.estado!=='asignado') : itemsEq;
+
+      const renderItems = (items) => items.map(item=>{
+        const estado = item.estado||'pendiente';
+        const variante = item.variantes?.valor||'';
+        return renderCheckItem(item, estado, variante);
+      }).join('');
+
+      const playersHTML = itemsPlayers.length ? `
+        <div style="margin:6px 0 4px;padding:6px 8px;background:rgba(77,159,255,0.06);border:1px solid rgba(77,159,255,0.15);border-radius:6px;">
+          <div style="font-size:10px;font-weight:600;color:#4d9fff;margin-bottom:4px;letter-spacing:0.05em;">🖥 PLAYERS</div>
+          ${renderItems(verSoloFaltantes ? itemsPlayers.filter(i=>i.estado!=='asignado') : itemsPlayers)}
+        </div>` : '';
+
+      const normalesHTML = renderItems(verSoloFaltantes ? itemsNormales.filter(i=>i.estado!=='asignado') : itemsNormales);
+
       return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
         <div onclick="toggleEquipo(${eq});seleccionarEquipo(${eq})" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel2);cursor:pointer;" id="eq-header-${eq}">
           <div style="font-size:13px;font-weight:600;">Equipo ${eq} de ${totalEquipos}</div>
@@ -755,11 +772,8 @@ function renderChecklist(){
           </div>
         </div>
         <div id="eq-body-${eq}" style="padding:8px;">
-          ${itemsEq.map(item=>{
-            const estado = item.estado||'pendiente';
-            const variante = item.variantes?.valor||'';
-            return renderCheckItem(item, estado, variante);
-          }).join('')}
+          ${normalesHTML}
+          ${playersHTML}
         </div>
       </div>`;
     }).join('');
