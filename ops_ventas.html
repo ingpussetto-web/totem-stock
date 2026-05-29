@@ -983,21 +983,11 @@ async function confirmarBOM(){
   if(playersItems.length && cantEquipos > 1){
     const noDiv = playersItems.filter(i => i.qty % cantEquipos !== 0);
     if(noDiv.length){
-      const lista = noDiv.map(i=>`• ${i.nombre}: ${i.qty} unidades (${cantEquipos} equipos → ${i.qty/cantEquipos} por equipo)`).join('
-');
-      if(!confirm(`⚠ Los siguientes players no se dividen exactamente entre ${cantEquipos} equipos:
-
-${lista}
-
-Se redondeará hacia arriba. ¿Confirmás igual?`)) return;
+      const lista = noDiv.map(i=>'• '+i.nombre+': '+i.qty+' unidades ('+cantEquipos+' equipos = '+Math.ceil(i.qty/cantEquipos)+' por equipo)').join('\n');
+      if(!confirm('⚠ Algunos players no se dividen exactamente entre '+cantEquipos+' equipos:\n\n'+lista+'\n\nSe redondeará hacia arriba. ¿Confirmás igual?')) return;
     } else {
-      const dist = playersItems.map(i=>`• ${i.nombre}: ${i.qty/cantEquipos} por equipo`).join('
-');
-      if(!confirm(`Los players se distribuirán así por equipo:
-
-${dist}
-
-¿Confirmás?`)) return;
+      const dist = playersItems.map(i=>'• '+i.nombre+': '+Math.round(i.qty/cantEquipos)+' por equipo').join('\n');
+      if(!confirm('Los players se distribuirán así por equipo:\n\n'+dist+'\n\n¿Confirmás?')) return;
     }
   }
 
