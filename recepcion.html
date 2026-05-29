@@ -592,6 +592,8 @@ function checkDesvio(i){
 
 // ─── PROCESAR RECEPCIÓN ─────────────────────────────────────
 function procesarRecepcion(){
+  const btnConf = document.getElementById('btn-confirmar-recepcion');
+  if(btnConf){ btnConf.disabled=true; btnConf.textContent='Procesando...'; }
   // Recolectar lo que ingresó el usuario
   recepcionItems = itemsActual.map((item,i)=>{
     const pendiente = item.cantidad - (item.cantidad_recibida||0);
@@ -673,6 +675,8 @@ function imprimirEtiquetaCaja(codigo, nombre){
 function confirmarConDesvios(){ confirmarRecepcion(); }
 
 function confirmarConDesviosConPass(){
+  const btnDev = document.querySelector('#rec-panel-desvios .btn.solid-green');
+  if(btnDev){ btnDev.disabled=true; btnDev.textContent='Procesando...'; }
   const pass = prompt('Confirmar recepción con desvíos requiere autorización del encargado.\nIngresá la contraseña:');
   if(pass === null) return;
   if(pass !== 'picone001'){
@@ -778,7 +782,11 @@ async function confirmarRecepcion(){
       }
     }catch(e){ console.warn('Error marcando alertas:', e); }
 
-  }catch(e){toast('Error: '+e.message);console.error(e);}
+  }catch(e){
+    toast('Error: '+e.message);console.error(e);
+    const btnConf = document.getElementById('btn-confirmar-recepcion');
+    if(btnConf){ btnConf.disabled=false; btnConf.textContent='Confirmar recepción →'; }
+  }
 }
 
 async function ingresarUIDs(ri, recId){
@@ -838,13 +846,13 @@ async function ingresarCantidad(ri){
 function generarPrefijo(nombre, color){
   let n = nombre.toUpperCase();
   n = n.replace(/[^A-Z0-9\s]/g,'').trim().replace(/\s+/g,'-');
-  n = n.substring(0,18);
+  // No truncar — usar nombre completo para evitar colisiones entre productos similares
   if(color){
     const colorMap={'Negro':'NEG','Blanco':'BLA','Gris Claro':'GRC','Gris Plomo':'GRP','A definir':'DEF','XPrinter':'XPR','3 N Star':'NST','Nitcom':'NIT','Garnic':'GAR'};
     const cod = colorMap[color]||color.substring(0,3).toUpperCase();
     n = n+'-'+cod;
   }
-  return n.substring(0,24);
+  return n;
 }
 
 function mostrarResultado(recNum, esParcial, hayDesvios){
@@ -1273,6 +1281,8 @@ async function mostrarVerificacionCaja(items, recId){
 }
 
 async function confirmarVerificacionCaja(){
+  const btnCaja = document.querySelector('[onclick="confirmarVerificacionCaja()"]');
+  if(btnCaja){ btnCaja.disabled=true; btnCaja.textContent='Guardando...'; }
   const nombre = document.getElementById('vcaja-nombre').value.trim() || 'Sin nombre';
   const fecha = new Date().toISOString();
   const alertas = [];

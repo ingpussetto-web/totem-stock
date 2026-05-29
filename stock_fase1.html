@@ -1117,8 +1117,8 @@ function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 async function imprimirEtiquetasUID(btn){
   const skuId = btn.dataset.skuId;
   const nombre = btn.dataset.skuNombre;
-  const unidades = await api(`unidades?sku_id=eq.${skuId}&estado=eq.stock&select=uid,variantes(valor)&order=uid.asc`).catch(()=>[]);
-  if(!unidades || !unidades.length){ alert('No hay unidades en stock para este SKU.'); return; }
+  const unidades = await api(`unidades?sku_id=eq.${skuId}&estado=in.(stock,reservado)&select=uid,estado,variantes(valor)&order=uid.asc`).catch(()=>[]);
+  if(!unidades || !unidades.length){ alert('No hay unidades disponibles para este SKU.'); return; }
   const etiquetas = unidades.map((u,i)=>({
     uid: u.uid,
     nombre: nombre,
