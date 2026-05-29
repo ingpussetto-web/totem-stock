@@ -489,9 +489,11 @@ async function abrirOP(opId){
       if(alertas?.length){
         // Verificar stock actual de cada SKU alertado
         const skuIds = [...new Set(alertas.map(a=>a.sku_id).filter(Boolean))];
-        const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
+
+        // Para insumos de cantidad: usar tabla stock directamente
+        const stockRows = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
         const stockMap = {};
-        (stockItems||[]).forEach(s=>{ stockMap[s.sku_id] = s.disponible; });
+        (stockRows||[]).forEach(s=>{ stockMap[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
 
         // Para UIDs: contar unidades en stock
         const unidadesItems = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
