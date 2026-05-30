@@ -780,33 +780,31 @@ async function cargarDesdeBOMMaestra(){
       });
     });
 
-    // Cargar stock real para cada item nuevo
+    // Cargar stock real para cada item
+    const skuIdsUnicos = [...new Set(currentBOMItems.map(i=>i.sku_id).filter(Boolean).map(Number))];
+    // Traer todos los SKUs de una vez
+    const skusData = skuIdsUnicos.length ? await api('skus?id=in.('+skuIdsUnicos.join(',')+')'+'&select=id,tracking,categoria_id').catch(()=>[]) : [];
+    const skusMap = {};
+    (skusData||[]).forEach(s=>{ skusMap[s.id] = s; });
+    // Traer stock de cantidad de una vez
+    const stockData2 = skuIdsUnicos.length ? await api('stock?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&variante_id=is.null&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]) : [];
+    const stockMap2 = {};
+    (stockData2||[]).forEach(s=>{ stockMap2[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
+    // Traer conteo de unidades UID de una vez
+    const uidsData = skuIdsUnicos.length ? await api('unidades?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]) : [];
+    const uidCountMap = {};
+    (uidsData||[]).forEach(u=>{ uidCountMap[u.sku_id] = (uidCountMap[u.sku_id]||0)+1; });
+    
     for(let item of currentBOMItems){
       if(!item.sku_id) continue;
-      const sku = allSkus.find(s=>String(s.id)===String(item.sku_id));
-      console.log('Stock item:', item.nombre, '| sku_id:', item.sku_id, '| sku encontrado:', sku?.nombre, '| tracking:', sku?.tracking || item.skus?.tracking);
-      if(!sku){ 
-        // Intentar con skus anidado
-        const tracking = item.skus?.tracking;
-        if(tracking === 'uid'){
-          const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
-          item._stock = uds?.length || 0;
-        } else if(tracking === 'cantidad'){
-          const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
-          item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
-        }
-        continue;
-      }
+      const skuId = Number(item.sku_id);
+      const sku = skusMap[skuId];
+      if(!sku) continue;
       item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
-      const skuIdNum = parseInt(item.sku_id);
       if(sku.tracking === 'uid'){
-        const uds = await api(`unidades?sku_id=eq.${skuIdNum}&estado=eq.stock&select=id`).catch(()=>[]);
-        item._stock = uds?.length || 0;
-        console.log('UID stock para', item.nombre, ':', item._stock, 'uds');
+        item._stock = uidCountMap[skuId] || 0;
       } else {
-        const st = await api(`stock?sku_id=eq.${skuIdNum}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
-        item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
-        console.log('Caja stock para', item.nombre, ':', item._stock, 'uds');
+        item._stock = stockMap2[skuId] || 0;
       }
     }
 
