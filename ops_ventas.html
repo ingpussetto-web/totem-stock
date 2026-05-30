@@ -738,20 +738,8 @@ async function cargarDesdeBOMMaestra(){
       return;
     }
 
-    // Buscar periféricos (players) en proyectos_cotizador asociados a esta OP
+    // Players detectados automáticamente (funcionalidad futura cuando exista op_id en proyectos_cotizador)
     let playersDetectados = [];
-    try{
-      const proyecto = await api('proyectos_cotizador?op_id=eq.'+currentOP.id+'&select=*').catch(()=>[]);
-      if(proyecto?.[0]?.periferico_v14){
-        // Buscar el SKU del periférico
-        const skuPlayer = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes(proyecto[0].periferico_v14.toLowerCase()));
-        playersDetectados.push({
-          nombre: proyecto[0].periferico_nombre || skuPlayer?.nombre || proyecto[0].periferico_v14,
-          qty: proyecto[0].periferico_cant || currentOP.cantidad || 1,
-          sku: skuPlayer
-        });
-      }
-    }catch(e){}
 
     // Construir items BOM desde la maestra
     const ts = Date.now();
@@ -796,6 +784,7 @@ async function cargarDesdeBOMMaestra(){
     for(let item of currentBOMItems){
       if(!item.sku_id) continue;
       const sku = allSkus.find(s=>String(s.id)===String(item.sku_id));
+      console.log('Stock item:', item.nombre, '| sku_id:', item.sku_id, '| sku encontrado:', sku?.nombre, '| tracking:', sku?.tracking || item.skus?.tracking);
       if(!sku){ 
         // Intentar con skus anidado
         const tracking = item.skus?.tracking;
