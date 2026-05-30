@@ -336,6 +336,7 @@ let ops = [];
 let allSkus = [];
 let currentOP = null;
 let currentBOMItems = [];
+let currentPlayerItems = []; // array separado para players
 let selectedColor = '';
 
 // ─── API ───────────────────────────────────────────────────
@@ -458,7 +459,9 @@ async function abrirBOM(opId){
     if(!currentOP) return;
 
     // Cargar items BOM con SKU y variantes
-    currentBOMItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
+    const allBomItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
+    currentPlayerItems = (allBomItems||[]).filter(i => i.notas && i.notas.startsWith('🖥'));
+    currentBOMItems = (allBomItems||[]).filter(i => !i.notas || !i.notas.startsWith('🖥'));
 
     // Cargar categoría Mini PCs
     const minipcCat = await api(`categorias?nombre=eq.Mini PCs&select=id`).catch(()=>[]);
@@ -738,6 +741,7 @@ async function cargarDesdeBOMMaestra(){
       return;
     }
 
+    currentPlayerItems = [];
     // Players detectados automáticamente (funcionalidad futura cuando exista op_id en proyectos_cotizador)
     let playersDetectados = [];
 
@@ -780,8 +784,9 @@ async function cargarDesdeBOMMaestra(){
       });
     });
 
-    // Cargar stock real para cada item
-    const skuIdsUnicos = [...new Set(currentBOMItems.map(i=>i.sku_id).filter(Boolean).map(Number))];
+    // Cargar stock real para cada item (BOM + players)
+    const todosItems = [...currentBOMItems, ...currentPlayerItems];
+    const skuIdsUnicos = [...new Set(todosItems.map(i=>i.sku_id).filter(Boolean).map(Number))];
     // Traer todos los SKUs de una vez
     const skusData = skuIdsUnicos.length ? await api('skus?id=in.('+skuIdsUnicos.join(',')+')'+'&select=id,tracking,categoria_id').catch(()=>[]) : [];
     const skusMap = {};
@@ -795,7 +800,7 @@ async function cargarDesdeBOMMaestra(){
     const uidCountMap = {};
     (uidsData||[]).forEach(u=>{ uidCountMap[u.sku_id] = (uidCountMap[u.sku_id]||0)+1; });
     
-    for(let item of currentBOMItems){
+    for(let item of todosItems){
       if(!item.sku_id) continue;
       const skuId = Number(item.sku_id);
       const sku = skusMap[skuId];
@@ -862,7 +867,7 @@ function poblarSelectPlayers(){
 function renderPlayersLista(){
   const lista = document.getElementById('players-lista');
   if(!lista) return;
-  const playerItems = currentBOMItems.filter(i => i.notas && i.notas.startsWith('🖥'));
+  const playerItems = currentPlayerItems;
   if(!playerItems.length){
     lista.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">Sin items players agregados aún</div>';
     return;
@@ -890,18 +895,17 @@ async function agregarItemPlayer(){
     v14_key: null, nombre: sku.nombre, qty, incluido: true, estado: 'pendiente',
     notas: '🖥 PLAYER', skus: sku, _variantes: [], _stock: 0, _isNew: true
   };
-  currentBOMItems.push(newItem);
+  currentPlayerItems.push(newItem);
   await cargarStockItem(newItem);
   renderPlayersLista();
-  renderBOMEditor();
   sel.value='';
   document.getElementById('player-qty').value='1';
   toast('Item player agregado ✓');
 }
 
 function quitarItemPlayer(id){
-  const idx = currentBOMItems.findIndex(i => i.id === id);
-  if(idx >= 0) currentBOMItems.splice(idx,1);
+  const idx = currentPlayerItems.findIndex(i => i.id === id);
+  if(idx >= 0) currentPlayerItems.splice(idx,1);
   renderPlayersLista();
 }
 
@@ -978,6 +982,28 @@ async function guardarBOM(estado){
       }
     }
 
+    // Guardar players (solo los nuevos)
+    for(const item of currentPlayerItems){
+      if(item._isNew){
+        await api('op_bom_items', 'POST', [{
+          op_id: currentOP.id,
+          sku_id: item.sku_id,
+          v14_key: null,
+          nombre: item.nombre,
+          qty: item.qty,
+          incluido: true,
+          variante_id: null,
+          estado: 'pendiente',
+          notas: item.notas || '🖥 PLAYER'
+        }]);
+      } else {
+        await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
+          qty: item.qty,
+          notas: item.notas
+        });
+      }
+    }
+
     closeModal('modal-bom');
     toast(estado==='bom_pendiente' ? 'Borrador guardado ✓' : 'BOM confirmada ✓');
     loadOPs();
@@ -988,9 +1014,10 @@ async function confirmarBOM(){
   if(!selectedColor || selectedColor==='A definir'){
     if(!confirm('El color del gabinete está como "A definir". ¿Confirmás igual?')) return;
   }
-  // Verificar items sin stock suficiente (qty × cantEquipos)
+  // Verificar items sin stock suficiente (qty × cantEquipos) — incluye players
   const cantEquiposVerif = currentOP.cantidad || 1;
-  const sinStock = currentBOMItems.filter(i=>{
+  const todosLosItems = [...currentBOMItems, ...currentPlayerItems];
+  const sinStock = todosLosItems.filter(i=>{
     if(i.incluido === false || !i.sku_id) return false;
     const esPlayer = i.notas && i.notas.startsWith('🖥');
     const cantRequerida = esPlayer ? i.qty * cantEquiposVerif : i.qty * cantEquiposVerif;
@@ -1014,7 +1041,7 @@ async function confirmarBOM(){
   }
   // Validar que players sean divisibles por cantidad de equipos
   const cantEquipos = currentOP.cantidad || 1;
-  const playersItems = currentBOMItems.filter(i => i.notas && i.notas.startsWith('🖥') && i.sku_id);
+  const playersItems = currentPlayerItems.filter(i => i.sku_id);
   if(playersItems.length && cantEquipos > 1){
     const dist = playersItems.map(i=>'• '+i.nombre+': '+i.qty+' por equipo (total: '+i.qty*cantEquipos+')').join('\n');
     if(!confirm('Los players se distribuirán así:\n\n'+dist+'\n\n¿Confirmás?')) return;
