@@ -533,6 +533,19 @@ async function abrirBOM(opId){
 
     // Color
     selectedColor = currentOP.color_gabinete || '';
+    // Si ya hay color seleccionado, cargar stock de gabinetes filtrado por ese color
+    if(selectedColor && selectedColor !== 'A definir'){
+      for(const item of currentBOMItems){
+        if(item.v14_key && item.v14_key.startsWith('gab_') && item.sku_id){
+          const variantes = await api(`variantes?sku_id=eq.${item.sku_id}&valor=eq.${encodeURIComponent(selectedColor)}&select=id`).catch(()=>[]);
+          const varId = variantes?.[0]?.id;
+          if(varId){
+            const uds = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${varId}&estado=eq.stock&select=id`).catch(()=>[]);
+            item._stock = uds?.length || 0;
+          }
+        }
+      }
+    }
     renderColorChips();
 
     // Render BOM
@@ -701,15 +714,34 @@ function cambiarModeloMiniPC(itemId, nuevoSkuId){
   item._skuCambiado = true;
 }
 
-function selectColor(color){
+async function selectColor(color){
   selectedColor = color;
   renderColorChips();
-  // Actualizar notas de gabinetes en BOM
-  currentBOMItems.forEach(item=>{
+  // Actualizar notas de gabinetes en BOM y recargar stock por variante
+  for(const item of currentBOMItems){
     if(item.v14_key && item.v14_key.startsWith('gab_')){
       item.notas = 'Color: ' + color;
+      // Buscar variante del color seleccionado
+      try{
+        const variantes = await api(`variantes?sku_id=eq.${item.sku_id}&valor=eq.${encodeURIComponent(color)}&select=id`).catch(()=>[]);
+        const varId = variantes?.[0]?.id;
+        if(varId){
+          const uds = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${varId}&estado=eq.stock&select=id`).catch(()=>[]);
+          item._stock = uds?.length || 0;
+          // Stock "A definir"
+          const varDef = await api(`variantes?sku_id=eq.${item.sku_id}&valor=eq.A+definir&select=id`).catch(()=>[]);
+          if(varDef?.[0]?.id){
+            const udsDef = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${varDef[0].id}&estado=eq.stock&select=id`).catch(()=>[]);
+            item._stockDefinir = udsDef?.length || 0;
+          }
+        } else {
+          // Color no tiene variante — mostrar total sin filtrar
+          const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+          item._stock = uds?.length || 0;
+        }
+      }catch(e){}
     }
-  });
+  }
   renderBOMEditor();
 }
 
