@@ -1073,15 +1073,20 @@ async function confirmarBOM(){
   // Verificar items sin stock suficiente (qty × cantEquipos) — incluye players
   const cantEquiposVerif = currentOP.cantidad || 1;
   const todosLosItems = [...currentBOMItems, ...currentPlayerItems];
-  const sinStock = todosLosItems.filter(i=>{
-    if(i.incluido === false || !i.sku_id) return false;
-    const esPlayer = i.notas && i.notas.startsWith('🖥');
-    const cantRequerida = esPlayer ? i.qty * cantEquiposVerif : i.qty * cantEquiposVerif;
-    const stockDisp = (i._stock||0) + (i._stockDefinir||0);
-    return stockDisp < cantRequerida;
+  // Agrupar demanda total por sku_id
+  const demandaPorSku = {};
+  todosLosItems.forEach(i=>{
+    if(i.incluido === false || !i.sku_id) return;
+    const skuId = String(i.sku_id);
+    if(!demandaPorSku[skuId]) demandaPorSku[skuId] = {qty:0, stock:0, nombre:i.nombre};
+    demandaPorSku[skuId].qty += i.qty * cantEquiposVerif;
+    demandaPorSku[skuId].stock = Math.max(demandaPorSku[skuId].stock, (i._stock||0) + (i._stockDefinir||0));
   });
+  const sinStock = Object.entries(demandaPorSku)
+    .filter(([skuId, d]) => d.stock < d.qty)
+    .map(([skuId, d]) => ({nombre: d.nombre, _stock: d.stock, _qty: d.qty}));
   if(sinStock.length){
-    const lista = sinStock.map(i=>'• '+i.nombre).join('\n');
+    const lista = sinStock.map(i=>'• '+i.nombre+(i._qty?' (necesitás '+i._qty+', hay '+i._stock+')':'')).join('\n');
     if(!confirm(`⚠ ${sinStock.length} insumo${sinStock.length>1?'s':''} sin stock al confirmar:\n\n${lista}\n\nSe registrará la alerta para Compras. ¿Confirmás igual?`)) return;
     // Registrar faltantes en alertas_gerencia para Compras
     try{
