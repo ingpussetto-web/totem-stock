@@ -896,13 +896,8 @@ function agregarInsumoExtra(){
 }
 
 async function guardarBOM(estado){
-  // Calcular qty de players por equipo (total / cantidad equipos)
+  // qty de players es por unidad — se guarda tal cual (1 por equipo)
   const cantEquipos = currentOP.cantidad || 1;
-  currentBOMItems.forEach(item => {
-    if(item.notas && item.notas.startsWith('🖥') && item._isNew){
-      item._qtyPorEquipo = Math.ceil(item.qty / cantEquipos);
-    }
-  });
   try{
     // Actualizar OP
     await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
@@ -915,8 +910,7 @@ async function guardarBOM(estado){
     for(const item of currentBOMItems){
       if(item._isNew){
         // Para players: guardar qty por equipo (se replicará para cada equipo)
-        const esPlayer = item.notas && item.notas.startsWith('🖥');
-        const qtyAGuardar = esPlayer ? (item._qtyPorEquipo || item.qty) : item.qty;
+        const qtyAGuardar = item.qty; // qty es siempre por unidad
         // Insertar nuevo
         await api('op_bom_items', 'POST', [{
           op_id: currentOP.id,
@@ -981,14 +975,8 @@ async function confirmarBOM(){
   const cantEquipos = currentOP.cantidad || 1;
   const playersItems = currentBOMItems.filter(i => i.notas && i.notas.startsWith('🖥') && i.sku_id);
   if(playersItems.length && cantEquipos > 1){
-    const noDiv = playersItems.filter(i => i.qty % cantEquipos !== 0);
-    if(noDiv.length){
-      const lista = noDiv.map(i=>'• '+i.nombre+': '+i.qty+' unidades ('+cantEquipos+' equipos = '+Math.ceil(i.qty/cantEquipos)+' por equipo)').join('\n');
-      if(!confirm('⚠ Algunos players no se dividen exactamente entre '+cantEquipos+' equipos:\n\n'+lista+'\n\nSe redondeará hacia arriba. ¿Confirmás igual?')) return;
-    } else {
-      const dist = playersItems.map(i=>'• '+i.nombre+': '+Math.round(i.qty/cantEquipos)+' por equipo').join('\n');
-      if(!confirm('Los players se distribuirán así por equipo:\n\n'+dist+'\n\n¿Confirmás?')) return;
-    }
+    const dist = playersItems.map(i=>'• '+i.nombre+': '+i.qty+' por equipo (total: '+i.qty*cantEquipos+')').join('\n');
+    if(!confirm('Los players se distribuirán así:\n\n'+dist+'\n\n¿Confirmás?')) return;
   }
 
   await guardarBOM('bom_confirmada');
