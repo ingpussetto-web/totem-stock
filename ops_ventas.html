@@ -795,16 +795,26 @@ async function cargarDesdeBOMMaestra(){
     // Cargar stock real para cada item nuevo
     for(let item of currentBOMItems){
       if(!item.sku_id) continue;
-      const sku = allSkus.find(s=>s.id===item.sku_id);
-      if(!sku) continue;
+      const sku = allSkus.find(s=>String(s.id)===String(item.sku_id));
+      if(!sku){ 
+        // Intentar con skus anidado
+        const tracking = item.skus?.tracking;
+        if(tracking === 'uid'){
+          const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+          item._stock = uds?.length || 0;
+        } else if(tracking === 'cantidad'){
+          const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
+          item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+        }
+        continue;
+      }
+      item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
       if(sku.tracking === 'uid'){
         const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
         item._stock = uds?.length || 0;
-        item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
       } else {
         const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
         item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
-        item.skus = {...(item.skus||{}), tracking: sku.tracking};
       }
     }
 
