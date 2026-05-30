@@ -650,7 +650,7 @@ function renderBOMItem(item){
   }
 
   return `<div class="bom-item ${incluido?'':'excluido'}" id="bom-item-${item.id}">
-    <button class="bom-toggle ${incluido?'on':'off'}" onclick="toggleItem(${item.id})" title="${incluido?'Excluir':'Incluir'}">
+    <button class="bom-toggle ${incluido?'on':'off'}" onclick="toggleItem('${item.id}')" title="${incluido?'Excluir':'Incluir'}">
       ${incluido?'✓':'✕'}
     </button>
     <div class="bom-item-nombre">${item.nombre}</div>
@@ -661,7 +661,7 @@ function renderBOMItem(item){
 }
 
 function toggleItem(itemId){
-  const item = currentBOMItems.find(i=>i.id===itemId);
+  const item = currentBOMItems.find(i=>String(i.id)===String(itemId));
   if(!item) return;
   item.incluido = !item.incluido;
   renderBOMEditor();
@@ -741,7 +741,7 @@ async function cargarDesdeBOMMaestra(){
     // Buscar periféricos (players) en proyectos_cotizador asociados a esta OP
     let playersDetectados = [];
     try{
-      const proyecto = await api('proyectos_cotizador?op_id=eq.'+currentOP.id+'&select=periferico_v14,periferico_nombre,periferico_cant').catch(()=>[]);
+      const proyecto = await api('proyectos_cotizador?op_id=eq.'+currentOP.id+'&select=*').catch(()=>[]);
       if(proyecto?.[0]?.periferico_v14){
         // Buscar el SKU del periférico
         const skuPlayer = allSkus.find(s => s.codigo && s.codigo.toLowerCase().includes(proyecto[0].periferico_v14.toLowerCase()));
