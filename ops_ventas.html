@@ -792,6 +792,22 @@ async function cargarDesdeBOMMaestra(){
       });
     });
 
+    // Cargar stock real para cada item nuevo
+    for(let item of currentBOMItems){
+      if(!item.sku_id) continue;
+      const sku = allSkus.find(s=>s.id===item.sku_id);
+      if(!sku) continue;
+      if(sku.tracking === 'uid'){
+        const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+        item._stock = uds?.length || 0;
+        item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
+      } else {
+        const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
+        item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+        item.skus = {...(item.skus||{}), tracking: sku.tracking};
+      }
+    }
+
     // Ocultar botón y re-renderizar
     document.getElementById('btn-cargar-bom-wrap').style.display = 'none';
     renderBOMEditor();
@@ -803,6 +819,21 @@ async function cargarDesdeBOMMaestra(){
     toast(msg);
 
   }catch(e){ toast('Error: '+e.message); console.error(e); }
+}
+
+// Helper: cargar stock real para un item
+async function cargarStockItem(item){
+  if(!item.sku_id) return;
+  const sku = allSkus.find(s=>s.id===item.sku_id);
+  if(!sku) return;
+  item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
+  if(sku.tracking === 'uid'){
+    const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+    item._stock = uds?.length || 0;
+  } else {
+    const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
+    item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+  }
 }
 
 function toggleSeccionPlayers(){
@@ -851,12 +882,15 @@ function agregarItemPlayer(){
   const sku = allSkus.find(s => s.id === skuId);
   if(!sku){ toast('Insumo no encontrado'); return; }
   const ts = Date.now();
-  currentBOMItems.push({
+  const newItem = {
     id: 'player-'+ts, op_id: currentOP.id, sku_id: sku.id,
     v14_key: null, nombre: sku.nombre, qty, incluido: true, estado: 'pendiente',
-    notas: '🖥 PLAYER', skus: sku, _variantes: [], _isNew: true
-  });
+    notas: '🖥 PLAYER', skus: sku, _variantes: [], _stock: 0, _isNew: true
+  };
+  currentBOMItems.push(newItem);
+  await cargarStockItem(newItem);
   renderPlayersLista();
+  renderBOMEditor();
   sel.value='';
   document.getElementById('player-qty').value='1';
   toast('Item player agregado ✓');
@@ -868,14 +902,13 @@ function quitarItemPlayer(id){
   renderPlayersLista();
 }
 
-function agregarInsumoExtra(){
+async function agregarInsumoExtra(){
   const skuId = parseInt(document.getElementById('add-sku-sel').value);
   const qty = parseFloat(document.getElementById('add-qty').value)||1;
   if(!skuId){ toast('Seleccioná un insumo'); return; }
   const sku = allSkus.find(s=>s.id===skuId);
   if(!sku) return;
-  // Agregar temporalmente
-  currentBOMItems.push({
+  const extraItem = {
     id: 'new-'+Date.now(),
     op_id: currentOP.id,
     sku_id: skuId,
@@ -887,8 +920,11 @@ function agregarInsumoExtra(){
     notas: 'Agregado manualmente',
     skus: sku,
     _variantes: [],
+    _stock: 0,
     _isNew: true
-  });
+  };
+  currentBOMItems.push(extraItem);
+  await cargarStockItem(extraItem);
   renderBOMEditor();
   document.getElementById('add-sku-sel').value='';
   document.getElementById('add-qty').value='1';
@@ -949,13 +985,15 @@ async function confirmarBOM(){
   if(!selectedColor || selectedColor==='A definir'){
     if(!confirm('El color del gabinete está como "A definir". ¿Confirmás igual?')) return;
   }
-  // Verificar items sin stock
-  const sinStock = currentBOMItems.filter(i=>
-    i.incluido !== false &&
-    i.sku_id &&
-    (i._stock||0) <= 0 &&
-    (i._stockDefinir||0) <= 0
-  );
+  // Verificar items sin stock suficiente (qty × cantEquipos)
+  const cantEquiposVerif = currentOP.cantidad || 1;
+  const sinStock = currentBOMItems.filter(i=>{
+    if(i.incluido === false || !i.sku_id) return false;
+    const esPlayer = i.notas && i.notas.startsWith('🖥');
+    const cantRequerida = esPlayer ? i.qty * cantEquiposVerif : i.qty * cantEquiposVerif;
+    const stockDisp = (i._stock||0) + (i._stockDefinir||0);
+    return stockDisp < cantRequerida;
+  });
   if(sinStock.length){
     const lista = sinStock.map(i=>'• '+i.nombre).join('\n');
     if(!confirm(`⚠ ${sinStock.length} insumo${sinStock.length>1?'s':''} sin stock al confirmar:\n\n${lista}\n\nSe registrará la alerta para Compras. ¿Confirmás igual?`)) return;
