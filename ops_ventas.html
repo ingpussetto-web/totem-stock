@@ -798,12 +798,15 @@ async function cargarDesdeBOMMaestra(){
         continue;
       }
       item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
+      const skuIdNum = parseInt(item.sku_id);
       if(sku.tracking === 'uid'){
-        const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+        const uds = await api(`unidades?sku_id=eq.${skuIdNum}&estado=eq.stock&select=id`).catch(()=>[]);
         item._stock = uds?.length || 0;
+        console.log('UID stock para', item.nombre, ':', item._stock, 'uds');
       } else {
-        const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
+        const st = await api(`stock?sku_id=eq.${skuIdNum}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
         item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+        console.log('Caja stock para', item.nombre, ':', item._stock, 'uds');
       }
     }
 
