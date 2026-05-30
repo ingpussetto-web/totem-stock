@@ -533,19 +533,6 @@ async function abrirBOM(opId){
 
     // Color
     selectedColor = currentOP.color_gabinete || '';
-    // Si ya hay color seleccionado, cargar stock de gabinetes filtrado por ese color
-    if(selectedColor && selectedColor !== 'A definir'){
-      for(const item of currentBOMItems){
-        if(esItemGabinete(item) && item.sku_id){
-          const variantes = await api(`variantes?sku_id=eq.${item.sku_id}&valor=eq.${encodeURIComponent(selectedColor)}&select=id`).catch(()=>[]);
-          const varId = variantes?.[0]?.id;
-          if(varId){
-            const uds = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${varId}&estado=eq.stock&select=id`).catch(()=>[]);
-            item._stock = uds?.length || 0;
-          }
-        }
-      }
-    }
     renderColorChips();
 
     // Render BOM
@@ -561,6 +548,19 @@ async function abrirBOM(opId){
     // Fill SKU selector para agregar extras
     if(!allSkus.length){
       allSkus = await api('skus?select=id,codigo,nombre,categoria_id,categorias(nombre)&activo=eq.true&order=nombre.asc');
+      // Ahora que allSkus está cargado, filtrar stock de gabinetes por color seleccionado
+      if(selectedColor && selectedColor !== 'A definir'){
+        for(const item of currentBOMItems){
+          if(esItemGabinete(item) && item.sku_id){
+            const variantes = await api('variantes?sku_id=eq.'+item.sku_id+'&valor=eq.'+encodeURIComponent(selectedColor)+'&select=id').catch(()=>[]);
+            const varId = variantes?.[0]?.id;
+            if(varId){
+              const uds = await api('unidades?sku_id=eq.'+item.sku_id+'&variante_id=eq.'+varId+'&estado=eq.stock&select=id').catch(()=>[]);
+              item._stock = uds?.length || 0;
+            }
+          }
+        }
+      }
     }
     // Solo mostrar insumos opcionales que tiene sentido agregar
     const EXTRAS_PERMITIDOS = [
