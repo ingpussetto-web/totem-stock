@@ -836,9 +836,19 @@ async function cargarDesdeBOMMaestra(){
     const stockMap2 = {};
     (stockData2||[]).forEach(s=>{ stockMap2[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
     // Traer conteo de unidades UID de una vez
-    const uidsData = skuIdsUnicos.length ? await api('unidades?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]) : [];
+    const uidsData = skuIdsUnicos.length ? await api('unidades?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&estado=eq.stock&select=sku_id,variante_id').catch(()=>[]) : [];
     const uidCountMap = {};
     (uidsData||[]).forEach(u=>{ uidCountMap[u.sku_id] = (uidCountMap[u.sku_id]||0)+1; });
+
+    // Para gabinetes: obtener variante del color seleccionado
+    let colorVarianteMap = {}; // sku_id → variante_id del color
+    if(selectedColor){
+      const gabSkuIds = skuIdsUnicos.filter(id => skusMap[id]?.categoria_id === 8);
+      if(gabSkuIds.length){
+        const varData = await api('variantes?sku_id=in.('+gabSkuIds.join(',')+')'+'&valor=eq.'+encodeURIComponent(selectedColor)+'&select=sku_id,id').catch(()=>[]);
+        (varData||[]).forEach(v=>{ colorVarianteMap[v.sku_id] = v.id; });
+      }
+    }
     
     for(let item of todosItems){
       if(!item.sku_id) continue;
@@ -847,7 +857,13 @@ async function cargarDesdeBOMMaestra(){
       if(!sku) continue;
       item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
       if(sku.tracking === 'uid'){
-        item._stock = uidCountMap[skuId] || 0;
+        const esGab = sku.categoria_id === 8;
+        if(esGab && colorVarianteMap[skuId]){
+          // Gabinete: contar solo del color seleccionado
+          item._stock = uidsData.filter(u=>u.sku_id===skuId && u.variante_id===colorVarianteMap[skuId]).length;
+        } else {
+          item._stock = uidCountMap[skuId] || 0;
+        }
       } else {
         item._stock = stockMap2[skuId] || 0;
       }
