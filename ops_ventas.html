@@ -874,7 +874,7 @@ function renderPlayersLista(){
     </div>`).join('');
 }
 
-function agregarItemPlayer(){
+async function agregarItemPlayer(){
   const sel = document.getElementById('player-sku-sel');
   const qty = parseInt(document.getElementById('player-qty').value)||1;
   const skuId = parseInt(sel.value);
