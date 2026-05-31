@@ -483,6 +483,17 @@ async function abrirOP(opId){
     bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&sku_id=not.is.null&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)&order=id.asc`);
 
     // Cargar alertas activas de faltantes para esta OP
+    // Mapa de stock UID por sku_id (para detectar faltantes sin alerta)
+    window.stockUidMap = {};
+    try{
+      const uidSkuIds = [...new Set(bomItems.filter(i=>i.skus?.tracking==='uid').map(i=>i.sku_id).filter(Boolean))];
+      if(uidSkuIds.length){
+        const udsStock = await api('unidades?sku_id=in.('+uidSkuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
+        uidSkuIds.forEach(id=>{ window.stockUidMap[id] = 0; });
+        (udsStock||[]).forEach(u=>{ window.stockUidMap[u.sku_id] = (window.stockUidMap[u.sku_id]||0)+1; });
+      }
+    }catch(e){ console.warn('stockUidMap:', e); }
+
     skusConAlerta = new Set();
     try{
       const alertas = await api(`alertas_gerencia?tipo=eq.faltante_generacion_op&op_id=eq.${opId}&leida=eq.false&select=id,sku_id`);
@@ -685,7 +696,7 @@ function renderCheckItem(item, estado, variante){
       ${estado==='asignado'
         ? `<span style="background:var(--green);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✓ Asignado</span>
            <button style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:2px 6px;" onclick="toggleDetalleAsig(${item.id}, '${item.uid_asignado}')">▾</button>`
-        : skusConAlerta.has(item.sku_id)
+        : (skusConAlerta.has(item.sku_id) || (item.skus?.tracking === 'uid' && (window.stockUidMap[item.sku_id]??1) === 0))
           ? `<span style="background:rgba(255,179,64,0.15);color:var(--amber);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,179,64,0.3);">⚠ Faltante · Compras notificado</span>`
           : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="asignarManual(${item.id})">Asignar</button>`
       }
