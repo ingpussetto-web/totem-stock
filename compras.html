@@ -852,7 +852,7 @@ async function loadDesvios(){
       const alertasGen = await api('alertas_gerencia?tipo=eq.faltante_generacion_op&leida=eq.false&order=id.desc');
       if(alertasGen && alertasGen.length){
         const opIds = [...new Set(alertasGen.filter(a=>a.op_id).map(a=>a.op_id))];
-        const skuIds = [...new Set(alertasGen.filter(a=>a.sku_id).map(a=>a.sku_id))];
+        const skuIds = [...new Set(alertasGen.map(a=>a.sku_id).filter(id=>id!=null && !isNaN(Number(id))))];
 
         const opsMap = {};
         if(opIds.length){
@@ -861,7 +861,7 @@ async function loadDesvios(){
         }
         const skusMap = {};
         if(skuIds.length){
-          const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_min,tracking').catch(()=>[]);
+          const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_min,tracking').catch(e=>{console.error('skus query error:',e.message,[...skuIds]);return [];});
           (skus||[]).forEach(s=>{ skusMap[String(s.id)]=s; });
         }
 
