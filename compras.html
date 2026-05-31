@@ -976,6 +976,15 @@ async function loadDesvios(){
 }
 
 
+function toggleAlertaCard(cardId){
+  const el = document.getElementById(cardId);
+  const arrow = document.getElementById('arrow-'+cardId);
+  if(!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'block';
+  if(arrow) arrow.textContent = visible ? '▶' : '▼';
+}
+
 async function marcarAlertaLeida(alertaId){
   try{
     await api('alertas_gerencia?id=eq.'+alertaId, 'PATCH', {leida:true});
