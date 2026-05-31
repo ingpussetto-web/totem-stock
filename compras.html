@@ -1019,12 +1019,12 @@ async function loadDesvios(){
         // Stock disponible por SKU (cantidad)
         const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
         const stockCantMap = {};
-        (stockItems||[]).forEach(s=>{ stockCantMap[s.sku_id] = s.disponible; });
+        (stockItems||[]).forEach(s=>{ stockCantMap[String(s.sku_id)] = s.disponible; });
 
         // Stock de unidades (uid) en estado=stock
         const unidadesStock = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
         const stockUidMap2 = {};
-        (unidadesStock||[]).forEach(u=>{ stockUidMap2[u.sku_id] = (stockUidMap2[u.sku_id]||0)+1; });
+        (unidadesStock||[]).forEach(u=>{ stockUidMap2[String(u.sku_id)] = (stockUidMap2[String(u.sku_id)]||0)+1; });
 
         // También traer items YA ASIGNADOS de las mismas OPs para calcular asignación parcial
         const opIds = [...new Set(alertas.map(i=>i.ordenes_produccion?.id).filter(Boolean))];
@@ -1040,7 +1040,7 @@ async function loadDesvios(){
         // demandaMap: sku_id → { sku, qty_total_pendiente, ops: { op_id → { op, qty_pendiente, qty_asignada } } }
         const demandaMap = {};
         alertas.forEach(item => {
-          const sid = item.sku_id;
+          const sid = String(item.sku_id);
           const opId = item.ordenes_produccion?.id;
           if(!demandaMap[sid]) demandaMap[sid] = { sku: item.skus||{}, qty_total: 0, ops: {} };
           demandaMap[sid].qty_total += (item.qty||1);
