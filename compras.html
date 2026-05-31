@@ -919,7 +919,7 @@ async function loadDesvios(){
               : '';
 
             cards += '<div style="background:var(--surface);border:1px solid rgba(77,159,255,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
-              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard('"+cardId+"')">'
+              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(this.dataset.cid)" data-cid="'+cardId+'">'
                 +'<span style="font-size:16px;color:#4d9fff;" id="arrow-'+cardId+'">▶</span>'
                 +'<div>'
                   +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
@@ -1112,7 +1112,7 @@ async function loadDesvios(){
 
             cards += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
               // Header de la card (siempre visible)
-              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard('"+cardId+"')">'
+              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(this.dataset.cid)" data-cid="'+cardId+'">'
                 +'<span style="font-size:16px;color:#ffb340;" id="arrow-'+cardId+'">▶</span>'
                 +'<div>'
                   +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
