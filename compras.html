@@ -868,7 +868,7 @@ async function loadDesvios(){
         // Stock disponible (cantidad)
         const stockGenMap = {};
         if(skuIds.length){
-          const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
+          const stockItems = await api('stock_disponible?id=in.('+skuIds.join(',')+')'+'&select=id,disponible').catch(()=>[]);
           (stockItems||[]).forEach(s=>{ stockGenMap[String(s.sku_id)] = s.disponible; });
           // Stock uid
           const udsGen = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
@@ -1017,9 +1017,9 @@ async function loadDesvios(){
         const skuIds = [...new Set(alertas.map(i=>i.sku_id))];
 
         // Stock disponible por SKU (cantidad)
-        const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
+        const stockItems = await api('stock_disponible?id=in.('+skuIds.join(',')+')'+'&select=id,disponible').catch(()=>[]);
         const stockCantMap = {};
-        (stockItems||[]).forEach(s=>{ stockCantMap[String(s.sku_id)] = s.disponible; });
+        (stockItems||[]).forEach(s=>{ stockCantMap[String(s.id)] = s.disponible; });
 
         // Stock de unidades (uid) en estado=stock
         const unidadesStock = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
