@@ -526,6 +526,22 @@ async function abrirOP(opId){
       }
     }catch(e){ console.warn('Error cargando alertas:', e.message); }
 
+    // Verificar stock de items cantidad pendientes (sin depender de alertas)
+    try{
+      const cantSkuIds = [...new Set(
+        bomItems.filter(i=>i.skus?.tracking==='cantidad' && i.estado!=='asignado').map(i=>i.sku_id).filter(Boolean)
+      )];
+      if(cantSkuIds.length){
+        const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
+        const stockCantMap = {};
+        (stockCant||[]).forEach(s=>{ stockCantMap[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
+        cantSkuIds.forEach(id=>{
+          const disp = stockCantMap[id] ?? -1; // -1 = no existe fila = sin stock
+          if(disp <= 0) skusConAlerta.add(id);
+        });
+      }
+    }catch(e){ console.warn('Stock cantidad check:', e); }
+
     // Mostrar header
     const esIniciada = currentOP.estado === 'iniciada';
     document.getElementById('op-detail-header').innerHTML = `
