@@ -934,70 +934,140 @@ async function loadDesvios(){
       return;
     }
 
-    // ── Alertas tempranas: demanda de OPs >= stock_min y stock disponible < stock_min ──
+    // ── Alertas tempranas: vista agrupada por insumo con detalle desplegable ──
     let alertasHTML = '';
     try{
-      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,skus(id,nombre,codigo,stock_min),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
-      const alertas = (opsAbiertas||[]).filter(i => i.ordenes_produccion && ['pendiente','en_proceso'].includes(i.ordenes_produccion.estado));
-      if(alertas.length){
-        const skuIds = [...new Set(alertas.map(i=>i.sku_id))].join(',');
-        const stockItems = await api('stock_disponible?sku_id=in.('+skuIds+')&select=sku_id,disponible').catch(()=>[]);
-        const stockMap = {};
-        (stockItems||[]).forEach(s=>{ stockMap[s.sku_id] = s.disponible; });
+      // Traer TODOS los items pendientes de OPs activas (no completadas ni canceladas)
+      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,equipo_num,skus(id,nombre,codigo,stock_min,tracking),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
+      const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
+      const alertas = (opsAbiertas||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
 
-        // Agrupar demanda total por SKU (suma qty de todas las OPs activas)
-        const demandaMap = {};   // sku_id → {qty_total, items:[]}
+      if(alertas.length){
+        const skuIds = [...new Set(alertas.map(i=>i.sku_id))];
+
+        // Stock disponible por SKU (cantidad)
+        const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
+        const stockCantMap = {};
+        (stockItems||[]).forEach(s=>{ stockCantMap[s.sku_id] = s.disponible; });
+
+        // Stock de unidades (uid) en estado=stock
+        const unidadesStock = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
+        const stockUidMap2 = {};
+        (unidadesStock||[]).forEach(u=>{ stockUidMap2[u.sku_id] = (stockUidMap2[u.sku_id]||0)+1; });
+
+        // También traer items YA ASIGNADOS de las mismas OPs para calcular asignación parcial
+        const opIds = [...new Set(alertas.map(i=>i.ordenes_produccion?.id).filter(Boolean))];
+        const asignados = opIds.length ? await api('op_bom_items?estado=eq.asignado&incluido=eq.true&sku_id=not.is.null&op_id=in.('+opIds.join(',')+')'+'&select=sku_id,qty,op_id').catch(()=>[]) : [];
+        // asignadosMap: op_id → sku_id → qty asignada
+        const asignadosMap = {};
+        (asignados||[]).forEach(a=>{
+          if(!asignadosMap[a.op_id]) asignadosMap[a.op_id] = {};
+          asignadosMap[a.op_id][a.sku_id] = (asignadosMap[a.op_id][a.sku_id]||0) + (a.qty||1);
+        });
+
+        // Agrupar demanda pendiente por SKU → por OP
+        // demandaMap: sku_id → { sku, qty_total_pendiente, ops: { op_id → { op, qty_pendiente, qty_asignada } } }
+        const demandaMap = {};
         alertas.forEach(item => {
           const sid = item.sku_id;
-          if(!demandaMap[sid]) demandaMap[sid] = { qty_total: 0, items: [] };
-          demandaMap[sid].qty_total += (item.qty || 1);
-          demandaMap[sid].items.push(item);
+          const opId = item.ordenes_produccion?.id;
+          if(!demandaMap[sid]) demandaMap[sid] = { sku: item.skus||{}, qty_total: 0, ops: {} };
+          demandaMap[sid].qty_total += (item.qty||1);
+          if(opId){
+            if(!demandaMap[sid].ops[opId]) demandaMap[sid].ops[opId] = { op: item.ordenes_produccion, qty_pendiente: 0, qty_asignada: 0 };
+            demandaMap[sid].ops[opId].qty_pendiente += (item.qty||1);
+          }
+        });
+        // Cargar qty asignada en cada OP
+        Object.entries(demandaMap).forEach(([sid, data])=>{
+          Object.entries(data.ops).forEach(([opId, opData])=>{
+            opData.qty_asignada = (asignadosMap[opId]||{})[sid] || 0;
+          });
         });
 
-        // Filtrar: stock disponible < stock_min Y demanda total >= stock_min
-        const skusAlerta = Object.entries(demandaMap).filter(([sid, data]) => {
-          const sku = (data.items[0].skus) || {};
-          const stockMin = sku.stock_min || 1;
-          const disponible = stockMap[sid] || 0;
-          return disponible < stockMin && data.qty_total >= stockMin;
+        // Filtrar: stock < demanda total pendiente (falta algo)
+        const skusConFaltante = Object.entries(demandaMap).filter(([sid, data])=>{
+          const tracking = data.sku.tracking;
+          const disponible = tracking==='uid' ? (stockUidMap2[sid]||0) : (stockCantMap[sid]||0);
+          return disponible < data.qty_total;
         });
 
-        if(skusAlerta.length){
-          // Aplanar items de los SKUs que disparan alerta
-          const itemsAlerta = skusAlerta.flatMap(([sid, data]) => data.items);
+        if(skusConFaltante.length){
+          let cards = '';
+          skusConFaltante.forEach(([sid, data], idx)=>{
+            const sku = data.sku;
+            const tracking = sku.tracking;
+            const disponible = tracking==='uid' ? (stockUidMap2[sid]||0) : (stockCantMap[sid]||0);
+            const stockMin = sku.stock_min || 0;
+            const faltanteOPs = data.qty_total - disponible; // faltante solo para cubrir OPs
+            const faltanteStockMin = Math.max(0, stockMin - disponible); // faltante para llegar al stock mínimo
+            // Total a comprar = máximo entre cubrir OPs y llegar a stock_min
+            const totalComprar = Math.max(faltanteOPs, faltanteStockMin);
+            const nombre = sku.nombre||'—';
+            const cardId = 'alerta-card-'+sid;
+
+            // Detalle por OP
+            const opsHTML = Object.values(data.ops).map(opData=>{
+              const op = opData.op;
+              const totalOp = opData.qty_pendiente + opData.qty_asignada;
+              const esParcia = opData.qty_asignada > 0 && opData.qty_pendiente > 0;
+              return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.1);">'
+                +'<div>'
+                +'<span style="font-family:DM Mono,monospace;font-size:11px;color:#ffb340;">'+op.op_numero+'</span>'
+                +' <span style="font-size:12px;color:var(--text2);">'+op.cliente+'</span>'
+                +(esParcia?' <span style="font-size:10px;background:rgba(255,179,64,0.15);color:#ffb340;padding:1px 6px;border-radius:10px;margin-left:4px;">parcial</span>':'')
+                +'</div>'
+                +'<div style="font-size:11px;color:var(--text3);white-space:nowrap;">'
+                +(esParcia
+                  ? '<span style="color:var(--green);">'+opData.qty_asignada+' asignado</span> / <span style="color:#ff5e5e;">'+opData.qty_pendiente+' pendiente</span> de '+totalOp
+                  : '<span style="color:#ff5e5e;">'+opData.qty_pendiente+' pendiente</span>')
+                +'</div>'
+                +'</div>';
+            }).join('');
+
+            // Fila de stock mínimo (si aplica)
+            const stockMinRow = stockMin > 0
+              ? '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);margin-top:2px;">'
+                +'<div style="font-size:11px;color:var(--text3);">📦 Stock mínimo requerido</div>'
+                +'<div style="font-size:11px;color:var(--text3);">mín: '+stockMin+' · disponible: '+disponible+' → <span style="color:'+(faltanteStockMin>0?'#ff5e5e':'var(--green)')+';">'+( faltanteStockMin>0 ? 'faltan '+faltanteStockMin : 'OK' )+'</span></div>'
+                +'</div>'
+              : '';
+
+            cards += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
+              // Header de la card (siempre visible)
+              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(\''+cardId+'\')">'
+                +'<span style="font-size:16px;color:#ffb340;" id="arrow-'+cardId+'">▶</span>'
+                +'<div>'
+                  +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
+                  +(sku.codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+sku.codigo+'</div>':'')
+                +'</div>'
+                +'<div style="text-align:center;min-width:80px;">'
+                  +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:2px;">DISPONIBLE</div>'
+                  +'<div style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:'+(disponible>0?'var(--amber)':'#ff5e5e')+';">'+disponible+'</div>'
+                +'</div>'
+                +'<div style="text-align:center;min-width:80px;">'
+                  +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:2px;">A COMPRAR</div>'
+                  +'<div style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:#ffb340;">'+totalComprar+'</div>'
+                +'</div>'
+                +'<button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="" onclick="event.stopPropagation();generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;white-space:nowrap;">🛒 Comprar</button>'
+              +'</div>'
+              // Detalle desplegable (oculto por defecto)
+              +'<div id="'+cardId+'" style="display:none;padding:0 16px 12px;border-top:1px solid rgba(255,179,64,0.15);">'
+                +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;padding:8px 0 4px;">Detalle por proyecto</div>'
+                +opsHTML
+                +stockMinRow
+              +'</div>'
+            +'</div>';
+          });
+
           alertasHTML = '<div style="margin-bottom:20px;">'
-            +'<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:8px;letter-spacing:0.05em;">⚡ ALERTAS TEMPRANAS — Demanda de OPs activas supera stock mínimo</div>'
-            +'<table style="width:100%;border-collapse:collapse;border:1px solid rgba(255,179,64,0.2);border-radius:8px;overflow:hidden;"><thead>'
-            +'<tr style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;border-bottom:1px solid rgba(255,179,64,0.15);">'
-            +'<th style="padding:8px 16px;text-align:left;">Insumo</th>'
-            +'<th style="padding:8px;text-align:center;">Stock mín.</th>'
-            +'<th style="padding:8px;text-align:center;">Disponible</th>'
-            +'<th style="padding:8px;text-align:center;">Demanda OPs</th>'
-            +'<th style="padding:8px;text-align:left;">OP</th>'
-            +'<th style="padding:8px;text-align:left;">Cliente</th>'
-            +'<th style="padding:8px;"></th></tr></thead><tbody>'
-            + itemsAlerta.map(item => {
-                const sku = item.skus||{};
-                const op = item.ordenes_produccion||{};
-                const variante = item.variantes ? item.variantes.valor : '';
-                const nombre = sku.nombre||item.nombre||'—';
-                const stockMin = sku.stock_min || 1;
-                const disponible = stockMap[item.sku_id] || 0;
-                const demanda = demandaMap[item.sku_id]?.qty_total || 0;
-                return '<tr style="border-top:1px solid rgba(255,179,64,0.1);">'
-                  +'<td style="padding:10px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'+(variante?'<div style="font-size:11px;color:var(--text3);">'+variante+'</div>':'')+'</td>'
-                  +'<td style="padding:10px;text-align:center;font-family:DM Mono,monospace;color:var(--text2);">'+stockMin+'</td>'
-                  +'<td style="padding:10px;text-align:center;font-family:DM Mono,monospace;color:'+(disponible>0?'var(--green)':'#ff5e5e')+';">'+disponible+'</td>'
-                  +'<td style="padding:10px;text-align:center;font-family:DM Mono,monospace;color:#ffb340;font-weight:600;">'+demanda+'</td>'
-                  +'<td style="padding:10px;font-family:DM Mono,monospace;font-size:12px;color:#ffb340;">'+(op.op_numero||'—')+'</td>'
-                  +'<td style="padding:10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
-                  +'<td style="padding:10px;text-align:right;"><button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="'+encodeURIComponent(variante)+'" onclick="generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;">🛒 Comprar</button></td>'
-                  +'</tr>';
-              }).join('')
-            +'</tbody></table></div>';
+            +'<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:10px;letter-spacing:0.05em;">⚡ FALTANTES EN OPs ACTIVAS — '+skusConFaltante.length+' insumo'+(skusConFaltante.length>1?'s':'')+'</div>'
+            +cards
+            +'</div>';
+
           statsEl.innerHTML += '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">'
-            +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+skusAlerta.length+'</div>'
-            +'<div style="font-size:11px;color:var(--text3);">Alertas tempranas</div></div>';
+            +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+skusConFaltante.length+'</div>'
+            +'<div style="font-size:11px;color:var(--text3);">Insumos faltantes</div></div>';
         }
       }
     }catch(e){ console.warn('Alertas tempranas:', e.message); }
@@ -1039,6 +1109,15 @@ async function loadDesvios(){
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#ff4d6a;">Error: ${e.message}</td></tr>`;
   }
+}
+
+function toggleAlertaCard(cardId){
+  const el = document.getElementById(cardId);
+  const arrow = document.getElementById('arrow-'+cardId);
+  if(!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'block';
+  if(arrow) arrow.textContent = visible ? '▶' : '▼';
 }
 
 async function marcarAlertaLeida(alertaId){
