@@ -844,352 +844,137 @@ async function loadDesvios(){
   const tbody = document.getElementById('desvios-tbody');
   const statsEl = document.getElementById('desvios-stats');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">⏳ Calculando faltantes...</td></tr>';
+  statsEl.innerHTML = '';
+
   try{
-    // ── Alertas de Generación OP — vista agrupada por insumo con detalle desplegable ──
-    let alertasGeneracionHTML = '';
-    try{
-      const alertasGen = await api('alertas_gerencia?tipo=eq.faltante_generacion_op&leida=eq.false&order=id.desc');
-      if(alertasGen && alertasGen.length){
-        const opIds = [...new Set(alertasGen.filter(a=>a.op_id).map(a=>a.op_id))];
-        const skuIds = [...new Set(alertasGen.map(a=>a.sku_id).filter(id=>id!=null && !isNaN(Number(id))))];
+    const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
 
-        const opsMap = {};
-        if(opIds.length){
-          const ops = await api('ordenes_produccion?id=in.('+opIds.join(',')+')'+'&select=id,op_numero,cliente,estado').catch(()=>[]);
-          (ops||[]).forEach(o=>{ opsMap[o.id]=o; });
-        }
-        const skusMap = {};
-        if(skuIds.length){
-          const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking').catch(()=>[]);
-          (skus||[]).forEach(s=>{ skusMap[String(s.id)]=s; });
-        }
+    // 1. Traer todos los items pendientes de OPs activas
+    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,nombre,ordenes_produccion(id,op_numero,cliente,estado)');
+    const activos = (bomItems||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
 
-        // Stock disponible (cantidad)
-        const stockGenMap = {};
-        if(skuIds.length){
-          const stockItems = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
-          (stockItems||[]).forEach(s=>{ stockGenMap[String(s.sku_id)] = Math.max(0,(s.cantidad||0)-(s.cantidad_reservada||0)); });
-          // Stock uid
-          const udsGen = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
-          (udsGen||[]).forEach(u=>{ stockGenMap[String(u.sku_id)] = (stockGenMap[String(u.sku_id)]||0)+1; });
-        }
-
-        // Auto-limpiar alertas donde ya hay stock
-        const aLimpiar = alertasGen.filter(a => a.sku_id && (stockGenMap[a.sku_id]||0) > 0);
-        if(aLimpiar.length){
-          await Promise.all(aLimpiar.map(a => api('alertas_gerencia?id=eq.'+a.id,'PATCH',{leida:true}).catch(()=>{})));
-          alertasGen.splice(0, alertasGen.length, ...alertasGen.filter(a => !aLimpiar.find(l=>l.id===a.id)));
-        }
-
-        // Agrupar por sku_id
-        const genMap = {}; // sku_id → { sku, alertas: [{alerta, op}] }
-        const sinSku = []; // alertas sin sku_id (null)
-        alertasGen.forEach(a => {
-          if(!a.sku_id){ sinSku.push(a); return; }
-          const sid = String(a.sku_id);
-          if(!genMap[sid]) genMap[sid] = { sku: skusMap[sid]||{id:sid,nombre:'—'}, alertas: [] };
-          genMap[sid].alertas.push({ alerta: a, op: opsMap[a.op_id]||{} });
-        });
-
-        if(Object.keys(genMap).length || sinSku.length){
-          let cards = '';
-          Object.entries(genMap).forEach(([sid, data])=>{
-            const sku = data.sku;
-            const disponible = stockGenMap[sid]||0;
-            const stockMin = sku.stock_minimo||0;
-            const nombre = sku.nombre||'—';
-            const cardId = 'gen-card-'+sid;
-            const cantOPs = data.alertas.length;
-
-            const opsHTML = data.alertas.map(({alerta, op})=>{
-              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(77,159,255,0.1);">'
-                +'<div>'
-                +'<span style="font-family:DM Mono,monospace;font-size:11px;color:#4d9fff;">'+(op.op_numero||'—')+'</span>'
-                +' <span style="font-size:12px;color:var(--text2);">'+(op.cliente||'—')+'</span>'
-                +'</div>'
-                +'<button class="btn" onclick="marcarAlertaLeida('+alerta.id+')" style="font-size:10px;padding:2px 8px;height:22px;border-color:var(--border2);color:var(--text3);" title="Marcar como resuelto">✓</button>'
-                +'</div>';
-            }).join('');
-
-            const stockMinRow = stockMin>0
-              ? '<div style="padding:6px 0;border-top:1px solid rgba(77,159,255,0.15);font-size:11px;color:var(--text3);">'
-                +'📦 Stock mínimo: '+stockMin+' · Disponible: '+disponible
-                +' → <span style="color:'+(disponible>=stockMin?'var(--green)':'#ff5e5e')+';">'+(disponible>=stockMin?'OK':'faltan '+(stockMin-disponible))+'</span>'
-                +'</div>'
-              : '';
-
-            cards += '<div style="background:var(--surface);border:1px solid rgba(77,159,255,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
-              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(this.dataset.cid)" data-cid="'+cardId+'">'
-                +'<span style="font-size:16px;color:#4d9fff;" id="arrow-'+cardId+'">▶</span>'
-                +'<div>'
-                  +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
-                  +(sku.codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+sku.codigo+'</div>':'')
-                +'</div>'
-                +'<div style="text-align:center;min-width:70px;">'
-                  +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:2px;">DISPONIBLE</div>'
-                  +'<div style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:'+(disponible>0?'var(--amber)':'#ff5e5e')+';">'+disponible+'</div>'
-                +'</div>'
-                +'<div style="text-align:center;min-width:70px;">'
-                  +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:2px;">OPs</div>'
-                  +'<div style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:#4d9fff;">'+cantOPs+'</div>'
-                +'</div>'
-                +'<button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="" onclick="event.stopPropagation();generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#4d9fff;color:#4d9fff;white-space:nowrap;">🛒 Generar OC</button>'
-              +'</div>'
-              +'<div id="'+cardId+'" style="display:none;padding:0 16px 12px;border-top:1px solid rgba(77,159,255,0.15);">'
-                +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;padding:8px 0 4px;">Proyectos afectados</div>'
-                +opsHTML
-                +stockMinRow
-              +'</div>'
-            +'</div>';
-          });
-
-          // Alertas sin SKU (las null) — mostrar simple
-          if(sinSku.length){
-            cards += sinSku.map(a=>{
-              const op = opsMap[a.op_id]||{};
-              const nombre = a.mensaje ? a.mensaje.replace(/^Faltante al generar OP [^:]+: /,'').replace(/ — sin stock.*$/,'') : '—';
-              return '<div style="background:var(--surface);border:1px solid rgba(77,159,255,0.15);border-radius:8px;padding:10px 16px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">'
-                +'<div><div style="font-size:13px;color:var(--text);">'+nombre+'</div>'
-                +'<span style="font-family:DM Mono,monospace;font-size:11px;color:#4d9fff;">'+(op.op_numero||'—')+'</span>'
-                +' <span style="font-size:12px;color:var(--text2);">'+(op.cliente||'—')+'</span></div>'
-                +'<button class="btn" onclick="marcarAlertaLeida('+a.id+')" style="font-size:10px;padding:2px 8px;height:22px;">✓</button>'
-                +'</div>';
-            }).join('');
-          }
-
-          const totalInsumos = Object.keys(genMap).length;
-          alertasGeneracionHTML = '<div style="margin-bottom:24px;">'
-            +'<div style="font-size:11px;font-weight:600;color:#4d9fff;margin-bottom:10px;letter-spacing:0.05em;">🔵 FALTANTES EN GENERACIÓN DE OP — '+totalInsumos+' insumo'+(totalInsumos>1?'s':'')+' sin stock al confirmar BOM</div>'
-            +cards
-            +'</div>';
-          statsEl.innerHTML = '<div style="background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:8px;padding:12px 20px;">'
-            +'<div style="font-size:22px;font-weight:700;color:#4d9fff;">'+totalInsumos+'</div>'
-            +'<div style="font-size:11px;color:var(--text3);">Faltantes al generar OP</div></div>';
-        }
-      }
-    }catch(e){ console.warn('Alertas generación OP:', e.message); }
-
-    // ── Diferencias de conteo de caja ─────────────────────────────────────
-    try{
-      const alertasCaja = await api('alertas_gerencia?tipo=eq.diferencia_conteo_caja&leida=eq.false&order=id.desc');
-      if(alertasCaja && alertasCaja.length){
-        const cajaBadge = '<div style="margin-bottom:24px;">'
-          +'<div style="font-size:11px;font-weight:600;color:#ff5e5e;margin-bottom:8px;letter-spacing:0.05em;">📦 DIFERENCIAS EN CONTEO DE CAJA — Stock físico no coincide con sistema</div>'
-          +'<table style="width:100%;border-collapse:collapse;border:1px solid rgba(255,94,94,0.2);border-radius:8px;overflow:hidden;">'
-          +'<thead><tr style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;border-bottom:1px solid rgba(255,94,94,0.15);">'
-          +'<th style="padding:8px 16px;text-align:left;">Detalle</th>'
-          +'<th style="padding:8px;text-align:right;"></th>'
-          +'</tr></thead><tbody>'
-          + alertasCaja.map(a => {
-              const fecha = a.created_at ? new Date(a.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-              return '<tr style="border-top:1px solid rgba(255,94,94,0.1);">'
-                +'<td style="padding:10px 16px;">'
-                +'<div style="font-weight:500;color:var(--text);font-size:12px;">'+a.mensaje+'</div>'
-                +'<div style="font-size:10px;color:var(--text3);margin-top:3px;">'+fecha+'</div>'
-                +'</td>'
-                +'<td style="padding:10px;text-align:right;">'
-                +'<button class="btn" onclick="marcarAlertaLeida('+a.id+')" style="font-size:11px;padding:4px 8px;border-color:var(--border2);color:var(--text3);" title="Marcar como revisado">✓ Revisado</button>'
-                +'</td>'
-                +'</tr>';
-            }).join('')
-          +'</tbody></table></div>';
-        statsEl.innerHTML += '<div style="background:rgba(255,94,94,0.08);border:1px solid rgba(255,94,94,0.2);border-radius:8px;padding:12px 20px;">'
-          +'<div style="font-size:22px;font-weight:700;color:#ff5e5e;">'+alertasCaja.length+'</div>'
-          +'<div style="font-size:11px;color:var(--text3);">Conteos con diferencia</div></div>';
-        alertasGeneracionHTML += cajaBadge;
-      }
-    }catch(e){ console.warn('Alertas conteo caja:', e.message); }
-
-    // Traer op_bom_items pendientes de OPs cerradas
-    const items = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&select=*,skus(id,nombre,codigo),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)&order=id.desc');
-    const cerrados = items ? items.filter(i => i.ordenes_produccion && i.ordenes_produccion.estado === 'cerrada') : [];
-
-    // ── Alertas tempranas: vista agrupada por insumo con detalle desplegable ──
-    let alertasHTML = '';
-    try{
-      // Traer TODOS los items pendientes de OPs activas (no completadas ni canceladas)
-      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,equipo_num,skus(id,nombre,codigo,stock_minimo,tracking),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
-      const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
-      const alertas = (opsAbiertas||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
-
-      if(alertas.length){
-        const skuIds = [...new Set(alertas.map(i=>i.sku_id))];
-
-        // Stock disponible por SKU (cantidad)
-        const stockItems = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
-        const stockCantMap = {};
-        (stockItems||[]).forEach(s=>{ stockCantMap[String(s.sku_id)] = Math.max(0, (s.cantidad||0) - (s.cantidad_reservada||0)); });
-
-        // Stock de unidades (uid) en estado=stock
-        const unidadesStock = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
-        const stockUidMap2 = {};
-        (unidadesStock||[]).forEach(u=>{ stockUidMap2[String(u.sku_id)] = (stockUidMap2[String(u.sku_id)]||0)+1; });
-
-        // También traer items YA ASIGNADOS de las mismas OPs para calcular asignación parcial
-        const opIds = [...new Set(alertas.map(i=>i.ordenes_produccion?.id).filter(Boolean))];
-        const asignados = opIds.length ? await api('op_bom_items?estado=eq.asignado&incluido=eq.true&sku_id=not.is.null&op_id=in.('+opIds.join(',')+')'+'&select=sku_id,qty,op_id').catch(()=>[]) : [];
-        // asignadosMap: op_id → sku_id → qty asignada
-        const asignadosMap = {};
-        (asignados||[]).forEach(a=>{
-          if(!asignadosMap[a.op_id]) asignadosMap[a.op_id] = {};
-          asignadosMap[a.op_id][a.sku_id] = (asignadosMap[a.op_id][a.sku_id]||0) + (a.qty||1);
-        });
-
-        // Agrupar demanda pendiente por SKU → por OP
-        // demandaMap: sku_id → { sku, qty_total_pendiente, ops: { op_id → { op, qty_pendiente, qty_asignada } } }
-        const demandaMap = {};
-        alertas.forEach(item => {
-          const sid = String(item.sku_id);
-          const opId = item.ordenes_produccion?.id;
-          if(!demandaMap[sid]) demandaMap[sid] = { sku: item.skus||{}, qty_total: 0, ops: {} };
-          demandaMap[sid].qty_total += (item.qty||1);
-          if(opId){
-            if(!demandaMap[sid].ops[opId]) demandaMap[sid].ops[opId] = { op: item.ordenes_produccion, qty_pendiente: 0, qty_asignada: 0 };
-            demandaMap[sid].ops[opId].qty_pendiente += (item.qty||1);
-          }
-        });
-        // Cargar qty asignada en cada OP
-        Object.entries(demandaMap).forEach(([sid, data])=>{
-          Object.entries(data.ops).forEach(([opId, opData])=>{
-            opData.qty_asignada = (asignadosMap[opId]||{})[sid] || 0;
-          });
-        });
-
-        // Filtrar: stock < demanda total pendiente (falta algo)
-        const skusConFaltante = Object.entries(demandaMap).filter(([sid, data])=>{
-          const tracking = data.sku.tracking;
-          const disponible = tracking==='uid' ? (stockUidMap2[sid]??0) : (stockCantMap[sid]??0);
-          return disponible < data.qty_total;
-        });
-
-        if(skusConFaltante.length){
-          let cards = '';
-          skusConFaltante.forEach(([sid, data], idx)=>{
-            const sku = data.sku;
-            const tracking = sku.tracking;
-            const disponible = tracking==='uid' ? (stockUidMap2[sid]??0) : (stockCantMap[sid]??0);
-            const stockMin = sku.stock_minimo || 0;
-            const faltanteOPs = data.qty_total - disponible; // faltante solo para cubrir OPs
-            const faltanteStockMin = Math.max(0, stockMin - disponible); // faltante para llegar al stock mínimo
-            // Total a comprar = máximo entre cubrir OPs y llegar a stock_min
-            const totalComprar = Math.max(faltanteOPs, faltanteStockMin);
-            const nombre = sku.nombre||'—';
-            const cardId = 'alerta-card-'+sid;
-
-            // Detalle por OP
-            const opsHTML = Object.values(data.ops).map(opData=>{
-              const op = opData.op;
-              const totalOp = opData.qty_pendiente + opData.qty_asignada;
-              const esParcia = opData.qty_asignada > 0 && opData.qty_pendiente > 0;
-              return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.1);">'
-                +'<div>'
-                +'<span style="font-family:DM Mono,monospace;font-size:11px;color:#ffb340;">'+op.op_numero+'</span>'
-                +' <span style="font-size:12px;color:var(--text2);">'+op.cliente+'</span>'
-                +(esParcia?' <span style="font-size:10px;background:rgba(255,179,64,0.15);color:#ffb340;padding:1px 6px;border-radius:10px;margin-left:4px;">parcial</span>':'')
-                +'</div>'
-                +'<div style="font-size:11px;color:var(--text3);white-space:nowrap;">'
-                +(esParcia
-                  ? '<span style="color:var(--green);">'+opData.qty_asignada+' asignado</span> / <span style="color:#ff5e5e;">'+opData.qty_pendiente+' pendiente</span> de '+totalOp
-                  : '<span style="color:#ff5e5e;">'+opData.qty_pendiente+' pendiente</span>')
-                +'</div>'
-                +'</div>';
-            }).join('');
-
-            // Fila de stock mínimo (si aplica)
-            const stockMinRow = stockMin > 0
-              ? '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);margin-top:2px;">'
-                +'<div style="font-size:11px;color:var(--text3);">📦 Stock mínimo requerido</div>'
-                +'<div style="font-size:11px;color:var(--text3);">mín: '+stockMin+' · disponible: '+disponible+' → <span style="color:'+(faltanteStockMin>0?'#ff5e5e':'var(--green)')+';">'+( faltanteStockMin>0 ? 'faltan '+faltanteStockMin : 'OK' )+'</span></div>'
-                +'</div>'
-              : '';
-
-            cards += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
-              // Header de la card (siempre visible)
-              +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(this.dataset.cid)" data-cid="'+cardId+'">'
-                +'<span style="font-size:16px;color:#ffb340;" id="arrow-'+cardId+'">▶</span>'
-                +'<div>'
-                  +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
-                  +(sku.codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+sku.codigo+'</div>':'')
-                +'</div>'
-                +'<div style="text-align:center;min-width:80px;">'
-                  +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:2px;">DISPONIBLE</div>'
-                  +'<div style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:'+(disponible>0?'var(--amber)':'#ff5e5e')+';">'+disponible+'</div>'
-                +'</div>'
-                +'<div style="text-align:center;min-width:80px;">'
-                  +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:2px;">A COMPRAR</div>'
-                  +'<div style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:#ffb340;">'+totalComprar+'</div>'
-                +'</div>'
-                +'<button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="" onclick="event.stopPropagation();generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;white-space:nowrap;">🛒 Comprar</button>'
-              +'</div>'
-              // Detalle desplegable (oculto por defecto)
-              +'<div id="'+cardId+'" style="display:none;padding:0 16px 12px;border-top:1px solid rgba(255,179,64,0.15);">'
-                +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;text-transform:uppercase;padding:8px 0 4px;">Detalle por proyecto</div>'
-                +opsHTML
-                +stockMinRow
-              +'</div>'
-            +'</div>';
-          });
-
-          alertasHTML = '<div style="margin-bottom:20px;">'
-            +'<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:10px;letter-spacing:0.05em;">⚡ FALTANTES EN OPs ACTIVAS — '+skusConFaltante.length+' insumo'+(skusConFaltante.length>1?'s':'')+'</div>'
-            +cards
-            +'</div>';
-
-          statsEl.innerHTML += '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">'
-            +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+skusConFaltante.length+'</div>'
-            +'<div style="font-size:11px;color:var(--text3);">Insumos faltantes</div></div>';
-        }
-      }
-    }catch(e){ console.warn('Alertas tempranas:', e.message); }
-
-    // ── Stats desvíos cerrados ───────────────────────────────────────────────
-    const ops = [...new Set(cerrados.map(i=>i.ordenes_produccion.op_numero))];
-    statsEl.innerHTML += '<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
-      +'<div style="font-size:22px;font-weight:700;color:#ff4d6a;">'+cerrados.length+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);">Desvíos cerrados</div></div>'
-      +'<div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.2);border-radius:8px;padding:12px 20px;">'
-      +'<div style="font-size:22px;font-weight:700;color:#ff4d6a;">'+ops.length+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);">OPs afectadas</div></div>';
-
-    // ── Tabla desvíos cerrados (solo insumos inventariables con sku_id) ────
-    const cerradosInventariables = cerrados.filter(i => !!i.sku_id);
-    let desviosCerradosHTML = '';
-    if(!cerradosInventariables.length){
-      desviosCerradosHTML = '<div style="padding:20px;text-align:center;color:var(--text3);">✓ Sin desvíos en OPs cerradas</div>';
-    } else {
-      desviosCerradosHTML = '<table style="width:100%;border-collapse:collapse;"><tbody>'
-        + cerradosInventariables.map(item => {
-          const sku = item.skus || {};
-          const op = item.ordenes_produccion || {};
-          const variante = item.variantes ? item.variantes.valor : '';
-          const nombre = sku.nombre || item.nombre || '—';
-          return '<tr style="border-top:1px solid var(--border2);">'
-            +'<td style="padding:12px 16px;"><div style="font-weight:500;color:var(--text);">'+nombre+'</div>'
-            +(variante?'<div style="font-size:11px;color:var(--text3);">'+variante+'</div>':'')
-            +'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+(sku.codigo||'')+'</div></td>'
-            +'<td style="padding:12px 10px;font-family:DM Mono,monospace;font-size:12px;color:var(--text2);">'+(op.op_numero||'—')+'</td>'
-            +'<td style="padding:12px 10px;color:var(--text2);">'+(op.cliente||'—')+'</td>'
-            +'<td style="padding:12px 10px;text-align:center;"><span style="background:rgba(255,77,106,0.12);color:#ff4d6a;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;">'+(item.qty||1)+'</span></td>'
-            +'<td style="padding:12px 10px;text-align:right;"><button class="btn" data-skuid="'+sku.id+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="'+encodeURIComponent(variante)+'" onclick="generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:var(--green);color:var(--green);">🛒 Generar OC</button></td>'
-            +'</tr>';
-        }).join('') + '</tbody></table>';
+    if(!activos.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin faltantes detectados</td></tr>';
+      return;
     }
-    tbody.innerHTML = alertasGeneracionHTML + alertasHTML + desviosCerradosHTML;
+
+    // 2. SKUs únicos
+    const skuIds = [...new Set(activos.map(i=>i.sku_id))];
+
+    // 3. Datos de SKUs
+    const skusRaw = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking').catch(()=>[]);
+    const skusMap = {};
+    (skusRaw||[]).forEach(s=>{ skusMap[String(s.id)] = s; });
+
+    // 4. Stock actual directo de tabla stock
+    const stockRaw = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
+    const stockMap = {};
+    (stockRaw||[]).forEach(s=>{ stockMap[String(s.sku_id)] = Math.max(0, (s.cantidad||0) - (s.cantidad_reservada||0)); });
+
+    // 5. Stock uid (tracking=uid) — unidades en estado stock
+    const stockUid = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
+    const stockUidMap = {};
+    (stockUid||[]).forEach(u=>{ stockUidMap[String(u.sku_id)] = (stockUidMap[String(u.sku_id)]||0)+1; });
+
+    // 6. Agrupar demanda por SKU → por OP
+    const demanda = {}; // sid → { sku, qty_total, ops: {opId → {op, qty}} }
+    activos.forEach(item => {
+      const sid = String(item.sku_id);
+      const op = item.ordenes_produccion;
+      const opId = String(op.id);
+      if(!demanda[sid]) demanda[sid] = { sku: skusMap[sid]||{nombre:item.nombre||'—'}, qty_total: 0, ops: {} };
+      demanda[sid].qty_total += (item.qty||1);
+      if(!demanda[sid].ops[opId]) demanda[sid].ops[opId] = { op, qty: 0 };
+      demanda[sid].ops[opId].qty += (item.qty||1);
+    });
+
+    // 7. Calcular faltantes
+    const faltantes = Object.entries(demanda).map(([sid, data]) => {
+      const sku = data.sku;
+      const esUid = sku.tracking === 'uid';
+      const disponible = esUid ? (stockUidMap[sid]??0) : (stockMap[sid]??0);
+      const stockMin = sku.stock_minimo || 0;
+      const faltanteOPs = Math.max(0, data.qty_total - disponible);
+      const faltanteMin = Math.max(0, stockMin - disponible);
+      const aComprar = Math.max(faltanteOPs, faltanteMin);
+      return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, ops: data.ops };
+    }).filter(f => f.aComprar > 0)
+      .sort((a,b) => a.sku.nombre?.localeCompare(b.sku.nombre));
+
+    if(!faltantes.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin faltantes — stock suficiente para todas las OPs activas</td></tr>';
+      statsEl.innerHTML = '';
+      return;
+    }
+
+    // 8. Render cards
+    let html = '<div style="padding:16px;">';
+    html += '<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:12px;letter-spacing:0.05em;">⚡ INSUMOS A COMPRAR — '+faltantes.length+' insumo'+(faltantes.length>1?'s con faltante':'')+'</div>';
+
+    faltantes.forEach(f => {
+      const cardId = 'card-'+f.sid;
+      const nombre = f.sku.nombre||'—';
+      const codigo = f.sku.codigo||'';
+
+      // Detalle por OP
+      const opsHTML = Object.values(f.ops).map(({op, qty}) =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.1);">'
+        +'<div><span style="font-family:DM Mono,monospace;font-size:11px;color:#ffb340;">'+op.op_numero+'</span>'
+        +' <span style="font-size:12px;color:var(--text2);">'+op.cliente+'</span></div>'
+        +'<span style="font-size:12px;font-family:DM Mono,monospace;color:var(--text3);">necesita '+qty+'</span>'
+        +'</div>'
+      ).join('');
+
+      // Fila stock mínimo
+      const minRow = f.stockMin > 0
+        ? '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
+          +'📦 Stock mínimo: '+f.stockMin
+          +' · Disponible: '+f.disponible
+          +' → <span style="color:'+(f.disponible>=f.stockMin?'var(--green)':'#ff5e5e')+';">'
+          +(f.disponible>=f.stockMin?'OK':'faltan '+(f.stockMin-f.disponible))+'</span></div>'
+        : '';
+
+      html += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
+        // Header card
+        +'<div style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(this.dataset.cid)" data-cid="'+cardId+'">'
+          +'<span style="font-size:14px;color:#ffb340;" id="arrow-'+cardId+'">▶</span>'
+          +'<div>'
+            +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
+            +(codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+codigo+'</div>':'')
+          +'</div>'
+          +'<div style="text-align:center;min-width:80px;">'
+            +'<div style="font-size:10px;color:var(--text3);margin-bottom:2px;">DISPONIBLE</div>'
+            +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:'+(f.disponible>0?'var(--amber)':'#ff5e5e')+';">'+f.disponible+'</div>'
+          +'</div>'
+          +'<div style="text-align:center;min-width:80px;">'
+            +'<div style="font-size:10px;color:var(--text3);margin-bottom:2px;">A COMPRAR</div>'
+            +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:#ffb340;">'+f.aComprar+'</div>'
+          +'</div>'
+          +'<button class="btn" data-skuid="'+f.sid+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="" onclick="event.stopPropagation();generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;white-space:nowrap;">🛒 Comprar</button>'
+        +'</div>'
+        // Detalle desplegable
+        +'<div id="'+cardId+'" style="display:none;padding:0 16px 12px;border-top:1px solid rgba(255,179,64,0.15);">'
+          +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;padding:8px 0 4px;">Detalle por proyecto</div>'
+          +opsHTML
+          +minRow
+        +'</div>'
+      +'</div>';
+    });
+
+    html += '</div>';
+
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:0;">'+html+'</td></tr>';
+    statsEl.innerHTML = '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">'
+      +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+faltantes.length+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);">Insumos a comprar</div></div>';
 
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#ff4d6a;">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;color:#ff5e5e;">Error: '+e.message+'</td></tr>';
+    console.error('loadDesvios:', e);
   }
 }
 
-function toggleAlertaCard(cardId){
-  const el = document.getElementById(cardId);
-  const arrow = document.getElementById('arrow-'+cardId);
-  if(!el) return;
-  const visible = el.style.display !== 'none';
-  el.style.display = visible ? 'none' : 'block';
-  if(arrow) arrow.textContent = visible ? '▶' : '▼';
-}
 
 async function marcarAlertaLeida(alertaId){
   try{
