@@ -861,7 +861,7 @@ async function loadDesvios(){
         }
         const skusMap = {};
         if(skuIds.length){
-          const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_min,tracking').catch(e=>{console.error('skus query error:',e.message,[...skuIds]);return [];});
+          const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking').catch(()=>[]);
           (skus||[]).forEach(s=>{ skusMap[String(s.id)]=s; });
         }
 
@@ -897,7 +897,7 @@ async function loadDesvios(){
           Object.entries(genMap).forEach(([sid, data])=>{
             const sku = data.sku;
             const disponible = stockGenMap[sid]||0;
-            const stockMin = sku.stock_min||0;
+            const stockMin = sku.stock_minimo||0;
             const nombre = sku.nombre||'—';
             const cardId = 'gen-card-'+sid;
             const cantOPs = data.alertas.length;
@@ -1016,7 +1016,7 @@ async function loadDesvios(){
     let alertasHTML = '';
     try{
       // Traer TODOS los items pendientes de OPs activas (no completadas ni canceladas)
-      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,equipo_num,skus(id,nombre,codigo,stock_min,tracking),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
+      const opsAbiertas = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=id,sku_id,qty,nombre,equipo_num,skus(id,nombre,codigo,stock_minimo,tracking),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)');
       const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
       const alertas = (opsAbiertas||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
 
@@ -1076,7 +1076,7 @@ async function loadDesvios(){
             const sku = data.sku;
             const tracking = sku.tracking;
             const disponible = tracking==='uid' ? (stockUidMap2[sid]||0) : (stockCantMap[sid]||0);
-            const stockMin = sku.stock_min || 0;
+            const stockMin = sku.stock_minimo || 0;
             const faltanteOPs = data.qty_total - disponible; // faltante solo para cubrir OPs
             const faltanteStockMin = Math.max(0, stockMin - disponible); // faltante para llegar al stock mínimo
             // Total a comprar = máximo entre cubrir OPs y llegar a stock_min
