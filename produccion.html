@@ -696,15 +696,23 @@ function renderCheckItem(item, estado, variante){
       ${estado==='asignado'
         ? `<span style="background:var(--green);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✓ Asignado</span>
            <button style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:2px 6px;" onclick="toggleDetalleAsig(${item.id}, '${item.uid_asignado}')">▾</button>`
-        : (skusConAlerta.has(item.sku_id) || (item.skus?.tracking === 'uid' && (window.stockUidMap[item.sku_id]??1) === 0))
+        : (skusConAlerta.has(item.sku_id) || (item.skus?.tracking === 'uid' && item.sku_id in window.stockUidMap && window.stockUidMap[item.sku_id] === 0))
           ? `<span style="background:rgba(255,179,64,0.15);color:var(--amber);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,179,64,0.3);">⚠ Faltante · Compras notificado</span>`
-          : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="asignarManual(${item.id})">Asignar</button>`
+          : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="focusScanInput('${item.nombre}')">Asignar</button>`
       }
     </div>
     <div id="detalle-asig-${item.id}" style="display:none;margin:4px 10px 8px 36px;padding:8px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);font-size:11px;color:var(--text2);">
       <div style="color:var(--text3);font-size:10px;margin-bottom:4px;font-family:'DM Mono',monospace;">DETALLE DE ASIGNACIÓN</div>
       <div id="detalle-asig-content-${item.id}">Cargando...</div>
     </div>`;
+}
+
+async function focusScanInput(nombreInsumo){
+  const input = document.getElementById('scan-input');
+  if(!input) return;
+  input.focus();
+  input.value = '';
+  setFeedback('📷 Escaneá el QR de: ' + nombreInsumo, 'ok');
 }
 
 async function toggleDetalleAsig(itemId, uid){
