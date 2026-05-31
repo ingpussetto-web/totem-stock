@@ -862,17 +862,17 @@ async function loadDesvios(){
         const skusMap = {};
         if(skuIds.length){
           const skus = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_min,tracking').catch(()=>[]);
-          (skus||[]).forEach(s=>{ skusMap[s.id]=s; });
+          (skus||[]).forEach(s=>{ skusMap[String(s.id)]=s; });
         }
 
         // Stock disponible (cantidad)
         const stockGenMap = {};
         if(skuIds.length){
           const stockItems = await api('stock_disponible?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,disponible').catch(()=>[]);
-          (stockItems||[]).forEach(s=>{ stockGenMap[s.sku_id] = s.disponible; });
+          (stockItems||[]).forEach(s=>{ stockGenMap[String(s.sku_id)] = s.disponible; });
           // Stock uid
           const udsGen = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
-          (udsGen||[]).forEach(u=>{ stockGenMap[u.sku_id] = (stockGenMap[u.sku_id]||0)+1; });
+          (udsGen||[]).forEach(u=>{ stockGenMap[String(u.sku_id)] = (stockGenMap[String(u.sku_id)]||0)+1; });
         }
 
         // Auto-limpiar alertas donde ya hay stock
@@ -887,8 +887,9 @@ async function loadDesvios(){
         const sinSku = []; // alertas sin sku_id (null)
         alertasGen.forEach(a => {
           if(!a.sku_id){ sinSku.push(a); return; }
-          if(!genMap[a.sku_id]) genMap[a.sku_id] = { sku: skusMap[a.sku_id]||{id:a.sku_id,nombre:'—'}, alertas: [] };
-          genMap[a.sku_id].alertas.push({ alerta: a, op: opsMap[a.op_id]||{} });
+          const sid = String(a.sku_id);
+          if(!genMap[sid]) genMap[sid] = { sku: skusMap[sid]||{id:sid,nombre:'—'}, alertas: [] };
+          genMap[sid].alertas.push({ alerta: a, op: opsMap[a.op_id]||{} });
         });
 
         if(Object.keys(genMap).length || sinSku.length){
