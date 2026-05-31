@@ -1005,13 +1005,6 @@ async function loadDesvios(){
     const items = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&select=*,skus(id,nombre,codigo),variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)&order=id.desc');
     const cerrados = items ? items.filter(i => i.ordenes_produccion && i.ordenes_produccion.estado === 'cerrada') : [];
 
-    if(!cerrados.length){
-      tbody.innerHTML = alertasGeneracionHTML || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin desvíos pendientes</td></tr>';
-      // No limpiar statsEl si ya tiene KPIs de alertas generación OP
-      if(!alertasGeneracionHTML) statsEl.innerHTML = '';
-      return;
-    }
-
     // ── Alertas tempranas: vista agrupada por insumo con detalle desplegable ──
     let alertasHTML = '';
     try{
@@ -1066,7 +1059,7 @@ async function loadDesvios(){
         // Filtrar: stock < demanda total pendiente (falta algo)
         const skusConFaltante = Object.entries(demandaMap).filter(([sid, data])=>{
           const tracking = data.sku.tracking;
-          const disponible = tracking==='uid' ? (stockUidMap2[sid]||0) : (stockCantMap[sid]||0);
+          const disponible = tracking==='uid' ? (stockUidMap2[sid]??0) : (stockCantMap[sid]??0);
           return disponible < data.qty_total;
         });
 
@@ -1075,7 +1068,7 @@ async function loadDesvios(){
           skusConFaltante.forEach(([sid, data], idx)=>{
             const sku = data.sku;
             const tracking = sku.tracking;
-            const disponible = tracking==='uid' ? (stockUidMap2[sid]||0) : (stockCantMap[sid]||0);
+            const disponible = tracking==='uid' ? (stockUidMap2[sid]??0) : (stockCantMap[sid]??0);
             const stockMin = sku.stock_minimo || 0;
             const faltanteOPs = data.qty_total - disponible; // faltante solo para cubrir OPs
             const faltanteStockMin = Math.max(0, stockMin - disponible); // faltante para llegar al stock mínimo
