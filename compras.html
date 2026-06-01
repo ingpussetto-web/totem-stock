@@ -851,7 +851,7 @@ async function loadDesvios(){
     const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
 
     // 1. Traer todos los items pendientes de OPs activas
-    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,nombre,ordenes_produccion(id,op_numero,cliente,estado)');
+    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,nombre,ordenes_produccion(id,op_numero,cliente,estado,color_gabinete)');
     const activos = (bomItems||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
 
     if(!activos.length){
@@ -862,8 +862,8 @@ async function loadDesvios(){
     // 2. SKUs únicos
     const skuIds = [...new Set(activos.map(i=>i.sku_id))];
 
-    // 3. Datos de SKUs
-    const skusRaw = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking').catch(()=>[]);
+    // 3. Datos de SKUs (incluyendo categoria_id para detectar gabinetes)
+    const skusRaw = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking,categoria_id').catch(()=>[]);
     const skusMap = {};
     (skusRaw||[]).forEach(s=>{ skusMap[String(s.id)] = s; });
 
@@ -872,20 +872,32 @@ async function loadDesvios(){
     const stockMap = {};
     (stockRaw||[]).forEach(s=>{ stockMap[String(s.sku_id)] = Math.max(0, (s.cantidad||0) - (s.cantidad_reservada||0)); });
 
-    // 5. Stock uid (tracking=uid) — unidades en estado stock
-    const stockUid = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
-    const stockUidMap = {};
-    (stockUid||[]).forEach(u=>{ stockUidMap[String(u.sku_id)] = (stockUidMap[String(u.sku_id)]||0)+1; });
+    // 5. Stock uid (tracking=uid) — unidades en estado stock, con variante (color)
+    const skuIdsUid = skusRaw.filter(s=>s.tracking==='uid').map(s=>s.id);
+    const stockUidRaw = skuIdsUid.length
+      ? await api('unidades?sku_id=in.('+skuIdsUid.join(',')+')'+'&estado=eq.stock&select=sku_id,variante_id,variantes(valor)').catch(()=>[])
+      : [];
+    const stockUidMap = {};    // sid → total
+    const stockUidColorMap = {}; // sid → { color → count }
+    (stockUidRaw||[]).forEach(u=>{
+      const sid = String(u.sku_id);
+      stockUidMap[sid] = (stockUidMap[sid]||0)+1;
+      const color = u.variantes?.valor||'';
+      if(color){
+        if(!stockUidColorMap[sid]) stockUidColorMap[sid] = {};
+        stockUidColorMap[sid][color] = (stockUidColorMap[sid][color]||0)+1;
+      }
+    });
 
-    // 6. Agrupar demanda por SKU → por OP
-    const demanda = {}; // sid → { sku, qty_total, ops: {opId → {op, qty}} }
+    // 6. Agrupar demanda por SKU → por OP (incluyendo color_gabinete de la OP)
+    const demanda = {}; // sid → { sku, qty_total, ops: {opId → {op, qty, color}} }
     activos.forEach(item => {
       const sid = String(item.sku_id);
       const op = item.ordenes_produccion;
       const opId = String(op.id);
       if(!demanda[sid]) demanda[sid] = { sku: skusMap[sid]||{nombre:item.nombre||'—'}, qty_total: 0, ops: {} };
       demanda[sid].qty_total += (item.qty||1);
-      if(!demanda[sid].ops[opId]) demanda[sid].ops[opId] = { op, qty: 0 };
+      if(!demanda[sid].ops[opId]) demanda[sid].ops[opId] = { op, qty: 0, color: op.color_gabinete||'' };
       demanda[sid].ops[opId].qty += (item.qty||1);
     });
 
@@ -917,23 +929,49 @@ async function loadDesvios(){
       const nombre = f.sku.nombre||'—';
       const codigo = f.sku.codigo||'';
 
-      // Detalle por OP
-      const opsHTML = Object.values(f.ops).map(({op, qty}) =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(255,179,64,0.1);">'
-        +'<div><span style="font-family:DM Mono,monospace;font-size:11px;color:#ffb340;">'+op.op_numero+'</span>'
-        +' <span style="font-size:12px;color:var(--text2);">'+op.cliente+'</span></div>'
-        +'<span style="font-size:12px;font-family:DM Mono,monospace;color:var(--text3);">necesita '+qty+'</span>'
-        +'</div>'
-      ).join('');
+      // Detectar si es gabinete (categoria_id=8)
+      const esGabinete = f.sku.categoria_id === 8;
 
-      // Fila stock mínimo
-      const minRow = f.stockMin > 0
-        ? '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
-          +'📦 Stock mínimo: '+f.stockMin
-          +' · Disponible: '+f.disponible
-          +' → <span style="color:'+(f.disponible>=f.stockMin?'var(--green)':'#ff5e5e')+';">'
-          +(f.disponible>=f.stockMin?'OK':'faltan '+(f.stockMin-f.disponible))+'</span></div>'
-        : '';
+      // Detalle por OP
+      const opsHTML = Object.values(f.ops).map(({op, qty, color}) => {
+        let colorInfo = '';
+        if(esGabinete && color && color !== 'N/A'){
+          const stockColor = (stockUidColorMap[f.sid]||{})[color]||0;
+          const faltaColor = Math.max(0, qty - stockColor);
+          colorInfo = '<div style="margin-top:3px;font-size:11px;">'
+            +'<span style="background:rgba(255,179,64,0.1);border:1px solid rgba(255,179,64,0.3);border-radius:4px;padding:1px 8px;color:#ffb340;margin-right:6px;">'+color+'</span>'
+            +'<span style="color:var(--text3);">stock: <span style="color:'+(stockColor>0?'var(--amber)':'#ff5e5e')+';">'+stockColor+'</span>'
+            +' · necesita: '+qty
+            +' → <span style="color:'+(faltaColor>0?'#ff5e5e':'var(--green)')+';">'+(faltaColor>0?'comprar '+faltaColor:'OK')+'</span>'
+            +'</span></div>';
+        }
+        return '<div style="padding:7px 0;border-top:1px solid rgba(255,179,64,0.1);">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;">'
+          +'<div><span style="font-family:DM Mono,monospace;font-size:11px;color:#ffb340;">'+op.op_numero+'</span>'
+          +' <span style="font-size:12px;color:var(--text2);">'+op.cliente+'</span></div>'
+          +(esGabinete?'':'<span style="font-size:12px;font-family:DM Mono,monospace;color:var(--text3);">necesita '+qty+'</span>')
+          +'</div>'
+          +colorInfo
+          +'</div>';
+      }).join('');
+
+      // Fila stock mínimo — para gabinetes mostrar por color
+      let minRow = '';
+      if(f.stockMin > 0){
+        if(esGabinete && stockUidColorMap[f.sid]){
+          const coloresStock = Object.entries(stockUidColorMap[f.sid])
+            .map(([c,n])=>'<span style="margin-right:8px;"><span style="background:rgba(255,255,255,0.08);border-radius:3px;padding:1px 6px;">'+c+'</span> <span style="color:var(--amber);">'+n+'</span></span>')
+            .join('');
+          minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
+            +'📦 Stock mínimo: '+f.stockMin+' · Stock por color: '+coloresStock+'</div>';
+        } else {
+          minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
+            +'📦 Stock mínimo: '+f.stockMin
+            +' · Disponible: '+f.disponible
+            +' → <span style="color:'+(f.disponible>=f.stockMin?'var(--green)':'#ff5e5e')+';">'
+            +(f.disponible>=f.stockMin?'OK':'faltan '+(f.stockMin-f.disponible))+'</span></div>';
+        }
+      }
 
       html += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
         // Header card
