@@ -777,7 +777,13 @@ async function cargarDesdeBOMMaestra(){
     const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoV14)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre))').catch(()=>[]);
     
     if(!rows?.length){
-      toast('No hay BOM Maestra guardada para este producto');
+      // Sin BOM maestra — dejar editor vacío para carga manual
+      currentBOMItems = [];
+      currentPlayerItems = [];
+      document.getElementById('btn-cargar-bom-wrap').style.display = 'none';
+      renderBOMEditor();
+      renderPlayersLista();
+      toast('Sin BOM Maestra para este producto — podés agregar insumos manualmente');
       return;
     }
 
