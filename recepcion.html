@@ -1417,14 +1417,12 @@ async function init(){
 }
 init();
 
-// ─── FALTANTES A COMPRAR (solo lectura) ────────────────────
-function toggleFaltanteCard(el){
-  const cardId = el.dataset.cid;
-  const div = document.getElementById(cardId);
+function toggleAlertaCard(cardId){
+  const el = document.getElementById(cardId);
   const arrow = document.getElementById('arrow-'+cardId);
-  if(!div) return;
-  const visible = div.style.display !== 'none';
-  div.style.display = visible ? 'none' : 'block';
+  if(!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'block';
   if(arrow) arrow.textContent = visible ? '▶' : '▼';
 }
 
@@ -1432,118 +1430,183 @@ async function loadFaltantes(){
   const container = document.getElementById('faltantes-content');
   const statsEl = document.getElementById('faltantes-stats');
   if(!container) return;
-  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">⏳ Calculando...</div>';
-  if(statsEl) statsEl.innerHTML = '';
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">⏳ Calculando faltantes...</div>';
+  statsEl.innerHTML = '';
 
   try{
     const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
 
-    // Items pendientes de OPs activas
-    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,ordenes_produccion(id,op_numero,cliente,estado,color_gabinete)');
+    // 1. Traer todos los items pendientes de OPs activas
+    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,nombre,ordenes_produccion(id,op_numero,cliente,estado,color_gabinete)');
     const activos = (bomItems||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
-    if(!activos.length){ container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">✓ Sin faltantes</div>'; return; }
 
-    const skuIdsNum = [...new Set(activos.map(i=> Number(i.sku_id)))].filter(Boolean);
+    if(!activos.length){
+      container.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">✓ Sin faltantes detectados</td></tr>';
+      return;
+    }
 
-    // SKUs
-    const skusRaw = await api('skus?id=in.('+skuIdsNum.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking,categoria_id');
+    // 2. SKUs únicos
+    const skuIds = [...new Set(activos.map(i=>i.sku_id))];
+
+    // 3. Datos de SKUs (incluyendo categoria_id para detectar gabinetes)
+    const skusRaw = await api('skus?id=in.('+skuIds.join(',')+')'+'&select=id,nombre,codigo,stock_minimo,tracking,categoria_id').catch(()=>[]);
     const skusMap = {};
-    (skusRaw||[]).forEach(s=>{ skusMap[s.id] = s; }); // clave numérica
+    (skusRaw||[]).forEach(s=>{ skusMap[String(s.id)] = s; });
 
-    // Stock cantidad
-    const stockRaw = await api('stock?sku_id=in.('+skuIdsNum.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
+    // 4. Stock actual directo de tabla stock
+    const stockRaw = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
     const stockMap = {};
-    (stockRaw||[]).forEach(s=>{ stockMap[s.sku_id] = Math.max(0,(s.cantidad||0)-(s.cantidad_reservada||0)); });
+    (stockRaw||[]).forEach(s=>{ stockMap[String(s.sku_id)] = Math.max(0, (s.cantidad||0) - (s.cantidad_reservada||0)); });
 
-    // Stock uid con color
-    const skuIdsUid = (skusRaw||[]).filter(s=>s.tracking==='uid').map(s=>s.id);
-    const stockUidRaw = skuIdsUid.length ? await api('unidades?sku_id=in.('+skuIdsUid.join(',')+')'+'&estado=eq.stock&select=sku_id,variantes(valor)').catch(()=>[]) : [];
-    const stockUidMap = {};
-    const stockUidColorMap = {};
+    // 5. Stock uid (tracking=uid) — unidades en estado stock, con variante (color)
+    const skuIdsUid = skusRaw.filter(s=>s.tracking==='uid').map(s=>s.id);
+    const stockUidRaw = skuIdsUid.length
+      ? await api('unidades?sku_id=in.('+skuIdsUid.join(',')+')'+'&estado=eq.stock&select=sku_id,variante_id,variantes(valor)').catch(()=>[])
+      : [];
+    const stockUidMap = {};    // sid → total
+    const stockUidColorMap = {}; // sid → { color → count }
     (stockUidRaw||[]).forEach(u=>{
-      const sid = u.sku_id;
+      const sid = String(u.sku_id);
       stockUidMap[sid] = (stockUidMap[sid]||0)+1;
       const color = u.variantes?.valor||'';
-      if(color){ if(!stockUidColorMap[sid]) stockUidColorMap[sid]={}; stockUidColorMap[sid][color]=(stockUidColorMap[sid][color]||0)+1; }
+      if(color){
+        if(!stockUidColorMap[sid]) stockUidColorMap[sid] = {};
+        stockUidColorMap[sid][color] = (stockUidColorMap[sid][color]||0)+1;
+      }
     });
 
-    // Agrupar demanda — todo con claves numéricas
-    const demanda = {};
+    // 6. Agrupar demanda por SKU → por OP (incluyendo color_gabinete de la OP)
+    const demanda = {}; // sid → { sku, qty_total, ops: {opId → {op, qty, color}} }
     activos.forEach(item => {
-      const sid = Number(item.sku_id);
+      const sid = String(item.sku_id);
       const op = item.ordenes_produccion;
-      const opId = op.id;
-      if(!demanda[sid]) demanda[sid] = { sku: skusMap[sid]||{nombre:'—'}, qty_total:0, ops:{} };
+      const opId = String(op.id);
+      if(!demanda[sid]) demanda[sid] = { sku: skusMap[sid]||{nombre:item.nombre||'—'}, qty_total: 0, ops: {} };
       demanda[sid].qty_total += (item.qty||1);
-      if(!demanda[sid].ops[opId]) demanda[sid].ops[opId] = { op, qty:0, color: op.color_gabinete||'' };
+      if(!demanda[sid].ops[opId]) demanda[sid].ops[opId] = { op, qty: 0, color: op.color_gabinete||'' };
       demanda[sid].ops[opId].qty += (item.qty||1);
     });
 
-    // Calcular faltantes
+    // 7. Calcular faltantes
     const faltantes = Object.entries(demanda).map(([sid, data]) => {
-      const sidN = Number(sid);
       const sku = data.sku;
       const esUid = sku.tracking === 'uid';
-      const disponible = esUid ? (stockUidMap[sidN]||0) : (stockMap[sidN]||0);
+      const disponible = esUid ? (stockUidMap[sid]??0) : (stockMap[sid]??0);
       const stockMin = sku.stock_minimo || 0;
-      const aComprar = Math.max(Math.max(0, data.qty_total - disponible), Math.max(0, stockMin - disponible));
-      return { sid: sidN, sku, disponible, qty_total: data.qty_total, aComprar, ops: data.ops };
-    }).filter(f => f.aComprar > 0).sort((a,b)=>(a.sku.nombre||'').localeCompare(b.sku.nombre||''));
+      const faltanteOPs = Math.max(0, data.qty_total - disponible);
+      const faltanteMin = Math.max(0, stockMin - disponible);
+      const aComprar = Math.max(faltanteOPs, faltanteMin);
+      return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, ops: data.ops };
+    }).filter(f => f.aComprar > 0)
+      .sort((a,b) => a.sku.nombre?.localeCompare(b.sku.nombre));
 
-    if(!faltantes.length){ container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">✓ Stock suficiente para todas las OPs activas</div>'; return; }
+    if(!faltantes.length){
+      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">✓ Stock suficiente para todas las OPs activas</div>';
+      statsEl.innerHTML = '';
+      return;
+    }
 
-    // Render
-    let html = '';
+    // 8. Render cards
+    let html = '<div style="padding:16px;">';
+    html += '<div style="font-size:11px;font-weight:600;color:#ffb340;margin-bottom:12px;letter-spacing:0.05em;">⚡ INSUMOS A COMPRAR — '+faltantes.length+' insumo'+(faltantes.length>1?'s con faltante':'')+'</div>';
+
     faltantes.forEach(f => {
-      const cardId = 'fc-'+f.sid;
+      const cardId = 'card-'+f.sid;
       const nombre = f.sku.nombre||'—';
-      const esGabinete = Number(f.sku.categoria_id) === 8;
+      const codigo = f.sku.codigo||'';
 
-      const opsHTML = Object.values(f.ops).map(({op,qty,color})=>{
+      // Detectar si es gabinete (categoria_id=8)
+      const esGabinete = f.sku.categoria_id === 8;
+
+      // Detalle por OP
+      const opsHTML = Object.values(f.ops).map(({op, qty, color}) => {
         let colorInfo = '';
-        if(esGabinete && color && color!=='N/A'){
+        if(esGabinete && color && color !== 'N/A'){
           const stockColor = (stockUidColorMap[f.sid]||{})[color]||0;
           const faltaColor = Math.max(0, qty - stockColor);
           colorInfo = '<div style="margin-top:3px;font-size:11px;">'
             +'<span style="background:rgba(255,179,64,0.1);border:1px solid rgba(255,179,64,0.3);border-radius:4px;padding:1px 8px;color:#ffb340;margin-right:6px;">'+color+'</span>'
-            +'stock: <span style="color:'+(stockColor>0?'var(--amber)':'#ff5e5e')+';">'+stockColor+'</span>'
-            +' · necesita: '+qty+' → <span style="color:'+(faltaColor>0?'#ff5e5e':'var(--green)')+';">'+(faltaColor>0?'comprar '+faltaColor:'OK')+'</span>'
-            +'</div>';
+            +'<span style="color:var(--text3);">stock: <span style="color:'+(stockColor>0?'var(--amber)':'#ff5e5e')+';">'+stockColor+'</span>'
+            +' · necesita: '+qty
+            +' → <span style="color:'+(faltaColor>0?'#ff5e5e':'var(--green)')+';">'+(faltaColor>0?'comprar '+faltaColor:'OK')+'</span>'
+            +'</span></div>';
         }
         return '<div style="padding:7px 0;border-top:1px solid rgba(255,179,64,0.1);">'
-          +'<div style="display:flex;justify-content:space-between;">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;">'
           +'<div><span style="font-family:DM Mono,monospace;font-size:11px;color:#ffb340;">'+op.op_numero+'</span>'
           +' <span style="font-size:12px;color:var(--text2);">'+op.cliente+'</span></div>'
-          +(esGabinete?'':'<span style="font-size:12px;color:var(--text3);">necesita '+qty+'</span>')
-          +'</div>'+colorInfo+'</div>';
+          +(esGabinete?'':'<span style="font-size:12px;font-family:DM Mono,monospace;color:var(--text3);">necesita '+qty+'</span>')
+          +'</div>'
+          +colorInfo
+          +'</div>';
       }).join('');
 
-      html += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.2);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
-        +'<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleFaltanteCard(this)" data-cid="'+cardId+'">'
+      // Fila stock mínimo — para gabinetes mostrar por color
+      let minRow = '';
+      if(f.stockMin > 0){
+        if(esGabinete && stockUidColorMap[f.sid]){
+          const coloresStock = Object.entries(stockUidColorMap[f.sid])
+            .map(([c,n])=>'<span style="margin-right:8px;"><span style="background:rgba(255,255,255,0.08);border-radius:3px;padding:1px 6px;">'+c+'</span> <span style="color:var(--amber);">'+n+'</span></span>')
+            .join('');
+          minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
+            +'📦 Stock mínimo: '+f.stockMin+' · Stock por color: '+coloresStock+'</div>';
+        } else {
+          minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
+            +'📦 Stock mínimo: '+f.stockMin
+            +' · Disponible: '+f.disponible
+            +' → <span style="color:'+(f.disponible>=f.stockMin?'var(--green)':'#ff5e5e')+';">'
+            +(f.disponible>=f.stockMin?'OK':'faltan '+(f.stockMin-f.disponible))+'</span></div>';
+        }
+      }
+
+      html += '<div style="background:var(--surface);border:1px solid rgba(255,179,64,0.25);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
+        // Header card
+        +'<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleAlertaCard(this.dataset.cid)" data-cid="'+cardId+'">'
           +'<span style="font-size:14px;color:#ffb340;" id="arrow-'+cardId+'">▶</span>'
-          +'<div><div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
-          +(f.sku.codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+f.sku.codigo+'</div>':'')+'</div>'
-          +'<div style="text-align:center;min-width:70px;"><div style="font-size:10px;color:var(--text3);margin-bottom:2px;">DISPONIBLE</div>'
-          +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:'+(f.disponible>0?'var(--amber)':'#ff5e5e')+';">'+f.disponible+'</div></div>'
-          +'<div style="text-align:center;min-width:70px;"><div style="font-size:10px;color:var(--text3);margin-bottom:2px;">A COMPRAR</div>'
-          +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:#ffb340;">'+f.aComprar+'</div></div>'
+          +'<div>'
+            +'<div style="font-weight:600;color:var(--text);font-size:13px;">'+nombre+'</div>'
+            +(codigo?'<div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">'+codigo+'</div>':'')
+          +'</div>'
+          +'<div style="text-align:center;min-width:80px;">'
+            +'<div style="font-size:10px;color:var(--text3);margin-bottom:2px;">DISPONIBLE</div>'
+            +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:'+(f.disponible>0?'var(--amber)':'#ff5e5e')+';">'+f.disponible+'</div>'
+          +'</div>'
+          +'<div style="text-align:center;min-width:80px;">'
+            +'<div style="font-size:10px;color:var(--text3);margin-bottom:2px;">A COMPRAR</div>'
+            +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:#ffb340;">'+f.aComprar+'</div>'
+          +'</div>'
+          
         +'</div>'
+        // Detalle desplegable
         +'<div id="'+cardId+'" style="display:none;padding:0 16px 12px;border-top:1px solid rgba(255,179,64,0.15);">'
           +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;padding:8px 0 4px;">Detalle por proyecto</div>'
           +opsHTML
+          +minRow
         +'</div>'
       +'</div>';
     });
 
+    html += '</div>';
+
     container.innerHTML = html;
-    if(statsEl) statsEl.innerHTML = '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:10px 16px;">'
-      +'<div style="font-size:20px;font-weight:700;color:#ffb340;">'+faltantes.length+'</div>'
+    statsEl.innerHTML = '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.2);border-radius:8px;padding:12px 20px;">'
+      +'<div style="font-size:22px;font-weight:700;color:#ffb340;">'+faltantes.length+'</div>'
       +'<div style="font-size:11px;color:var(--text3);">Insumos a comprar</div></div>';
 
   }catch(e){
     container.innerHTML = '<div style="padding:16px;color:#ff5e5e;">Error: '+e.message+'</div>';
-    console.error('loadFaltantes:', e);
+    console.error('loadDesvios:', e);
   }
+}
+
+
+function toggleAlertaCard(cardId){
+  const el = document.getElementById(cardId);
+  const arrow = document.getElementById('arrow-'+cardId);
+  if(!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'block';
+  if(arrow) arrow.textContent = visible ? '▶' : '▼';
 }
 
 </script>
