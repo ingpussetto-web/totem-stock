@@ -1436,11 +1436,8 @@ async function loadFaltantes(){
 
   try{
     const estadosActivos = ['pendiente','bom_confirmada','en_produccion','iniciada'];
-    console.log('loadFaltantes: inicio query');
-    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,nombre,ordenes_produccion(id,op_numero,cliente,estado,color_gabinete)').catch(e=>{ console.error('bomItems error:', e.message); return []; });
-    console.log('bomItems:', bomItems?.length);
+    const bomItems = await api('op_bom_items?estado=eq.pendiente&incluido=eq.true&sku_id=not.is.null&select=sku_id,qty,nombre,ordenes_produccion(id,op_numero,cliente,estado,color_gabinete)').catch(()=>[]);
     const activos = (bomItems||[]).filter(i => i.ordenes_produccion && estadosActivos.includes(i.ordenes_produccion.estado));
-    console.log('activos:', activos.length);
 
     if(!activos.length){
       container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">✓ Sin faltantes detectados</div>';
@@ -1457,7 +1454,7 @@ async function loadFaltantes(){
     const stockMap = {};
     (stockRaw||[]).forEach(s=>{ stockMap[String(s.sku_id)] = Math.max(0,(s.cantidad||0)-(s.cantidad_reservada||0)); });
 
-    const skuIdsUid = skusRaw.filter(s=>s.tracking==='uid').map(s=>s.id);
+    const skuIdsUid = skusRaw.filter(s=>s.tracking==='uid').map(s=>String(s.id));
     const stockUidRaw = skuIdsUid.length
       ? await api('unidades?sku_id=in.('+skuIdsUid.join(',')+')'+'&estado=eq.stock&select=sku_id,variante_id,variantes(valor)').catch(()=>[])
       : [];
@@ -1489,7 +1486,9 @@ async function loadFaltantes(){
       const esUid = sku.tracking === 'uid';
       const disponible = esUid ? (stockUidMap[sid]??0) : (stockMap[sid]??0);
       const stockMin = sku.stock_minimo || 0;
-      const aComprar = Math.max(Math.max(0, data.qty_total - disponible), Math.max(0, stockMin - disponible));
+      const faltanteOPs = Math.max(0, data.qty_total - disponible);
+      const faltanteMin = Math.max(0, stockMin - disponible);
+      const aComprar = Math.max(faltanteOPs, faltanteMin);
       return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, ops: data.ops };
     }).filter(f => f.aComprar > 0)
       .sort((a,b) => (a.sku.nombre||'').localeCompare(b.sku.nombre||''));
