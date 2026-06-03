@@ -334,7 +334,7 @@
             <div class="label-nombre">${et.nombre}</div>
             ${et.variante?`<div class="label-variante">● ${et.variante}</div>`:''}
             <div class="label-body">
-              <div id="qrlabel-${safeId}"></div>
+              <div id="qrlabel-${safeId}" style="width:90px;height:90px;"></div>
               <div class="label-uid-wrap">
                 <div class="label-uid-label">UID</div>
                 <div class="label-uid">${et.uid}</div>
@@ -345,7 +345,7 @@
               <span>#${String(et.num||p+1).padStart(4,'0')}</span>
             </div>
           </div>`;
-          qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:72,height:72,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
+          qrScripts += `new QRCode(document.getElementById('qrlabel-${safeId}'),{text:'${baseUrl}'+encodeURIComponent('${et.uid}'),width:90,height:90,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});\n`;
         } else {
           celdasHTML += `<div class="label-vacia"></div>`;
         }
@@ -362,7 +362,7 @@
         .label-sheet{width:210mm;display:grid;grid-template-columns:repeat(2,1fr);gap:0;row-gap:0;}
         .label{width:105mm;height:74mm;border:0.5pt solid #ddd;padding:3mm 3mm 2mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;page-break-inside:avoid;box-sizing:border-box;overflow:hidden;text-align:center;}
         .label-vacia{width:105mm;height:74mm;box-sizing:border-box;}
-        .label-header{width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:1mm;}
+        .label-header{width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:3mm;}
         .label-brand{font-size:7pt;font-weight:700;color:#666;letter-spacing:0.08em;text-transform:uppercase;}
         .label-estado{font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:0.5mm 2mm;font-weight:700;}
         .label-nombre{font-size:10pt;font-weight:700;color:#111;line-height:1.2;margin:0 0 1mm;}
@@ -370,8 +370,8 @@
         .label-body{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:2mm;}
         .label-uid-wrap{text-align:center;}
         .label-uid-label{font-size:5pt;color:#aaa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1mm;}
-        .label-uid{font-size:6.5pt;font-family:'Courier New',monospace;color:#444;word-break:break-all;line-height:1.2;}
-        .label-footer{width:100%;display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1mm;font-size:5pt;color:#aaa;}
+        .label-uid{font-size:8pt;font-family:'Courier New',monospace;color:#000;word-break:break-all;line-height:1.2;font-weight:600;}
+        .label-footer{width:100%;display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:2mm;margin-top:1mm;font-size:7pt;color:#555;}
         @media print{body{padding:0;margin:0;}@page{size:A4;margin:0;}}
       </style>
     </head><body>
