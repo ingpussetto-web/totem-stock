@@ -116,6 +116,18 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
 
+
+/* Modal historial stock */
+.modal-hist{width:680px;}
+.hist-section-title{font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--text3);margin:14px 0 6px;text-transform:uppercase;}
+.hist-table{width:100%;border-collapse:collapse;font-size:12px;}
+.hist-table th{font-size:10px;color:var(--text3);font-weight:600;padding:4px 8px;text-align:left;border-bottom:1px solid var(--border);}
+.hist-table td{padding:6px 8px;border-bottom:1px solid var(--border2);vertical-align:top;}
+.hist-table tr:last-child td{border-bottom:none;}
+.hist-saldo-row{display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:var(--radius);padding:8px 12px;margin-top:14px;font-size:13px;}
+.hist-num-pos{color:var(--green);font-weight:700;font-family:'DM Mono',monospace;}
+.hist-num-neg{color:var(--red);font-weight:700;font-family:'DM Mono',monospace;}
+.hist-num-neu{color:var(--text2);font-weight:700;font-family:'DM Mono',monospace;}
 /* Variantes section */
 .variantes-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;}
 .var-chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-family:'DM Mono',monospace;}
@@ -799,6 +811,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
         : ''
       }
+      <button class="btn sm" onclick="event.stopPropagation();showHistorialStock(${d.sku_id},'${d.variante||''}',this)" style="margin-left:4px;">📋 Historial</button>
       ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
         <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''} 
           onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
@@ -1157,7 +1170,18 @@ function imprimirEtiquetaCaja(codigo, nombre){
       new QRCode(document.getElementById('qr'),{text:'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=${codigo}',width:160,height:160,correctLevel:QRCode.CorrectLevel.M});
       setTimeout(()=>window.print(),800);
     <\/script>
-  </body></html>`);
+  
+<!-- Modal historial stock -->
+<div class="modal-bg" id="modal-hist-stock">
+  <div class="modal modal-hist">
+    <div class="modal-title">
+      <span id="modal-hist-title">Historial de stock</span>
+      <button class="modal-close" onclick="closeModal('modal-hist-stock')">×</button>
+    </div>
+    <div id="modal-hist-body"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+  </div>
+</div>
+</body></html>`);
   win.document.close();
 }
 
@@ -1436,6 +1460,108 @@ async function init(){
 document.getElementById('var-nueva')?.addEventListener('keydown', e=>{ if(e.key==='Enter') addVariante(); });
 
 init();
+
+// ─── HISTORIAL STOCK ────────────────────────────────────────────────────────
+async function showHistorialStock(skuId, variante, btn){
+  const modal = document.getElementById('modal-hist-stock');
+  const body  = document.getElementById('modal-hist-body');
+  const title = document.getElementById('modal-hist-title');
+
+  // Nombre del SKU desde el array global
+  const skuObj = (skus||[]).find(s=>s.id===skuId);
+  const nombreSku = skuObj ? skuObj.nombre : 'SKU #'+skuId;
+  title.textContent = '📋 ' + nombreSku + (variante ? ' · ' + variante : '');
+
+  modal.classList.add('open');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
+
+  try {
+    // ── ENTRADAS ──
+    // recepcion_items → recepciones → ordenes_compra → proveedores
+    const entradas = await api(
+      `recepcion_items?sku_id=eq.${skuId}&select=cantidad_recibida,created_at,recepciones(recepcion_numero,created_at,ordenes_compra(oc_numero,proveedores(razon_social)))`
+    ).catch(()=>[]);
+
+    // ── SALIDAS ──
+    // op_bom_items donde sku_id coincide y qty > 0, con OP
+    const salidas = await api(
+      `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&select=qty,nombre,ordenes_produccion(op_numero,cliente,estado,fecha_entrega,updated_at)`
+    ).catch(()=>[]);
+
+    // Calcular totales
+    const totalEntradas = (entradas||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
+    const totalSalidas  = (salidas||[]).reduce((s,e)=>s+(e.qty||0),0);
+    const saldo         = totalEntradas - totalSalidas;
+    const saldoClass    = saldo > 0 ? 'hist-num-pos' : saldo < 0 ? 'hist-num-neg' : 'hist-num-neu';
+
+    // ── Render entradas ──
+    let htmlEntradas = '';
+    if(!entradas?.length){
+      htmlEntradas = '<tr><td colspan="4" style="color:var(--text3);font-style:italic;padding:10px 8px;">Sin recepciones registradas</td></tr>';
+    } else {
+      htmlEntradas = (entradas||[]).map(e=>{
+        const rec  = e.recepciones;
+        const oc   = rec?.ordenes_compra;
+        const prov = oc?.proveedores?.razon_social || '—';
+        const fecha = rec?.created_at ? new Date(rec.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+        return `<tr>
+          <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${fecha}</td>
+          <td>${prov}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
+          <td style="text-align:right;color:var(--green);font-weight:600;font-family:'DM Mono',monospace;">+${e.cantidad_recibida||0}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ── Render salidas ──
+    let htmlSalidas = '';
+    if(!salidas?.length){
+      htmlSalidas = '<tr><td colspan="4" style="color:var(--text3);font-style:italic;padding:10px 8px;">Sin asignaciones a OPs registradas</td></tr>';
+    } else {
+      htmlSalidas = (salidas||[]).map(s=>{
+        const op    = s.ordenes_produccion;
+        const fecha = op?.updated_at ? new Date(op.updated_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+        const estadoBadge = {
+          pendiente:'<span style="font-size:10px;color:var(--text3);">Pendiente</span>',
+          bom_confirmada:'<span style="font-size:10px;color:var(--amber);">BOM conf.</span>',
+          en_produccion:'<span style="font-size:10px;color:var(--green);">En prod.</span>',
+          completada:'<span style="font-size:10px;color:var(--text3);">Completada</span>',
+        }[op?.estado] || '<span style="font-size:10px;color:var(--text3);">'+(op?.estado||'—')+'</span>';
+        return `<tr>
+          <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${fecha}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
+          <td>${op?.cliente||'—'} ${estadoBadge}</td>
+          <td style="text-align:right;color:var(--red);font-weight:600;font-family:'DM Mono',monospace;">−${s.qty||0}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    body.innerHTML = `
+      <div class="hist-section-title">▼ ENTRADAS</div>
+      <table class="hist-table">
+        <thead><tr>
+          <th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th>
+        </tr></thead>
+        <tbody>${htmlEntradas}</tbody>
+      </table>
+
+      <div class="hist-section-title" style="margin-top:18px;">▼ SALIDAS (asignadas a OPs)</div>
+      <table class="hist-table">
+        <thead><tr>
+          <th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th>
+        </tr></thead>
+        <tbody>${htmlSalidas}</tbody>
+      </table>
+
+      <div class="hist-saldo-row">
+        <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradas}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
+        <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${saldo >= 0 ? '+' : ''}${saldo}</span></span>
+      </div>
+    `;
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--red);padding:20px;">Error cargando historial: ${e.message}</div>`;
+  }
+}
 </script>
 </body>
 </html>
