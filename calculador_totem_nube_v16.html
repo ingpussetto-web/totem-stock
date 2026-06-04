@@ -867,6 +867,10 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <span style="font-size:14px;font-weight:500;color:var(--text);">Vista previa de cotización</span>
         <div style="display:flex;gap:8px;">
           <button class="btn green" onclick="aprobarCotizacion()">✓ Marcar como aprobada → pasar a Ventas</button>
+          <select id="wa-linea-sel" style="border:1px solid #25D366;color:#25D366;background:transparent;border-radius:6px;padding:4px 8px;font-size:13px;height:36px;cursor:pointer;">
+            <option value="personal">📱 Personal (7579831)</option>
+            <option value="comercial">🏢 Comercial (2132633)</option>
+          </select>
           <button class="btn" onclick="enviarWhatsApp()" style="border-color:#25D366;color:#25D366;">💬 WhatsApp</button>
           <button class="btn" onclick="imprimirCotizacionActual()">🖨 Imprimir / PDF</button>
           <button class="btn" onclick="cerrarPreview()">✕</button>
@@ -5042,8 +5046,17 @@ function enviarWhatsApp(){
   msg += '_Totem Nube S.A.S._';
 
   const encoded = encodeURIComponent(msg);
-  const url = tel ? 'https://wa.me/' + tel + '?text=' + encoded
-                  : 'https://wa.me/?text=' + encoded;
+
+  // Detectar línea seleccionada
+  const linea = document.getElementById('wa-linea-sel')?.value || 'personal';
+  const numPersonal = '543517579831';
+  const numComercial = '543512132633';
+  const numLinea = linea === 'comercial' ? numComercial : numPersonal;
+
+  // Usar web.whatsapp.com para abrir en el navegador con la cuenta vinculada
+  const urlBase = 'https://web.whatsapp.com/send';
+  const destino = tel || numLinea;
+  const url = urlBase + '?phone=' + destino + '&text=' + encoded;
 
   window.open(url, '_blank');
 }
