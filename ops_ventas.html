@@ -813,7 +813,7 @@ async function cargarDesdeBOMMaestra(){
 
     // Agregar players detectados automáticamente
     playersDetectados.forEach((p,idx) => {
-      currentBOMItems.push({
+      currentPlayerItems.push({
         id: 'player-auto-'+ts+'-'+idx,
         op_id: currentOP.id,
         sku_id: p.sku?.id || null,
@@ -824,6 +824,7 @@ async function cargarDesdeBOMMaestra(){
         estado: 'pendiente',
         notas: '🖥 PLAYER',
         skus: p.sku || {nombre: p.nombre},
+        tracking: p.sku?.tracking || null,
         _variantes: [],
         _stock: 0,
         _isNew: true
@@ -955,7 +956,7 @@ async function agregarItemPlayer(){
   const newItem = {
     id: 'player-'+ts, op_id: currentOP.id, sku_id: sku.id,
     v14_key: null, nombre: sku.nombre, qty, incluido: true, estado: 'pendiente',
-    notas: '🖥 PLAYER', skus: sku, _variantes: [], _stock: 0, _isNew: true
+    notas: '🖥 PLAYER', skus: sku, tracking: sku.tracking||null, _variantes: [], _stock: 0, _isNew: true
   };
   currentPlayerItems.push(newItem);
   await cargarStockItem(newItem);
@@ -1047,17 +1048,35 @@ async function guardarBOM(estado){
     // Guardar players (solo los nuevos)
     for(const item of currentPlayerItems){
       if(item._isNew){
-        await api('op_bom_items', 'POST', [{
-          op_id: currentOP.id,
-          sku_id: item.sku_id,
-          v14_key: null,
-          nombre: item.nombre,
-          qty: item.qty,
-          incluido: true,
-          variante_id: null,
-          estado: 'pendiente',
-          notas: item.notas || '🖥 PLAYER'
-        }]);
+        const esUID = item.tracking === 'uid' || item.skus?.tracking === 'uid';
+        if(esUID && item.qty > 1){
+          // SKU con tracking uid: insertar un registro por unidad (qty=1 c/u)
+          const filas = Array.from({length: item.qty}, ()=>({
+            op_id: currentOP.id,
+            sku_id: item.sku_id,
+            v14_key: null,
+            nombre: item.nombre,
+            qty: 1,
+            incluido: true,
+            variante_id: null,
+            estado: 'pendiente',
+            notas: item.notas || '🖥 PLAYER'
+          }));
+          await api('op_bom_items', 'POST', filas);
+        } else {
+          // SKU de cantidad: un solo registro con qty total
+          await api('op_bom_items', 'POST', [{
+            op_id: currentOP.id,
+            sku_id: item.sku_id,
+            v14_key: null,
+            nombre: item.nombre,
+            qty: item.qty,
+            incluido: true,
+            variante_id: null,
+            estado: 'pendiente',
+            notas: item.notas || '🖥 PLAYER'
+          }]);
+        }
       } else {
         await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
           qty: item.qty,
@@ -1131,7 +1150,7 @@ async function confirmarBOM(){
             sku_id: item.sku_id,
             v14_key: item.v14_key,
             nombre: item.nombre,
-            qty: item.qty,
+            qty: item.qty, // qty ya es 1 para uid (expandido en guardarBOM)
             incluido: item.incluido,
             variante_id: item.variante_id||null,
             estado: 'pendiente',

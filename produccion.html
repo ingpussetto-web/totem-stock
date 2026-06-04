@@ -1294,16 +1294,21 @@ function cerrarDocOP(){
 
 // ─── ASIGNACIÓN UID CON DESTINO ─────────────────────────────────────────────
 
-function labelDestino(item){
+function labelDestino(item, items){
   const eq = item.equipo_num || 1;
   const esPlayer = item.notas && item.notas.startsWith('🖥');
   if(!esPlayer) return `Equipo ${eq} — insumo principal`;
-  // Extraer número de player del campo notas si existe, sino numerar por índice
-  const matchPlayer = item.notas.match(/player\s*(\d+)/i);
-  const numPlayer = matchPlayer ? matchPlayer[1] : null;
-  return numPlayer
-    ? `Equipo ${eq} — Player ${numPlayer}`
-    : `Equipo ${eq} — Player`;
+  // Numerar el player según su posición entre los players del mismo SKU y equipo
+  // items puede ser el array de compatibles del modal, o bomItems global
+  const fuente = items || bomItems;
+  const hermanos = fuente.filter(i =>
+    i.sku_id === item.sku_id &&
+    (i.equipo_num||1) === eq &&
+    i.notas && i.notas.startsWith('🖥')
+  );
+  const idx = hermanos.findIndex(i => i.id === item.id);
+  const numPlayer = idx >= 0 ? idx + 1 : '?';
+  return `Equipo ${eq} — Player ${numPlayer}`;
 }
 
 async function asignarItemUID(item, unidad, uid){
@@ -1351,7 +1356,7 @@ function mostrarModalDestino(items, unidad, uid){
       <span style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px;">
         ${item.notas && item.notas.startsWith('🖥') ? '🖥 PLAYER' : '🔧 INSUMO'}
       </span>
-      ${labelDestino(item)}
+      ${labelDestino(item, items)}
     </button>
   `).join('');
 
