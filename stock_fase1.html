@@ -1504,13 +1504,29 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     ).catch(()=>[]);
 
     const entradas = recItems || [];
-    const salidas  = bomItems || [];
+
+    // ── Agrupar salidas por OP (evita duplicados por equipo_num) ──
+    const salidaMap = {};
+    (bomItems||[]).forEach(s=>{
+      const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
+      if(!salidaMap[opNum]){
+        salidaMap[opNum] = { ...s, qty: s.qty||0 };
+      } else {
+        salidaMap[opNum].qty += (s.qty||0);
+      }
+    });
+    const salidas = Object.values(salidaMap);
 
     // Calcular totales
     const totalEntradas = (entradas||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
     const totalSalidas  = (salidas||[]).reduce((s,e)=>s+(e.qty||0),0);
     const saldo         = totalEntradas - totalSalidas;
     const saldoClass    = saldo > 0 ? 'hist-num-pos' : saldo < 0 ? 'hist-num-neg' : 'hist-num-neu';
+
+    // Stock disponible actual (para detectar unidades sin origen registrado)
+    const stockObj = (stockData||[]).find(d=>d.sku_id===skuIdInt);
+    const disponibleActual = stockObj ? stockObj.disponible : null;
+    const sinOrigen = (disponibleActual !== null) ? (disponibleActual - saldo) : null;
 
     // ── Render entradas ──
     let htmlEntradas = '';
@@ -1536,7 +1552,7 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     if(!salidas?.length){
       htmlSalidas = '<tr><td colspan="4" style="color:var(--text3);font-style:italic;padding:10px 8px;">Sin asignaciones a OPs registradas</td></tr>';
     } else {
-      htmlSalidas = (salidas||[]).map(s=>{
+      htmlSalidas = salidas.map(s=>{
         const op    = s.ordenes_produccion;
         const fecha = op?.updated_at ? new Date(op.updated_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
         const estadoBadge = {
@@ -1554,6 +1570,11 @@ async function showHistorialStock(skuId, variante, codigo, btn){
       }).join('');
     }
 
+    // Nota de stock sin origen si hay diferencia
+    const notaSinOrigen = (sinOrigen !== null && sinOrigen > 0)
+      ? `<div style="font-size:11px;color:var(--amber);margin-top:10px;padding:6px 10px;background:rgba(255,160,0,0.08);border-radius:var(--radius);border:1px solid rgba(255,160,0,0.2);">⚠ ${sinOrigen} unidad${sinOrigen!==1?'es':''} sin origen registrado (stock inicial o ajuste manual)</div>`
+      : '';
+
     body.innerHTML = `
       <div class="hist-section-title">▼ ENTRADAS</div>
       <table class="hist-table">
@@ -1570,6 +1591,8 @@ async function showHistorialStock(skuId, variante, codigo, btn){
         </tr></thead>
         <tbody>${htmlSalidas}</tbody>
       </table>
+
+      ${notaSinOrigen}
 
       <div class="hist-saldo-row">
         <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradas}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
