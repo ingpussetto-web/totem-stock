@@ -5330,7 +5330,7 @@ function renderVentas(){
   if(!listaEl) return;
   if(lista.length===0){ listaEl.innerHTML='<div class="empty">— Sin proyectos para el filtro seleccionado.</div>'; return; }
 
-  const estadoLabels = {iniciado:'Iniciado',produccion:'En producción',listo_despacho:'Listo para despacho',despachado:'Despachado',completado:'Completado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado',venta:'En venta'};
+  const estadoLabels = {iniciado:'Iniciado',produccion:'En producción',listo_despacho:'Listo para despacho',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado',venta:'En venta'};
   const catLabel = {equipo:'✅ Equipo',periferico:'🔧 Periférico',servicio:'🔧 Servicio'};
   function proyectoTieneLicencia(p){
     return licencias.some(function(l){ return matchLicProy(l, p); });
