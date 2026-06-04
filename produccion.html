@@ -924,7 +924,7 @@ async function procesarScan(){
       return;
     }
 
-    // Buscar item en la BOM que corresponda a este SKU y esté pendiente
+    // Buscar items en la BOM que correspondan a este SKU y estén pendientes
     const itemsCompatibles = bomItems.filter(i=>
       i.sku_id === unidad.sku_id &&
       i.estado === 'pendiente' &&
@@ -932,7 +932,6 @@ async function procesarScan(){
     );
 
     if(!itemsCompatibles.length){
-      // Verificar si ya está asignado
       const yaAsignado = bomItems.find(i=>i.uid_asignado===uid);
       if(yaAsignado){
         setFeedback(`⚠ Este insumo ya está asignado a esta OP`, 'warn');
@@ -944,40 +943,13 @@ async function procesarScan(){
       return;
     }
 
-    // Tomar el primer item compatible
-    const item = itemsCompatibles[0];
-
-    // Actualizar item en BOM
-    await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
-      estado: 'asignado',
-      uid_asignado: uid
-    });
-
-    // Actualizar unidad física → reservado
-    await api(`unidades?id=eq.${unidad.id}`, 'PATCH', {
-      estado: 'reservado',
-      updated_at: new Date().toISOString()
-    });
-
-    // Actualizar estado local
-    item.estado = 'asignado';
-    item.uid_asignado = uid;
-
-    // Feedback visual
-    scanArea.className='scan-area active';
-    setFeedback(`✓ ${unidad.skus?.nombre} asignado correctamente`, 'ok');
-    document.getElementById('scan-input').value='';
-    scanBuffer='';
-
-    // Flash en checklist item
-    const ciEl = document.getElementById('ci-'+item.id);
-    if(ciEl) ciEl.classList.add('flash-green');
-
-    actualizarProgreso();
-    renderChecklist();
-
-    setTimeout(()=>{ scanArea.className='scan-area'; }, 1500);
-    document.getElementById('scan-input').focus();
+    // Si hay un solo destino posible, asignar directo
+    // Si hay múltiples (ej: Mini PC que puede ir al equipo o a un player), pedir destino
+    if(itemsCompatibles.length === 1){
+      await asignarItemUID(itemsCompatibles[0], unidad, uid);
+    } else {
+      mostrarModalDestino(itemsCompatibles, unidad, uid);
+    }
 
   }catch(e){
     setFeedback('✕ Error: '+e.message, 'err');
@@ -1318,6 +1290,110 @@ function imprimirDocOP(){
 
 function cerrarDocOP(){
   document.getElementById('modal-doc-op').style.display = 'none';
+}
+
+// ─── ASIGNACIÓN UID CON DESTINO ─────────────────────────────────────────────
+
+function labelDestino(item){
+  const eq = item.equipo_num || 1;
+  const esPlayer = item.notas && item.notas.startsWith('🖥');
+  if(!esPlayer) return `Equipo ${eq} — insumo principal`;
+  // Extraer número de player del campo notas si existe, sino numerar por índice
+  const matchPlayer = item.notas.match(/player\s*(\d+)/i);
+  const numPlayer = matchPlayer ? matchPlayer[1] : null;
+  return numPlayer
+    ? `Equipo ${eq} — Player ${numPlayer}`
+    : `Equipo ${eq} — Player`;
+}
+
+async function asignarItemUID(item, unidad, uid){
+  const scanArea = document.getElementById('scan-area');
+  try{
+    await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
+      estado: 'asignado',
+      uid_asignado: uid
+    });
+    await api(`unidades?id=eq.${unidad.id}`, 'PATCH', {
+      estado: 'reservado',
+      updated_at: new Date().toISOString()
+    });
+    item.estado = 'asignado';
+    item.uid_asignado = uid;
+
+    scanArea.className='scan-area active';
+    setFeedback(`✓ ${unidad.skus?.nombre} → ${labelDestino(item)}`, 'ok');
+    document.getElementById('scan-input').value='';
+    scanBuffer='';
+
+    const ciEl = document.getElementById('ci-'+item.id);
+    if(ciEl) ciEl.classList.add('flash-green');
+
+    actualizarProgreso();
+    renderChecklist();
+    setTimeout(()=>{ scanArea.className='scan-area'; }, 1500);
+    document.getElementById('scan-input').focus();
+  }catch(e){
+    setFeedback('✕ Error: '+e.message, 'err');
+  }
+}
+
+function mostrarModalDestino(items, unidad, uid){
+  // Crear modal dinámico de selección de destino
+  let existing = document.getElementById('modal-destino-uid');
+  if(existing) existing.remove();
+
+  const opciones = items.map((item,idx)=>`
+    <button onclick="elegirDestino(${item.id})" style="
+      display:block;width:100%;text-align:left;padding:10px 14px;margin-bottom:6px;
+      background:var(--panel2);border:1px solid var(--border);border-radius:6px;
+      color:var(--text1);font-size:13px;cursor:pointer;
+    " onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px;">
+        ${item.notas && item.notas.startsWith('🖥') ? '🖥 PLAYER' : '🔧 INSUMO'}
+      </span>
+      ${labelDestino(item)}
+    </button>
+  `).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-destino-uid';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;width:340px;max-width:90vw;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">¿A dónde va este insumo?</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px;">${unidad.skus?.nombre} · ${uid}</div>
+      ${opciones}
+      <button onclick="cancelarDestino()" style="
+        width:100%;padding:8px;margin-top:4px;background:transparent;
+        border:1px solid var(--border);border-radius:6px;color:var(--text3);
+        font-size:12px;cursor:pointer;
+      ">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Guardar contexto para cuando el usuario elija
+  window._pendingUID = { items, unidad, uid };
+}
+
+async function elegirDestino(itemId){
+  const modal = document.getElementById('modal-destino-uid');
+  if(modal) modal.remove();
+  const { items, unidad, uid } = window._pendingUID || {};
+  if(!items) return;
+  const item = items.find(i=>i.id===itemId);
+  if(!item) return;
+  await asignarItemUID(item, unidad, uid);
+  window._pendingUID = null;
+}
+
+function cancelarDestino(){
+  const modal = document.getElementById('modal-destino-uid');
+  if(modal) modal.remove();
+  window._pendingUID = null;
+  document.getElementById('scan-input').value='';
+  scanBuffer='';
+  document.getElementById('scan-input').focus();
 }
 </script>
 </body>
