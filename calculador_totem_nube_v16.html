@@ -5330,7 +5330,7 @@ function renderVentas(){
   if(!listaEl) return;
   if(lista.length===0){ listaEl.innerHTML='<div class="empty">— Sin proyectos para el filtro seleccionado.</div>'; return; }
 
-  const estadoLabels = {iniciado:'Iniciado',produccion:'En producción',listo_despacho:'Listo para despacho',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado'};
+  const estadoLabels = {iniciado:'Iniciado',produccion:'En producción',listo_despacho:'Listo para despacho',despachado:'Despachado',instalado:'Instalado',cancelado:'Cancelado',presupuestado:'Presupuestado',relevamiento:'Relevamiento',pendiente:'Pendiente',nuevo:'Nuevo',cotizacion:'Cotización',aprobado:'Aprobado',venta:'En venta'};
   const catLabel = {equipo:'✅ Equipo',periferico:'🔧 Periférico',servicio:'🔧 Servicio'};
   function proyectoTieneLicencia(p){
     return licencias.some(function(l){ return matchLicProy(l, p); });
@@ -5493,6 +5493,7 @@ function renderVentas(){
             +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">'
               +'<span class="proyecto-orden">'+p.orden+'</span>'
               +'<span class="status-badge status-'+p.estado+'">'+estadoLabels[p.estado]+'</span>'
+              +(filtroMes && (p.anio*12+p.mes) < (parseInt(filtroMes.split('-')[0])*12+parseInt(filtroMes.split('-')[1])) ? '<span style="font-size:9px;color:var(--text3);margin-left:6px;font-style:italic;">↩ desde '+MESES_NOMBRES[p.mes]+' '+p.anio+'</span>' : '')
             +'</div>'
             +'<div class="proyecto-cliente">'+p.cliente+'</div>'
             +'<div style="font-size:11px;color:var(--text3);">'+MESES_NOMBRES[p.mes]+' '+p.anio+(p.notas?' · '+p.notas:'')+'</div>'
