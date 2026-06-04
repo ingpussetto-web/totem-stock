@@ -1215,7 +1215,7 @@ async function loadHistorial(){
           ? '<span class="badge blue">⏳ Parcial final</span>'
           : '<span class="badge blue">⏳ Entrega parcial</span>');
       html += '<div class="card" style="margin-bottom:0;padding:0;overflow:hidden;">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleHistorial(\'hist-'+r.id+'\')">'        +'<div style="flex:1;">'        +'<div style="font-family:DM Mono,monospace;font-size:11px;color:var(--text3);">'+r.recepcion_numero+' · '+fecha+'</div>'        +'<div style="font-size:14px;font-weight:600;margin:3px 0;">'+proveedor+'</div>'        +'<div style="font-size:11px;color:var(--text2);">OC: '+(r.ordenes_compra?.oc_numero||'—')+' · '+totalRecibido+' unidades</div>'        +'</div>'        +'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:12px;">'+tipoBadge       +(r.tiene_desvios?'<span class="badge amber">⚠ Con desvíos</span>':'')        +'<span style="font-size:11px;color:var(--text3);font-family:DM Mono,monospace;margin-top:4px;">▼</span>'        +'</div>'        +'</div>'        +'<div id="hist-'+r.id+'" style="display:none;border-top:1px solid var(--border);padding:12px 16px;">'        +(itemsHtml?'<div style="margin-bottom:10px;">'+itemsHtml+'</div>':'')        +(r.observaciones?'<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-style:italic;">📝 '+r.observaciones+'</div>':'')        +'<div style="display:flex;justify-content:flex-end;">'        +'<button class="btn" style="font-size:11px;padding:5px 10px;" onclick="event.stopPropagation();verEtiquetasHistorial('+r.id+')">🏷 Ver etiquetas</button>'        +'</div>'        +'</div>'        +'</div>';
+        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer;" onclick="toggleHistorial(\'hist-'+r.id+'\')">'        +'<div style="flex:1;">'        +'<div style="font-family:DM Mono,monospace;font-size:11px;color:var(--text3);">'+r.recepcion_numero+' · '+fecha+'</div>'        +'<div style="font-size:14px;font-weight:600;margin:3px 0;">'+proveedor+'</div>'        +'<div style="font-size:11px;color:var(--text2);">OC: '+(r.ordenes_compra?.oc_numero||'—')+' · '+totalRecibido+' unidades</div>'        +'</div>'        +'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:12px;">'+tipoBadge       +(r.tiene_desvios?'<span class="badge amber">⚠ Con desvíos</span>':'')        +'<span style="font-size:11px;color:var(--text3);font-family:DM Mono,monospace;margin-top:4px;">▼</span>'        +'</div>'        +'</div>'        +'<div id="hist-'+r.id+'" style="display:none;border-top:1px solid var(--border);padding:12px 16px;">'        +(itemsHtml?'<div style="margin-bottom:10px;">'+itemsHtml+'</div>':'')        +(r.observaciones?'<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-style:italic;">📝 '+r.observaciones+'</div>':'')        +'<div style="display:flex;justify-content:flex-end;">'        +'<button class="btn" style="font-size:11px;padding:5px 10px;" onclick="event.stopPropagation();verEtiquetasHistorial('+r.id+')">🏷 Ver etiquetas</button>'+'<button class="btn" style="font-size:11px;padding:5px 10px;border-color:#ff5e5e;color:#ff5e5e;margin-left:6px;" onclick="event.stopPropagation();deshacerIngreso('+r.id+',\''+r.ordenes_compra?.oc_numero+'\',\''+r.ordenes_compra?.id+'\')" title="Solo gerencia">↩ Deshacer ingreso</button>'+'</div>'        +'</div>'        +'</div>';
     });
     html += '</div>';
     el.innerHTML = html;
@@ -1609,6 +1609,81 @@ function toggleAlertaCard(cardId){
   if(arrow) arrow.textContent = visible ? '▶' : '▼';
 }
 
+
+// ─── DESHACER INGRESO (solo gerencia) ──────────────────────
+async function deshacerIngreso(recepcionId, ocNumero, ocId){
+  // Verificar contraseña de gerencia
+  const pass = prompt('Ingresá la contraseña de gerencia para deshacer el ingreso de ' + ocNumero + ':');
+  if(pass !== 'picone001'){ 
+    if(pass !== null) toast('Contraseña incorrecta');
+    return; 
+  }
+
+  if(!confirm('⚠ ¿Confirmar DESHACER el ingreso de ' + ocNumero + '?\n\nEsto:\n• Revertirá el estado de la recepción\n• Eliminará las unidades creadas\n• Devolverá la OC a estado "En espera"')) return;
+
+  try{
+    toast('Revirtiendo ingreso...');
+
+    // 1. Traer items de esta recepción
+    const recItems = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*');
+    
+    // 2. Para cada item, encontrar los oc_items afectados y revertir cantidad_recibida
+    const ocItemIds = [...new Set((recItems||[]).map(ri=>ri.oc_item_id).filter(Boolean))];
+    for(const ocItemId of ocItemIds){
+      const ri = recItems.filter(r=>r.oc_item_id===ocItemId);
+      const cantRevertir = ri.reduce((s,r)=>s+(r.cantidad_recibida||0),0);
+      // Obtener cantidad_recibida actual del oc_item
+      const ocItem = await api('oc_items?id=eq.'+ocItemId+'&select=id,cantidad_recibida');
+      if(ocItem?.[0]){
+        const nuevaCant = Math.max(0, (ocItem[0].cantidad_recibida||0) - cantRevertir);
+        await api('oc_items?id=eq.'+ocItemId,'PATCH',{cantidad_recibida: nuevaCant});
+      }
+    }
+
+    // 3. Revertir items de recepción
+    await api('recepcion_items?recepcion_id=eq.'+recepcionId,'PATCH',{ingresado_a_stock: false});
+
+    // 4. Revertir recepción
+    await api('recepciones?id=eq.'+recepcionId,'PATCH',{
+      estado: 'pendiente',
+      tiene_desvios: false
+    });
+
+    // 5. Traer unidades creadas en esta recepción (uid que matchean con los oc_items)
+    // Las unidades se identifican por el timestamp de creación cercano a la recepción
+    // Buscamos unidades en estado stock o baja creadas por esta recepción
+    // Estrategia: eliminar unidades UID cuyo uid_origen coincida con esta recepción
+    // Como no tenemos campo de origen, buscamos por los oc_items y skus involucrados
+    for(const ri of (recItems||[])){
+      if(!ri.oc_item_id) continue;
+      const ocItem = await api('oc_items?id=eq.'+ri.oc_item_id+'&select=sku_id,color').catch(()=>[]);
+      if(!ocItem?.[0]) continue;
+      const sku = ocItem[0];
+      // Buscar unidades en baja de ese sku/color creadas recientemente
+      const colorPart = sku.color && sku.color !== 'A definir' ? sku.color.substring(0,3).toUpperCase() : null;
+      // Obtener unidades en baja de este sku
+      const unidades = await api('unidades?sku_id=eq.'+sku.sku_id+'&estado=eq.baja&select=id,uid,created_at&order=created_at.desc&limit=20').catch(()=>[]);
+      // Eliminar las más recientes que coincidan con la cantidad recibida
+      const cantElim = ri.cantidad_recibida||0;
+      const aEliminar = (unidades||[]).slice(0, cantElim);
+      for(const u of aEliminar){
+        await api('unidades?id=eq.'+u.id,'DELETE');
+      }
+    }
+
+    // 6. Revertir estado de la OC a aprobada (en espera)
+    if(ocId){
+      await api('ordenes_compra?id=eq.'+ocId,'PATCH',{estado: 'aprobada'});
+    }
+
+    toast('✅ Ingreso revertido correctamente');
+    loadHistorial();
+    
+  }catch(e){
+    toast('Error al revertir: ' + e.message);
+    console.error('deshacerIngreso:', e);
+  }
+}
 </script>
 
 <!-- MODAL VERIFICACIÓN CAJA -->
