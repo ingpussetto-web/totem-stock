@@ -1477,16 +1477,23 @@ async function showHistorialStock(skuId, variante, codigo, btn){
   }
 
   try {
-    // ── ENTRADAS: recepcion_items → recepciones (join) → ordenes_compra (join) ──
-    // PostgREST no admite joins anidados profundos en un solo select; se hacen en dos pasos
-    const recItems = await api(
-      `recepcion_items?sku_id=eq.${skuIdInt}&select=cantidad_recibida,recepcion_id,recepciones(id,recepcion_numero,created_at,oc_id)`
+    // ── ENTRADAS: oc_items (sku_id) → recepcion_items → recepciones → ordenes_compra → proveedores ──
+    // recepcion_items no tiene sku_id; el join es: oc_items.sku_id → recepcion_items.oc_item_id
+    const ocItemsFiltrados = await api(
+      `oc_items?sku_id=eq.${skuIdInt}&select=id,sku_id,oc_id`
     ).catch(()=>[]);
 
-    // Obtener OC ids únicos para traer proveedor
-    const ocIds = [...new Set((recItems||[]).map(r=>r.recepciones?.oc_id).filter(Boolean))];
-    const ocs = ocIds.length
-      ? await api(`ordenes_compra?id=in.(${ocIds.join(',')})&select=id,oc_numero,proveedor_id,proveedores(razon_social)`).catch(()=>[])
+    const ocItemIds = (ocItemsFiltrados||[]).map(i=>i.id);
+    const ocIdsDeItems = [...new Set((ocItemsFiltrados||[]).map(i=>i.oc_id).filter(Boolean))];
+
+    // Traer recepciones de esos oc_items
+    const recItems = ocItemIds.length
+      ? await api(`recepcion_items?oc_item_id=in.(${ocItemIds.join(',')})&select=cantidad_recibida,oc_item_id,recepcion_id,recepciones(id,recepcion_numero,created_at,oc_id)`).catch(()=>[])
+      : [];
+
+    // Traer OCs para obtener proveedor
+    const ocs = ocIdsDeItems.length
+      ? await api(`ordenes_compra?id=in.(${ocIdsDeItems.join(',')})&select=id,oc_numero,proveedores(razon_social)`).catch(()=>[])
       : [];
     const ocMap = {};
     (ocs||[]).forEach(o=>{ ocMap[o.id] = o; });
