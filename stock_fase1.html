@@ -1523,28 +1523,46 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     const saldo         = totalEntradas - totalSalidas;
     const saldoClass    = saldo > 0 ? 'hist-num-pos' : saldo < 0 ? 'hist-num-neg' : 'hist-num-neu';
 
-    // Stock disponible actual (para detectar unidades sin origen registrado)
+    // Stock total actual para calcular stock inicial
     const stockObj = (stockData||[]).find(d=>d.sku_id===skuIdInt);
-    const disponibleActual = stockObj ? stockObj.disponible : null;
-    const sinOrigen = (disponibleActual !== null) ? (disponibleActual - saldo) : null;
+    const stockTotal = stockObj ? (stockObj.cantidad||0) : null;
+    const stockInicial = (stockTotal !== null) ? Math.max(0, stockTotal - totalEntradas) : null;
+    const totalEntradasConInicial = totalEntradas + (stockInicial||0);
 
     // ── Render entradas ──
     let htmlEntradas = '';
-    if(!entradas?.length){
-      htmlEntradas = '<tr><td colspan="4" style="color:var(--text3);font-style:italic;padding:10px 8px;">Sin recepciones registradas</td></tr>';
-    } else {
-      htmlEntradas = (entradas||[]).map(e=>{
+    const filasEntradas = [];
+
+    // Fila de stock inicial si corresponde
+    if(stockInicial !== null && stockInicial > 0){
+      filasEntradas.push(`<tr style="opacity:0.75;">
+        <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">—</td>
+        <td style="color:var(--text3);font-style:italic;">Stock inicial</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">Sin OC registrada</td>
+        <td style="text-align:right;color:var(--green);font-weight:600;font-family:'DM Mono',monospace;">+${stockInicial}</td>
+      </tr>`);
+    }
+
+    // Filas de recepciones
+    if(entradas?.length){
+      entradas.forEach(e=>{
         const rec  = e.recepciones;
         const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
         const prov = oc?.proveedores?.razon_social || '—';
         const fecha = rec?.created_at ? new Date(rec.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
-        return `<tr>
+        filasEntradas.push(`<tr>
           <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${fecha}</td>
           <td>${prov}</td>
           <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
           <td style="text-align:right;color:var(--green);font-weight:600;font-family:'DM Mono',monospace;">+${e.cantidad_recibida||0}</td>
-        </tr>`;
-      }).join('');
+        </tr>`);
+      });
+    }
+
+    if(!filasEntradas.length){
+      htmlEntradas = '<tr><td colspan="4" style="color:var(--text3);font-style:italic;padding:10px 8px;">Sin recepciones registradas</td></tr>';
+    } else {
+      htmlEntradas = filasEntradas.join('');
     }
 
     // ── Render salidas ──
@@ -1571,9 +1589,7 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     }
 
     // Nota de stock sin origen si hay diferencia
-    const notaSinOrigen = (sinOrigen !== null && sinOrigen > 0)
-      ? `<div style="font-size:11px;color:var(--amber);margin-top:10px;padding:6px 10px;background:rgba(255,160,0,0.08);border-radius:var(--radius);border:1px solid rgba(255,160,0,0.2);">⚠ ${sinOrigen} unidad${sinOrigen!==1?'es':''} sin origen registrado (stock inicial o ajuste manual)</div>`
-      : '';
+    const notaSinOrigen = '';
 
     body.innerHTML = `
       <div class="hist-section-title">▼ ENTRADAS</div>
@@ -1595,8 +1611,8 @@ async function showHistorialStock(skuId, variante, codigo, btn){
       ${notaSinOrigen}
 
       <div class="hist-saldo-row">
-        <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradas}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
-        <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${saldo >= 0 ? '+' : ''}${saldo}</span></span>
+        <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradasConInicial}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
+        <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${totalEntradasConInicial - totalSalidas >= 0 ? '+' : ''}${totalEntradasConInicial - totalSalidas}</span></span>
       </div>
     `;
   } catch(e) {
