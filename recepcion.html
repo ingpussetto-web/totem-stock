@@ -666,8 +666,9 @@ function volverPanel1(){
   setStep(1);
 }
 
-function imprimirEtiquetaCaja(codigo, nombre){
+function imprimirEtiquetaCaja(codigo, nombre, color){
   const win = window.open('','_blank','width=400,height=500');
+  const colorBadge = color ? '<div style="font-size:11px;font-weight:600;color:#ff9900;margin:4px 0;">● ' + color + '</div>' : '';
   const html = '<!DOCTYPE html><html><head>'
     + '<title>Etiqueta Caja</title>'
     + '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></' + 'script>'
@@ -680,6 +681,7 @@ function imprimirEtiquetaCaja(codigo, nombre){
     + '<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.1em;">Totem Nube</div>'
     + '<div class="badge">📦 CAJA</div>'
     + '<div class="nombre">' + nombre + '</div>'
+    + colorBadge
     + '<div class="codigo">' + codigo + '</div>'
     + '<div id="qr"></div></div>'
     + '<script>new QRCode(document.getElementById("qr"),{text:"https://ingpussetto-web.github.io/totem-stock/scan.html?uid=' + codigo + '",width:160,height:160,correctLevel:QRCode.CorrectLevel.M});'
@@ -935,7 +937,7 @@ function mostrarResultado(recNum, esParcial, hayDesvios){
             + '</div>'
             + '<div style="display:flex;align-items:center;gap:10px;">'
             + '<span style="font-size:13px;font-weight:600;color:var(--amber);">+' + ri.cantidad_recibida + ' ud.</span>'
-            + (codigo ? '<button data-codigo="' + codigo + '" data-nombre="' + ri.nombre.replace(/"/g,'') + '" onclick="imprimirEtiquetaCaja(this.dataset.codigo,this.dataset.nombre)" style="background:rgba(255,179,64,0.15);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨 Etiqueta caja</button>' : '')
+            + (codigo ? '<button data-codigo="' + codigo + '" data-nombre="' + ri.nombre.replace(/"/g,'') + '" data-color="' + (ri.color_recibido||'') + '" onclick="imprimirEtiquetaCaja(this.dataset.codigo,this.dataset.nombre,this.dataset.color)" style="background:rgba(255,179,64,0.15);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨 Etiqueta caja</button>' : '')
             + '</div>'
             + '</div>';
         }).join('')
@@ -1075,44 +1077,104 @@ async function verEtiquetasHistorial(recepcionId){
   try{
     // Traer items de recepción con oc_item_id
     const items = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*');
-    // Recopilar todos los insumos UID con sus unidades
     const grupos = [];
+    const cajaItems = []; // items de tracking=cantidad
+
     for(const ri of (items||[])){
       if(!ri.oc_item_id) continue;
-      const ocItemArr = await api('oc_items?id=eq.'+ri.oc_item_id+'&select=sku_id,nombre');
+      const ocItemArr = await api('oc_items?id=eq.'+ri.oc_item_id+'&select=sku_id,nombre,color');
       const ocItem = ocItemArr?.[0];
       if(!ocItem?.sku_id) continue;
-      const skuArr = await api('skus?id=eq.'+ocItem.sku_id+'&select=id,nombre,tracking');
+      const skuArr = await api('skus?id=eq.'+ocItem.sku_id+'&select=id,nombre,codigo,tracking');
       const sku = skuArr?.[0];
-      if(!sku || sku.tracking !== 'uid') continue;
-      const unidades = await api('unidades?sku_id=eq.'+ocItem.sku_id+'&select=uid,variantes(valor),created_at&order=uid.desc&limit='+(ri.cantidad_recibida*3));
-      const unidadesFiltradas = (unidades||[]).slice(0, ri.cantidad_recibida);
-      if(!unidadesFiltradas.length) continue;
-      const fechaRec = unidadesFiltradas[0]?.created_at
-        ? new Date(unidadesFiltradas[0].created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})
-        : '—';
-      grupos.push({
-        nombre: sku.nombre||ocItem.nombre||'—',
-        variante: ri.color_recibido||'',
-        fecha: fechaRec,
-        cantidad: unidadesFiltradas.length,
-        unidades: unidadesFiltradas.map(u=>({
-          uid: u.uid,
+      if(!sku) continue;
+
+      if(sku.tracking === 'uid'){
+        // ── Items con UID individual ──
+        const unidades = await api('unidades?sku_id=eq.'+ocItem.sku_id+'&select=uid,variantes(valor),created_at&order=uid.desc&limit='+(ri.cantidad_recibida*3));
+        const unidadesFiltradas = (unidades||[]).slice(0, ri.cantidad_recibida);
+        if(!unidadesFiltradas.length) continue;
+        const fechaRec = unidadesFiltradas[0]?.created_at
+          ? new Date(unidadesFiltradas[0].created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+          : '—';
+        grupos.push({
           nombre: sku.nombre||ocItem.nombre||'—',
-          variante: u.variantes?.valor||ri.color_recibido||'',
-          num: parseInt(u.uid.match(/-(\d+)$/)?.[1]||'0')
-        }))
-      });
+          variante: ri.color_recibido||'',
+          fecha: fechaRec,
+          cantidad: unidadesFiltradas.length,
+          unidades: unidadesFiltradas.map(u=>({
+            uid: u.uid,
+            nombre: sku.nombre||ocItem.nombre||'—',
+            variante: u.variantes?.valor||ri.color_recibido||'',
+            num: parseInt(u.uid.match(/-(\d+)$/)?.[1]||'0')
+          }))
+        });
+      } else {
+        // ── Items de caja (tracking=cantidad) ──
+        if(ri.cantidad_recibida > 0){
+          cajaItems.push({
+            codigo: sku.codigo||'',
+            nombre: sku.nombre||ocItem.nombre||'—',
+            color: ri.color_recibido||ocItem.color||'',
+            cantidad: ri.cantidad_recibida
+          });
+        }
+      }
     }
-    if(!grupos.length){
-      alert('No hay etiquetas UID para esta recepción.');
+
+    // Si hay UIDs, mostrar selector normal
+    if(grupos.length){
+      mostrarSeleccionInsumos(grupos);
       return;
     }
-    // Mostrar pantalla previa de selección por insumo
-    mostrarSeleccionInsumos(grupos);
+
+    // Si solo hay items de caja, mostrar modal simple con botones de etiqueta
+    if(cajaItems.length){
+      mostrarEtiquetasCajaHistorial(cajaItems);
+      return;
+    }
+
+    alert('No hay etiquetas para esta recepción.');
   }catch(e){
     alert('Error cargando etiquetas: '+e.message);
   }
+}
+
+function mostrarEtiquetasCajaHistorial(cajaItems){
+  let existing = document.getElementById('modal-etiq-caja-hist');
+  if(existing) existing.remove();
+
+  const itemsHTML = cajaItems.map(item=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${item.nombre}</div>
+        ${item.color ? '<div style="font-size:11px;color:#ff9900;margin-top:2px;">● '+item.color+'</div>' : ''}
+        <div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">${item.codigo}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:13px;color:var(--amber);">×${item.cantidad}</span>
+        <button onclick="imprimirEtiquetaCaja('${item.codigo}','${item.nombre.replace(/'/g,'')}','${item.color||''}')"
+          style="background:rgba(255,179,64,0.15);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:4px;padding:5px 12px;font-size:11px;cursor:pointer;">
+          🖨 Etiqueta
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-etiq-caja-hist';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;width:420px;max-width:90vw;">
+      <div style="font-size:14px;font-weight:600;margin-bottom:14px;">🏷 Etiquetas de caja</div>
+      ${itemsHTML}
+      <button onclick="document.getElementById('modal-etiq-caja-hist').remove()"
+        style="width:100%;padding:8px;margin-top:8px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;">
+        Cerrar
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 function mostrarSeleccionInsumos(grupos){
