@@ -811,7 +811,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
         : ''
       }
-      <button class="btn sm" onclick="event.stopPropagation();showHistorialStock(${d.sku_id},'${d.variante||''}',this)" style="margin-left:4px;">📋 Historial</button>
+      <button class="btn sm" onclick="event.stopPropagation();showHistorialStock(${d.sku_id||d.id},'${d.variante||''}','${d.codigo||''}',this)" style="margin-left:4px;">📋 Historial</button>
       ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
         <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''} 
           onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
@@ -1452,31 +1452,52 @@ document.getElementById('var-nueva')?.addEventListener('keydown', e=>{ if(e.key=
 init();
 
 // ─── HISTORIAL STOCK ────────────────────────────────────────────────────────
-async function showHistorialStock(skuId, variante, btn){
+async function showHistorialStock(skuId, variante, codigo, btn){
   const modal = document.getElementById('modal-hist-stock');
   const body  = document.getElementById('modal-hist-body');
   const title = document.getElementById('modal-hist-title');
 
-  // Nombre del SKU desde el array global
-  const skuObj = (skus||[]).find(s=>s.id===skuId);
-  const nombreSku = skuObj ? skuObj.nombre : 'SKU #'+skuId;
+  // skuId puede venir como string 'undefined' si la view no lo expone — buscar por código
+  let skuIdInt = parseInt(skuId);
+  let skuObj = (skus||[]).find(s=>s.id===skuIdInt);
+  // Fallback: buscar por código si skuId es undefined
+  if((!skuIdInt || isNaN(skuIdInt)) && codigo){
+    skuObj = (skus||[]).find(s=>s.codigo===codigo);
+    if(skuObj) skuIdInt = skuObj.id;
+  }
+  const nombreSku = skuObj ? skuObj.nombre : (skuIdInt ? 'SKU #'+skuIdInt : '—');
   title.textContent = '📋 ' + nombreSku + (variante ? ' · ' + variante : '');
 
   modal.classList.add('open');
   body.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
 
+  if(!skuIdInt || isNaN(skuIdInt)){
+    body.innerHTML = '<div style="color:var(--red);padding:20px;">No se pudo identificar el SKU. Verificá que la vista stock_disponible exponga el campo sku_id.</div>';
+    return;
+  }
+
   try {
-    // ── ENTRADAS ──
-    // recepcion_items → recepciones → ordenes_compra → proveedores
-    const entradas = await api(
-      `recepcion_items?sku_id=eq.${skuId}&select=cantidad_recibida,created_at,recepciones(recepcion_numero,created_at,ordenes_compra(oc_numero,proveedores(razon_social)))`
+    // ── ENTRADAS: recepcion_items → recepciones (join) → ordenes_compra (join) ──
+    // PostgREST no admite joins anidados profundos en un solo select; se hacen en dos pasos
+    const recItems = await api(
+      `recepcion_items?sku_id=eq.${skuIdInt}&select=cantidad_recibida,recepcion_id,recepciones(id,recepcion_numero,created_at,oc_id)`
     ).catch(()=>[]);
 
-    // ── SALIDAS ──
-    // op_bom_items donde sku_id coincide y qty > 0, con OP
-    const salidas = await api(
-      `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&select=qty,nombre,ordenes_produccion(op_numero,cliente,estado,fecha_entrega,updated_at)`
+    // Obtener OC ids únicos para traer proveedor
+    const ocIds = [...new Set((recItems||[]).map(r=>r.recepciones?.oc_id).filter(Boolean))];
+    const ocs = ocIds.length
+      ? await api(`ordenes_compra?id=in.(${ocIds.join(',')})&select=id,oc_numero,proveedor_id,proveedores(razon_social)`).catch(()=>[])
+      : [];
+    const ocMap = {};
+    (ocs||[]).forEach(o=>{ ocMap[o.id] = o; });
+
+    // ── SALIDAS: op_bom_items → ordenes_produccion ──
+    const bomItems = await api(
+      `op_bom_items?sku_id=eq.${skuIdInt}&incluido=eq.true&select=qty,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
     ).catch(()=>[]);
+
+    const entradas = recItems || [];
+    const salidas  = bomItems || [];
 
     // Calcular totales
     const totalEntradas = (entradas||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
@@ -1491,7 +1512,7 @@ async function showHistorialStock(skuId, variante, btn){
     } else {
       htmlEntradas = (entradas||[]).map(e=>{
         const rec  = e.recepciones;
-        const oc   = rec?.ordenes_compra;
+        const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
         const prov = oc?.proveedores?.razon_social || '—';
         const fecha = rec?.created_at ? new Date(rec.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
         return `<tr>
