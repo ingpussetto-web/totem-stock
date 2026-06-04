@@ -256,7 +256,7 @@ async function renderEnStock(){
           <div class="op-item-producto">${op.producto_nombre}</div>
           ${op.color_gabinete?`<div class="op-item-color">● Color: ${op.color_gabinete}</div>`:''}
           ${pendientesEnOP>1?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">Quedan ${pendientesEnOP} unidades por asignar en esta OP</div>`:''}
-          <button class="btn-asignar" onclick="prepararAsignacion(${b.id}, ${op.id}, '${op.op_numero}', '${op.cliente}')">
+          <button class="btn-asignar" onclick="prepararAsignacion(${b.id}, ${op.id}, '${op.op_numero}', '${op.cliente}', ${JSON.stringify(b.notas||'')})">
             Asignar a esta OP
           </button>
         </div>`;
@@ -508,10 +508,12 @@ function renderError(titulo, msg){
 // ─── ASIGNACIÓN ──────────────────────────────────────────────
 let pendingBomId = null;
 let pendingOpId = null;
+let pendingBomNotas = '';
 
-function prepararAsignacion(bomId, opId, opNumero, cliente){
+function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales){
   pendingBomId = bomId;
   pendingOpId = opId;
+  pendingBomNotas = notasOriginales || '';
 
   // Obtener nombre actual (puede completarse en el confirm)
   const nombreActual = document.getElementById('inp-nombre')?.value.trim() || '';
@@ -551,10 +553,12 @@ async function ejecutarAsignacion(nombre){
 
   try{
     // Actualizar op_bom_items
+    // Preservar prefijo 🖥 PLAYER si el item era un player
+    const prefixPlayer = pendingBomNotas.startsWith('🖥') ? '🖥 PLAYER — ' : '';
     await api(`op_bom_items?id=eq.${pendingBomId}`, 'PATCH', {
       estado: 'asignado',
       uid_asignado: unidadActual.uid,
-      notas: `Asignado por: ${nombre} — ${new Date().toLocaleString('es-AR')}`
+      notas: `${prefixPlayer}Asignado por: ${nombre} — ${new Date().toLocaleString('es-AR')}`
     });
 
     // Actualizar unidad → reservado
