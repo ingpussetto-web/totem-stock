@@ -1075,6 +1075,10 @@ function crearEtiquetaPrint(et){
 // ─── HISTORIAL ───────────────────────────────────────────────
 async function verEtiquetasHistorial(recepcionId){
   try{
+    // Traer recepción para obtener fecha de creación (usada para filtrar unidades)
+    const recArr = await api('recepciones?id=eq.'+recepcionId+'&select=id,created_at');
+    const recFecha = recArr?.[0]?.created_at || null;
+
     // Traer items de recepción con oc_item_id
     const items = await api('recepcion_items?recepcion_id=eq.'+recepcionId+'&select=*');
     const grupos = [];
@@ -1091,7 +1095,21 @@ async function verEtiquetasHistorial(recepcionId){
 
       if(sku.tracking === 'uid'){
         // ── Items con UID individual ──
-        const unidades = await api('unidades?sku_id=eq.'+ocItem.sku_id+'&select=uid,variantes(valor),created_at&order=uid.desc&limit='+(ri.cantidad_recibida*3));
+        // Filtrar por variante (color_recibido) y fecha de recepción para no mezclar colores
+        const colorFilter = ri.color_recibido
+          ? await api('variantes?valor=eq.'+encodeURIComponent(ri.color_recibido)+'&select=id').catch(()=>[])
+          : [];
+        const varianteId = colorFilter?.[0]?.id || null;
+
+        let queryUnd = 'unidades?sku_id=eq.'+ocItem.sku_id+'&select=uid,variantes(valor),created_at&order=created_at.desc&limit='+(ri.cantidad_recibida*3);
+        if(varianteId) queryUnd += '&variante_id=eq.'+varianteId;
+        if(recFecha){
+          // Tomar solo unidades creadas el mismo día de la recepción (±1 día de margen)
+          const desde = new Date(recFecha);
+          desde.setHours(0,0,0,0);
+          queryUnd += '&created_at=gte.'+desde.toISOString();
+        }
+        const unidades = await api(queryUnd);
         const unidadesFiltradas = (unidades||[]).slice(0, ri.cantidad_recibida);
         if(!unidadesFiltradas.length) continue;
         const fechaRec = unidadesFiltradas[0]?.created_at
