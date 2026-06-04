@@ -1171,16 +1171,6 @@ function imprimirEtiquetaCaja(codigo, nombre){
       setTimeout(()=>window.print(),800);
     <\/script>
   
-<!-- Modal historial stock -->
-<div class="modal-bg" id="modal-hist-stock">
-  <div class="modal modal-hist">
-    <div class="modal-title">
-      <span id="modal-hist-title">Historial de stock</span>
-      <button class="modal-close" onclick="closeModal('modal-hist-stock')">×</button>
-    </div>
-    <div id="modal-hist-body"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
-  </div>
-</div>
 </body></html>`);
   win.document.close();
 }
@@ -1563,5 +1553,16 @@ async function showHistorialStock(skuId, variante, btn){
   }
 }
 </script>
+
+<!-- Modal historial stock -->
+<div class="modal-bg" id="modal-hist-stock">
+  <div class="modal modal-hist">
+    <div class="modal-title">
+      <span id="modal-hist-title">Historial de stock</span>
+      <button class="modal-close" onclick="closeModal('modal-hist-stock')">×</button>
+    </div>
+    <div id="modal-hist-body"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+  </div>
+</div>
 </body>
 </html>
