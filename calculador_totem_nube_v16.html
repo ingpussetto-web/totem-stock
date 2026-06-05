@@ -4097,7 +4097,12 @@ function abrirVentanaImpresion(cotObj){
     try { return Array.from(ss.cssRules).map(function(r){ return r.cssText; }).join('\n'); } catch(e){ return ''; }
   }).join('\n');
   const fecha = new Date(cotObj.fecha||Date.now()).toLocaleDateString('es-AR').replace(/\//g,'-');
-  const nombreArchivo = (cotObj.empresa||'cliente').replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s]/g,'').trim()+'_'+fecha;
+  const empresaBase = (cotObj.empresa||'cliente').replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s]/g,'').trim();
+  const cotNro = (cotObj.numero||'').replace(/[^a-zA-Z0-9-]/g,'');
+  // Detectar versión: buscar cotizaciones con misma empresa y misma fecha base
+  const versionesExistentes = cotizaciones.filter(function(c){ return c.id !== cotObj.id && (c.empresa||'').trim() === (cotObj.empresa||'').trim() && new Date(c.fecha||Date.now()).toLocaleDateString('es-AR').replace(/\//g,'-') === fecha; });
+  const vSufijo = versionesExistentes.length > 0 ? '_v'+(versionesExistentes.length+1) : '';
+  const nombreArchivo = empresaBase+'_'+fecha+vSufijo;
   const ventana = window.open('','_blank','width=900,height=700');
   ventana.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nombreArchivo+'</title>'
     +'<style>'+estilos+' body{background:#fff;padding:0;margin:0;} .no-print{display:none!important;} @media print{@page{margin:1cm;} body{margin:0;padding:0;}}</style>'
@@ -4117,7 +4122,10 @@ function imprimirYEliminar(cotObj, onConfirm){
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   const fecha = new Date(cotObj.fecha||Date.now()).toLocaleDateString('es-AR').replace(/\//g,'-');
-  const nombreArchivo = (cotObj.empresa||'cliente').replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s]/g,'').trim()+'_'+fecha;
+  const empresaBase2 = (cotObj.empresa||'cliente').replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s]/g,'').trim();
+  const versionesExist2 = cotizaciones.filter(function(c){ return c.id !== cotObj.id && (c.empresa||'').trim() === (cotObj.empresa||'').trim() && new Date(c.fecha||Date.now()).toLocaleDateString('es-AR').replace(/\//g,'-') === fecha; });
+  const vSufijo2 = versionesExist2.length > 0 ? '_v'+(versionesExist2.length+1) : '';
+  const nombreArchivo = empresaBase2+'_'+fecha+vSufijo2;
   overlay.innerHTML = '<div style="background:var(--bg);border-radius:12px;padding:28px 32px;max-width:420px;width:100%;text-align:center;">'
     +'<div style="font-size:18px;font-weight:600;margin-bottom:10px;">¿Guardar antes de eliminar?</div>'
     +'<div style="font-size:13px;color:var(--text2);margin-bottom:24px;">¿Querés guardar el PDF de la cotización de <strong>'+cotObj.empresa+'</strong> antes de eliminarla?<br><span style="font-size:11px;color:var(--text3);margin-top:6px;display:block;">Nombre sugerido: <em>'+nombreArchivo+'.pdf</em></span></div>'
