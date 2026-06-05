@@ -786,42 +786,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-hdmi-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" onchange="syncAdicional('hdmi')" />
         </label>
-        <!-- Otros periféricos -->
-        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
-          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Otros periféricos</div>
-          <!-- Mini PC -->
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="add-extra-minipc" onchange="toggleAdicionalExtra('minipc')" style="width:14px;height:14px;" />
-            Mini PC Beelink N95 8GB SSD 240Gb.
-            <input type="number" id="add-extra-minipc-precio" value="614000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
-            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
-            <input type="number" id="add-extra-minipc-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
-          </label>
-          <!-- Impresora Térmica -->
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="add-extra-impresora" onchange="toggleAdicionalExtra('impresora')" style="width:14px;height:14px;" />
-            Impresora Térmica (XPrinter)
-            <input type="number" id="add-extra-impresora-precio" value="84000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
-            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
-            <input type="number" id="add-extra-impresora-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
-          </label>
-          <!-- Cámara Web -->
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
-            <input type="checkbox" id="add-extra-camara" onchange="toggleAdicionalExtra('camara')" style="width:14px;height:14px;" />
-            Cámara Web HD Logitech C505
-            <input type="number" id="add-extra-camara-precio" value="75000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
-            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
-            <input type="number" id="add-extra-camara-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
-          </label>
-          <!-- Lector QR -->
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:2px;cursor:pointer;">
-            <input type="checkbox" id="add-extra-lectorqr" onchange="toggleAdicionalExtra('lectorqr')" style="width:14px;height:14px;" />
-            Lector QR inalámbrico
-            <input type="number" id="add-extra-lectorqr-precio" value="412000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
-            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
-            <input type="number" id="add-extra-lectorqr-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
-          </label>
-        </div>
+
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
@@ -3630,6 +3595,7 @@ function renderCotItemsTemp(){
           +'<td style="padding:5px 6px;color:var(--text3);">'+(i+1)+'</td>'
           +'<td style="padding:5px 6px;color:var(--text);">'+it.nombre
             +(it.cat==='equipo' ? ' <button onclick="toggleMiniPC('+i+')" style="font-size:9px;padding:1px 5px;border:1px solid var(--border2);border-radius:4px;background:transparent;color:var(--text3);cursor:pointer;margin-left:4px;">+ Mini PC</button>' : '')
+            +(it.cat==='equipo' ? ' <button onclick="toggleOtrosPerifericos('+i+')" style="font-size:9px;padding:1px 5px;border:1px solid var(--border2);border-radius:4px;background:transparent;color:var(--text3);cursor:pointer;margin-left:2px;">+ Otros periféricos</button>' : '')
           +'</td>'
           +'<td style="padding:2px 4px;text-align:center;">'
             +'<input type="number" value="'+it.cant+'" min="1" style="width:50px;height:24px;font-size:11px;text-align:center;" onchange="actualizarItemCot('+i+',\'cant\',this.value)" />'
@@ -3668,7 +3634,24 @@ function renderCotItemsTemp(){
             +'<td style="padding:4px 6px;text-align:center;"><button onclick="quitarMiniPC('+i+')" style="font-size:9px;padding:1px 5px;border:1px solid var(--red);color:var(--red);border-radius:4px;background:transparent;cursor:pointer;">✕</button></td>'
           +'</tr>';
         }
-        return eqRow + minipcRow;
+        // Sub-filas de otros periféricos
+        const OTROS_PERIFERICOS = [
+          {key:'impresora_termica', nombre:'Impresora Térmica (XPrinter)', precio:84000},
+          {key:'camara_web',        nombre:'Cámara Web HD Logitech C505',   precio:75000},
+          {key:'lector_qr',         nombre:'Lector QR inalámbrico',         precio:412000},
+        ];
+        let otrosRows = '';
+        if(it.cat==='equipo' && it._showOtros){
+          if(!it.otrosPerifericos) it.otrosPerifericos = {};
+          otrosRows = OTROS_PERIFERICOS.map(function(per){
+            const p = it.otrosPerifericos[per.key] || {activo:false, cant:1, precio:per.precio};
+            it.otrosPerifericos[per.key] = p;
+            const ivaP = p.activo ? Math.round(p.precio*p.cant*0.105) : 0;
+            const totalP = p.activo ? Math.round(p.precio*p.cant + ivaP) : 0;
+            return '<tr style="background:rgba(255,179,64,0.04);">'              +'<td style="padding:4px 6px;color:var(--text3);font-size:10px;">↳</td>'              +'<td style="padding:4px 6px;font-size:12px;color:var(--text2);">'                +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'                  +'<input type="checkbox" '+(p.activo?'checked':'')+' onchange="togglePerifericoExtra('+i+',\''+per.key+'\',this.checked)" style="width:13px;height:13px;" />'                  +per.nombre                +'</label>'              +'</td>'              +'<td style="padding:4px 6px;text-align:center;">'                +(p.activo ? '<input type="number" value="'+p.cant+'" min="1" style="width:50px;height:24px;font-size:11px;text-align:center;" onchange="actualizarPerifericoExtra('+i+',\''+per.key+'\',\'cant\',this.value)" />' : '<span style="color:var(--text3);font-size:11px;">—</span>')              +'</td>'              +'<td style="padding:4px 6px;text-align:right;">'                +(p.activo ? '<input type="number" value="'+p.precio+'" min="0" style="width:110px;height:24px;font-size:11px;text-align:right;font-family:monospace;" onchange="actualizarPerifericoExtra('+i+',\''+per.key+'\',\'precio\',this.value)" />' : '<span style="color:var(--text3);font-size:11px;">—</span>')              +'</td>'              +'<td style="padding:4px 6px;text-align:right;font-family:monospace;color:var(--text3);font-size:11px;">'+(p.activo?fmt(ivaP):'—')+'</td>'              +'<td style="padding:4px 6px;text-align:right;font-family:monospace;font-size:11px;font-weight:500;">'+(p.activo?fmt(totalP):'—')+'</td>'              +'<td></td>'            +'</tr>';
+          }).join('');
+        }
+        return eqRow + minipcRow + otrosRows;
       }).join('')
     +'</tbody></table>';
 }
@@ -3766,7 +3749,13 @@ function calcPagoMontos(){
   const itemsBase = cotItemsTemp.filter(function(i){
     return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
   });
-  let subtotal = itemsBase.reduce(function(s,i){ return s+(i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0); }, 0);
+  let subtotal = itemsBase.reduce(function(s,i){
+    let base = (i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0);
+    if(i.otrosPerifericos){
+      Object.values(i.otrosPerifericos).forEach(function(p){ if(p.activo) base += (p.precio||0)*(p.cant||1); });
+    }
+    return s + base;
+  }, 0);
   // Agregar adicionales activos en tiempo real
   if(document.getElementById('add-ploteo')?.checked){
     subtotal += (parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000) * (parseInt(document.getElementById('add-ploteo-cant')?.value)||1);
@@ -3889,7 +3878,13 @@ function generarPreviewHTML(c){
   const validezFecha = new Date(Date.now()+c.validez*86400000).toLocaleDateString('es-AR');
 
   // Calculate totals
-  let subtotalNeto = c.items.reduce(function(s,i){ return s+(i.precio*i.cant) + (i.minipc ? i.minipc.precio*i.cant : 0); },0);
+  let subtotalNeto = c.items.reduce(function(s,i){
+    let base = (i.precio*i.cant) + (i.minipc ? i.minipc.precio*i.cant : 0);
+    if(i.otrosPerifericos){
+      Object.values(i.otrosPerifericos).forEach(function(p){ if(p.activo) base += (p.precio||0)*(p.cant||1); });
+    }
+    return s + base;
+  },0);
   if(c.transporte && c.transporteMonto) subtotalNeto += c.transporteMonto;
   // ploteo y seteo ya están incluidos en c.items
   if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotalNeto += c.licMonto;
@@ -7129,6 +7124,26 @@ function copiarCotizacion(cotId){
   abrirNuevaCotizacion(copia.id);
 
   // Guardar en Supabase al salir del editor (ya lo maneja guardarCotizacion)
+}
+
+function toggleOtrosPerifericos(idx){
+  cotItemsTemp[idx]._showOtros = !cotItemsTemp[idx]._showOtros;
+  renderCotItemsTemp();
+}
+
+function togglePerifericoExtra(idx, key, activo){
+  if(!cotItemsTemp[idx].otrosPerifericos) cotItemsTemp[idx].otrosPerifericos = {};
+  if(!cotItemsTemp[idx].otrosPerifericos[key]) cotItemsTemp[idx].otrosPerifericos[key] = {activo:false, cant:1, precio:0};
+  cotItemsTemp[idx].otrosPerifericos[key].activo = activo;
+  renderCotItemsTemp();
+  recalcCotPreview();
+}
+
+function actualizarPerifericoExtra(idx, key, campo, val){
+  if(!cotItemsTemp[idx].otrosPerifericos) cotItemsTemp[idx].otrosPerifericos = {};
+  if(!cotItemsTemp[idx].otrosPerifericos[key]) cotItemsTemp[idx].otrosPerifericos[key] = {activo:true, cant:1, precio:0};
+  cotItemsTemp[idx].otrosPerifericos[key][campo] = campo === 'cant' ? parseInt(val)||1 : parseFloat(val)||0;
+  recalcCotPreview();
 }
 </script>
 </body>
