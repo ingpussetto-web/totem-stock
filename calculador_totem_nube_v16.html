@@ -682,6 +682,10 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <input type="text" id="cot-empresa" placeholder="Nombre de la empresa" />
         </div>
         <div class="modal-field">
+          <label>CUIT</label>
+          <input type="text" id="cot-cuit" placeholder="ej: 30-12345678-9" />
+        </div>
+        <div class="modal-field">
           <label>Contacto</label>
           <input type="text" id="cot-contacto" placeholder="Nombre y apellido" />
         </div>
@@ -3404,6 +3408,7 @@ function abrirNuevaCotizacion(editId){
     if(!c) return;
     document.getElementById('cot-edit-id').value = editId;
     document.getElementById('cot-empresa').value = c.empresa;
+    document.getElementById('cot-cuit').value = c.cuit||'';
     document.getElementById('cot-contacto').value = c.contacto||'';
     document.getElementById('cot-tel').value = c.tel||'';
     document.getElementById('cot-email').value = c.email||'';
@@ -3489,7 +3494,7 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-pago-tipo').value = c.pagoTipo||'senia_saldo';
   } else {
     document.getElementById('cot-edit-id').value = '';
-    ['cot-empresa','cot-contacto','cot-tel','cot-email','cot-sistema','cot-notas','cot-lic-desc'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
+    ['cot-empresa','cot-cuit','cot-contacto','cot-tel','cot-email','cot-sistema','cot-notas','cot-lic-desc'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('cot-validez').value = '15';
     document.getElementById('cot-transporte').checked = false;
     document.getElementById('cot-transporte-monto').style.display = 'none';
@@ -3760,6 +3765,7 @@ function getCotizacionData(estado){
     estado: estado || 'borrador',
     fecha: new Date().toISOString(),
     empresa: document.getElementById('cot-empresa').value.trim(),
+    cuit: document.getElementById('cot-cuit').value.trim(),
     contacto: document.getElementById('cot-contacto').value.trim(),
     tel: document.getElementById('cot-tel').value.trim(),
     email: document.getElementById('cot-email').value.trim(),
