@@ -228,7 +228,7 @@ async function renderEnStock(){
   // Filtrar OPs en producción — si es gabinete, filtrar también por color
   const esGabinete = variante && ['Negro','Blanco','Gris Claro','Gris Plomo'].includes(variante);
   const itemsValidos = (bomItems||[]).filter(b=>{
-    if(b.ordenes_produccion?.estado !== 'en_produccion') return false;
+    if(!['en_produccion','bom_confirmada'].includes(b.ordenes_produccion?.estado)) return false;
     if(esGabinete){
       const colorOP = b.ordenes_produccion?.color_gabinete || '';
       return colorOP === variante || colorOP === 'A definir' || colorOP === '';
