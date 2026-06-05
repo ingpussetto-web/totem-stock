@@ -6817,7 +6817,19 @@ async function verificarPreciosActualizados(){
 
 async function crearOP(proyId){
   proyId = typeof proyId === 'string' ? parseInt(proyId) : proyId;
-  const p = proyectos.find(function(x){ return x.id === proyId; });
+  let p = proyectos.find(function(x){ return x.id === proyId; });
+  // Si no se encuentra, recargar proyectos desde Supabase (puede ser recién creado)
+  if(!p){
+    try{
+      const proyRows = await stockAPI('proyectos_cotizador?select=*&order=id.asc');
+      if(proyRows && proyRows.length > 0){
+        proyectos = proyRows.map(function(r){
+          return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', mes:parseInt(r.mes)||0, anio:parseInt(r.anio)||0, estado:r.estado||'', notas:r.notas||'', items: r.items ? JSON.parse(r.items) : [] };
+        });
+        p = proyectos.find(function(x){ return x.id === proyId; });
+      }
+    }catch(e){}
+  }
   if(!p){ alert('Proyecto no encontrado.'); return; }
 
   // Verificar si ya tiene OP creada
