@@ -4960,6 +4960,7 @@ function renderCotizaciones(){
       +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">'
         +'<button class="btn green" onclick="verPreviewExistente(\''+c.id+'\')" style="height:28px;font-size:11px;">👁 Ver / Imprimir</button>'
         +'<button class="btn" onclick="abrirNuevaCotizacion(\''+c.id+'\')" style="height:28px;font-size:11px;">✏ Editar</button>'
+        +'<button class="btn" onclick="copiarCotizacion(\''+c.id+'\')" style="height:28px;font-size:11px;border-color:#ffb340;color:#ffb340;">⎘ Copiar</button>'
         +(c.estado==='aprobada' ? '<button class="btn" onclick="abrirModalFactura(\''+c.id+'\')" style="height:28px;font-size:11px;border-color:#4d9fff;color:#4d9fff;">📧 Enviar factura</button>' : '')
         +(c.estado==='aprobada' ? '<button class="btn" onclick="abrirModalOP(\''+c.id+'\')" style="height:28px;font-size:11px;border-color:#a78bfa;color:#a78bfa;">📋 Generar OP</button>' : '')
         +'<select onchange="cambiarEstadoCot(\''+c.id+'\',this.value)" style="height:28px;font-size:11px;padding:2px 6px;">'
@@ -7016,6 +7017,41 @@ function seleccionarColor(cliente, orden){
     if(sub) sub.textContent = cliente + ' — ' + orden;
     document.getElementById('modal-color-op').style.display='flex';
   });
+}
+
+// ─── COPIAR COTIZACIÓN ────────────────────────────────────────────────────────
+function copiarCotizacion(cotId){
+  const original = cotizaciones.find(function(c){ return c.id === cotId; });
+  if(!original){ alert('Cotización no encontrada.'); return; }
+
+  // Generar nuevo número correlativo
+  const hoy = new Date();
+  const mm = String(hoy.getMonth()+1).padStart(2,'0');
+  const yyyy = hoy.getFullYear();
+  const base = 'COT-'+yyyy+'-'+mm+'-';
+  const existentes = cotizaciones.filter(function(c){ return c.numero && c.numero.startsWith(base); });
+  const maxNum = existentes.reduce(function(max, c){
+    const match = c.numero.match(/-(\d+)$/);
+    return match ? Math.max(max, parseInt(match[1])) : max;
+  }, 0);
+  const nuevoNumero = base + String(maxNum + 1).padStart(3, '0');
+
+  // Crear copia con nuevo número y estado borrador
+  const copia = JSON.parse(JSON.stringify(original));
+  copia.id = 'new-'+Date.now();
+  copia.numero = nuevoNumero;
+  copia.estado = 'borrador';
+  copia.fecha = new Date().toISOString();
+  copia.proyId = null;
+
+  // Agregar a la lista local y abrir para editar
+  cotizaciones.unshift(copia);
+  renderCotizaciones();
+
+  // Abrir en modo edición para ajustar datos
+  abrirNuevaCotizacion(copia.id);
+
+  // Guardar en Supabase al salir del editor (ya lo maneja guardarCotizacion)
 }
 </script>
 </body>
