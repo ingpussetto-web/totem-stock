@@ -1488,7 +1488,7 @@ async function showHistorialStock(skuId, variante, codigo, btn){
 
     // Traer recepciones de esos oc_items
     const recItems = ocItemIds.length
-      ? await api(`recepcion_items?oc_item_id=in.(${ocItemIds.join(',')})&select=cantidad_recibida,oc_item_id,recepcion_id,recepciones(id,recepcion_numero,created_at,oc_id)`).catch(()=>[])
+      ? await api(`recepcion_items?oc_item_id=in.(${ocItemIds.join(',')})&select=cantidad_recibida,color_recibido,oc_item_id,recepcion_id,recepciones(id,recepcion_numero,created_at,oc_id)`).catch(()=>[])
       : [];
 
     // Traer OCs para obtener proveedor
@@ -1550,9 +1550,10 @@ async function showHistorialStock(skuId, variante, codigo, btn){
         const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
         const prov = oc?.proveedores?.razon_social || '—';
         const fecha = rec?.created_at ? new Date(rec.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+        const colorBadge = e.color_recibido ? `<span style="font-size:10px;color:#ff9900;margin-left:6px;">● ${e.color_recibido}</span>` : '';
         filasEntradas.push(`<tr>
           <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${fecha}</td>
-          <td>${prov}</td>
+          <td>${prov}${colorBadge}</td>
           <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
           <td style="text-align:right;color:var(--green);font-weight:600;font-family:'DM Mono',monospace;">+${e.cantidad_recibida||0}</td>
         </tr>`);
