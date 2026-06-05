@@ -786,6 +786,42 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-hdmi-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" onchange="syncAdicional('hdmi')" />
         </label>
+        <!-- Otros periféricos -->
+        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Otros periféricos</div>
+          <!-- Mini PC -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="add-extra-minipc" onchange="toggleAdicionalExtra('minipc')" style="width:14px;height:14px;" />
+            Mini PC Beelink N95 8GB SSD 240Gb.
+            <input type="number" id="add-extra-minipc-precio" value="614000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
+            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
+            <input type="number" id="add-extra-minipc-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
+          </label>
+          <!-- Impresora Térmica -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="add-extra-impresora" onchange="toggleAdicionalExtra('impresora')" style="width:14px;height:14px;" />
+            Impresora Térmica (XPrinter)
+            <input type="number" id="add-extra-impresora-precio" value="84000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
+            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
+            <input type="number" id="add-extra-impresora-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
+          </label>
+          <!-- Cámara Web -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="add-extra-camara" onchange="toggleAdicionalExtra('camara')" style="width:14px;height:14px;" />
+            Cámara Web HD Logitech C505
+            <input type="number" id="add-extra-camara-precio" value="75000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
+            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
+            <input type="number" id="add-extra-camara-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
+          </label>
+          <!-- Lector QR -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:2px;cursor:pointer;">
+            <input type="checkbox" id="add-extra-lectorqr" onchange="toggleAdicionalExtra('lectorqr')" style="width:14px;height:14px;" />
+            Lector QR inalámbrico
+            <input type="number" id="add-extra-lectorqr-precio" value="412000" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
+            <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
+            <input type="number" id="add-extra-lectorqr-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
+          </label>
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
@@ -3348,10 +3384,20 @@ function toggleAdicional(tipo){
 
 function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ }
 
+function toggleAdicionalExtra(tipo){
+  const el = document.getElementById('add-extra-'+tipo);
+  const checked = el?.checked;
+  const cantEl = document.getElementById('add-extra-'+tipo+'-cant');
+  const precioEl = document.getElementById('add-extra-'+tipo+'-precio');
+  if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
+  if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
+}
+
 function sincronizarAdicionales(){
   // Limpiar adicionales previos
   cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande'].includes(i.prodId);
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande',
+             'extra_minipc','extra_impresora','extra_camara','extra_lectorqr'].includes(i.prodId);
   });
   // Agregar los activos leyendo directo del DOM
   if(document.getElementById('add-ploteo')?.checked){
@@ -3374,6 +3420,20 @@ function sincronizarAdicionales(){
     const precio = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
     cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:precio, cat:'periferico'});
   }
+  // Otros periféricos
+  const extrasConfig = [
+    {id:'minipc',    prodId:'extra_minipc',    nombre:'Mini PC Beelink N95 8GB SSD 240Gb.',  defPrecio:614000},
+    {id:'impresora', prodId:'extra_impresora', nombre:'Impresora Térmica (XPrinter)',          defPrecio:84000},
+    {id:'camara',    prodId:'extra_camara',    nombre:'Cámara Web HD Logitech C505',           defPrecio:75000},
+    {id:'lectorqr',  prodId:'extra_lectorqr',  nombre:'Lector QR inalámbrico',                defPrecio:412000},
+  ];
+  extrasConfig.forEach(function(ex){
+    if(document.getElementById('add-extra-'+ex.id)?.checked){
+      const cant  = parseInt(document.getElementById('add-extra-'+ex.id+'-cant')?.value)||1;
+      const precio = parseFloat(document.getElementById('add-extra-'+ex.id+'-precio')?.value)||ex.defPrecio;
+      cotItemsTemp.push({prodId:ex.prodId, nombre:ex.nombre, cant:cant, precio:precio, cat:'periferico'});
+    }
+  });
 }
 
 function guardarBorrador(){
