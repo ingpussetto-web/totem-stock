@@ -222,7 +222,7 @@ async function renderEnStock(){
 
   // Buscar OPs en_produccion que necesiten este SKU
   const bomItems = await api(
-    `op_bom_items?sku_id=eq.${u.sku_id}&estado=eq.pendiente&incluido=eq.true&select=*,ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete,estado)&ordenes_produccion.estado=eq.en_produccion`
+    `op_bom_items?sku_id=eq.${u.sku_id}&estado=eq.pendiente&incluido=eq.true&select=*,ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete,estado)`
   );
 
   // Filtrar OPs en producción — si es gabinete, filtrar también por color
