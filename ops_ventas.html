@@ -1168,7 +1168,10 @@ async function confirmarBOM(){
   }
   // Validar players — mostrar modal de distribución
   const cantEquipos = currentOP.cantidad || 1;
-  const playersItems = currentPlayerItems.filter(i => i.sku_id);
+  // Pasar items con sus índices reales en currentPlayerItems
+  const playersItems = currentPlayerItems
+    .map((item, idx) => ({item, idx}))
+    .filter(({item}) => item.sku_id);
   if(playersItems.length && cantEquipos > 1){
     const continuar = await mostrarModalDistribucionPlayers(playersItems, cantEquipos);
     if(!continuar) return;
@@ -1535,7 +1538,7 @@ function mostrarModalDistribucionPlayers(playersItems, cantEquipos){
             </thead>
             <tbody>`;
 
-    playersItems.forEach((item, idx) => {
+    playersItems.forEach(({item, idx}) => {
       // Si qty > 1, mostrar una fila por unidad
       const unidades = item.qty > 1 ? item.qty : 1;
       for(let u = 0; u < unidades; u++){
