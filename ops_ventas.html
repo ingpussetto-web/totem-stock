@@ -672,7 +672,12 @@ function renderBOMItem(item){
     <div class="bom-item-nombre">${item.nombre}</div>
     ${varHTML}
     ${stockHTML}
-    <div class="bom-item-qty">×${item.qty}</div>
+    <div class="bom-item-qty" style="text-align:right;">
+      <span>×${item.qty}</span>
+      ${(currentOP && currentOP.cantidad > 1)
+        ? `<span style="font-size:9px;color:var(--text3);display:block;white-space:nowrap;">×${(item.qty||1)*(currentOP.cantidad||1)} total</span>`
+        : ''}
+    </div>
   </div>`;
 }
 
