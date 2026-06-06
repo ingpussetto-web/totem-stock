@@ -364,7 +364,7 @@ async function loadOPs(){
   try{
     // Cargar todas las OPs (vigentes y terminadas)
     todasLasOPs = await api('op_progreso?select=*&order=created_at.desc');
-    ops = todasLasOPs.filter(o => o.estado === 'en_produccion' || o.estado === 'iniciada' || o.estado === 'bom_confirmada' || o.estado === 'bom_pendiente');
+    ops = todasLasOPs.filter(o => o.estado === 'en_produccion' || o.estado === 'iniciada' || o.estado === 'bom_confirmada');
     poblarFiltroMes();
     aplicarFiltros();
   }catch(e){
