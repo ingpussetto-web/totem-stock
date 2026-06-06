@@ -1074,25 +1074,27 @@ async function guardarBOM(estado){
         await api('op_bom_items', 'POST', filas);
 
       } else if(destinos.length){
-        // Distribución según modal
+        // Distribución según modal — guardar destino en notas como info visual
         const destinosItem = destinos.filter(d => d.itemIdx === itemIdx);
         if(esUID){
           const filas = destinosItem.map(d => ({
             op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
             nombre: item.nombre, qty: 1, incluido: true, variante_id: null,
-            estado: 'pendiente', notas: item.notas || '🖥 PLAYER',
-            equipo_num: d.equipo || null
+            estado: 'pendiente',
+            notas: `🖥 PLAYER · Equipo ${d.equipo}`,
+            equipo_num: null
           }));
           if(filas.length) await api('op_bom_items', 'POST', filas);
         } else {
-          // Agrupar por equipo
+          // Una fila por equipo destino con notas informativas
           const porEquipo = {};
-          destinosItem.forEach(d => { porEquipo[d.equipo||'null'] = (porEquipo[d.equipo||'null']||0) + 1; });
+          destinosItem.forEach(d => { porEquipo[d.equipo||0] = (porEquipo[d.equipo||0]||0) + 1; });
           const filas = Object.entries(porEquipo).map(([eq, qty]) => ({
             op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
             nombre: item.nombre, qty, incluido: true, variante_id: null,
-            estado: 'pendiente', notas: item.notas || '🖥 PLAYER',
-            equipo_num: eq === 'null' ? null : parseInt(eq)
+            estado: 'pendiente',
+            notas: `🖥 PLAYER · Equipo ${eq}`,
+            equipo_num: null
           }));
           if(filas.length) await api('op_bom_items', 'POST', filas);
         }
