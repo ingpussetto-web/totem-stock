@@ -1050,43 +1050,68 @@ async function guardarBOM(estado){
       }
     }
 
-    // Guardar players (solo los nuevos)
-    for(const item of currentPlayerItems){
-      if(item._isNew){
-        const esUID = item.tracking === 'uid' || item.skus?.tracking === 'uid';
+    // Guardar players con distribución por equipo
+    const destinos = currentOP._playerDestinos || [];
+    const espejada = currentOP._licenciaEspejada || false;
+
+    for(let itemIdx = 0; itemIdx < currentPlayerItems.length; itemIdx++){
+      const item = currentPlayerItems[itemIdx];
+      if(!item._isNew){
+        await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {qty: item.qty, notas: item.notas});
+        continue;
+      }
+      const esUID = item.tracking === 'uid' || item.skus?.tracking === 'uid';
+
+      if(espejada){
+        // Licencia espejada: global sin equipo_num
+        const veces = esUID ? item.qty : 1;
+        const qty = esUID ? 1 : item.qty;
+        const filas = Array.from({length: veces}, () => ({
+          op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
+          nombre: item.nombre, qty, incluido: true, variante_id: null,
+          estado: 'pendiente', notas: item.notas || '🖥 PLAYER', equipo_num: null
+        }));
+        await api('op_bom_items', 'POST', filas);
+
+      } else if(destinos.length){
+        // Distribución según modal
+        const destinosItem = destinos.filter(d => d.itemIdx === itemIdx);
+        if(esUID){
+          const filas = destinosItem.map(d => ({
+            op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
+            nombre: item.nombre, qty: 1, incluido: true, variante_id: null,
+            estado: 'pendiente', notas: item.notas || '🖥 PLAYER',
+            equipo_num: d.equipo || null
+          }));
+          if(filas.length) await api('op_bom_items', 'POST', filas);
+        } else {
+          // Agrupar por equipo
+          const porEquipo = {};
+          destinosItem.forEach(d => { porEquipo[d.equipo||'null'] = (porEquipo[d.equipo||'null']||0) + 1; });
+          const filas = Object.entries(porEquipo).map(([eq, qty]) => ({
+            op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
+            nombre: item.nombre, qty, incluido: true, variante_id: null,
+            estado: 'pendiente', notas: item.notas || '🖥 PLAYER',
+            equipo_num: eq === 'null' ? null : parseInt(eq)
+          }));
+          if(filas.length) await api('op_bom_items', 'POST', filas);
+        }
+      } else {
+        // Sin configuración — guardar global
         if(esUID && item.qty > 1){
-          // SKU con tracking uid: insertar un registro por unidad (qty=1 c/u)
-          const filas = Array.from({length: item.qty}, ()=>({
-            op_id: currentOP.id,
-            sku_id: item.sku_id,
-            v14_key: null,
-            nombre: item.nombre,
-            qty: 1,
-            incluido: true,
-            variante_id: null,
-            estado: 'pendiente',
-            notas: item.notas || '🖥 PLAYER'
+          const filas = Array.from({length: item.qty}, () => ({
+            op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
+            nombre: item.nombre, qty: 1, incluido: true, variante_id: null,
+            estado: 'pendiente', notas: item.notas || '🖥 PLAYER', equipo_num: null
           }));
           await api('op_bom_items', 'POST', filas);
         } else {
-          // SKU de cantidad: un solo registro con qty total
           await api('op_bom_items', 'POST', [{
-            op_id: currentOP.id,
-            sku_id: item.sku_id,
-            v14_key: null,
-            nombre: item.nombre,
-            qty: item.qty,
-            incluido: true,
-            variante_id: null,
-            estado: 'pendiente',
-            notas: item.notas || '🖥 PLAYER'
+            op_id: currentOP.id, sku_id: item.sku_id, v14_key: null,
+            nombre: item.nombre, qty: item.qty, incluido: true, variante_id: null,
+            estado: 'pendiente', notas: item.notas || '🖥 PLAYER', equipo_num: null
           }]);
         }
-      } else {
-        await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
-          qty: item.qty,
-          notas: item.notas
-        });
       }
     }
 
