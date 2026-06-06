@@ -561,7 +561,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-preview')">Cerrar</button>
       <button class="btn" onclick="imprimirOC()">🖨 Imprimir / PDF</button>
-      <button class="btn blue" onclick="compartirOC()">📱 Compartir por WA/Mail</button>
+      <button class="btn blue" onclick="compartirOCActual()">📱 Compartir por WA/Mail</button>
       <button class="btn solid-green" id="btn-aprobar-oc" onclick="aprobarOC()">✓ Aprobar OC</button>
     </div>
   </div>
@@ -1649,6 +1649,7 @@ async function previsualizarOC(ocId){
         ${o.observaciones?`<div style="margin-top:14px;padding:10px;background:var(--surface2);border-radius:6px;font-size:11px;color:var(--text2);">${o.observaciones}</div>`:''}
       </div>`;
 
+    window._previewOcId = o.id; // guardar id para compartir
     openModal('modal-preview');
   }catch(e){toast('Error: '+e.message);}
 }
@@ -1778,6 +1779,15 @@ function imprimirOC(){
     </div>`;
   window.print();
   setTimeout(()=>{ printZone.style.display='none'; }, 1000);
+}
+
+function compartirOCActual(){
+  // Si hay un ocId guardado (venimos del historial), usar compartirOCId
+  if(window._previewOcId){
+    compartirOCId(window._previewOcId);
+  } else {
+    compartirOC();
+  }
 }
 
 function compartirOC(){
