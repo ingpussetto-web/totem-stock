@@ -1100,19 +1100,27 @@ async function confirmarBOM(){
   if(!selectedColor || selectedColor==='A definir'){
     if(!confirm('El color del gabinete está como "A definir". ¿Confirmás igual?')) return;
   }
-  // Verificar items sin stock suficiente — los items ya están replicados por equipo, no multiplicar
+  // Verificar items sin stock suficiente
   const cantEquiposVerif = currentOP.cantidad || 1;
   const todosLosItems = [...currentBOMItems, ...currentPlayerItems];
-  // Agrupar demanda total por sku_id — sumar qty de todos los equipos directamente
+  // Agrupar demanda total por sku_id
   const demandaPorSku = {};
   todosLosItems.forEach(i=>{
     if(i.incluido === false || !i.sku_id) return;
     const skuId = String(i.sku_id);
     if(!demandaPorSku[skuId]) demandaPorSku[skuId] = {qty:0, stock:0, nombre:i.nombre};
-    // Players aún no replicados: multiplicar por cantidad de equipos
-    // BOM items ya replicados (equipo_num asignado): sumar directo
-    // BOM items ya replicados y players son totales globales — nunca multiplicar
-    demandaPorSku[skuId].qty += i.qty;
+    const esPlayer = currentPlayerItems.includes(i);
+    const yaReplicado = !i._isNew; // items guardados ya están replicados por equipo
+    if(esPlayer){
+      // Players son globales — sumar directo sin multiplicar
+      demandaPorSku[skuId].qty += i.qty;
+    } else if(yaReplicado){
+      // Items ya guardados en base — sumar directo (ya están replicados)
+      demandaPorSku[skuId].qty += i.qty;
+    } else {
+      // Items nuevos de BOM maestra — multiplicar por cantidad de equipos
+      demandaPorSku[skuId].qty += i.qty * cantEquiposVerif;
+    }
     demandaPorSku[skuId].stock = Math.max(demandaPorSku[skuId].stock, (i._stock||0) + (i._stockDefinir||0));
   });
   const sinStock = Object.entries(demandaPorSku)
@@ -1133,12 +1141,12 @@ async function confirmarBOM(){
       await api('alertas_gerencia', 'POST', alertas);
     }catch(e){ console.warn('Error registrando alertas faltantes:', e.message); }
   }
-  // Validar que players sean divisibles por cantidad de equipos
+  // Validar players — mostrar modal de distribución
   const cantEquipos = currentOP.cantidad || 1;
   const playersItems = currentPlayerItems.filter(i => i.sku_id);
-  if(playersItems.length){
-    const dist = playersItems.map(i=>'• '+i.nombre+': '+i.qty+' en total (global, no por equipo)').join('\n');
-    if(!confirm('Players a asignar en esta OP:\n\n'+dist+'\n\n¿Confirmás?')) return;
+  if(playersItems.length && cantEquipos > 1){
+    const continuar = await mostrarModalDistribucionPlayers(playersItems, cantEquipos);
+    if(!continuar) return;
   }
 
   await guardarBOM('bom_confirmada');
@@ -1467,6 +1475,107 @@ async function guardarBOMMaestra(){
     alert('Error: ' + e.message);
   }
 }
+
+// ─── MODAL DISTRIBUCIÓN PLAYERS ─────────────────────────────────────────────
+let _resolverModalPlayers = null;
+
+function mostrarModalDistribucionPlayers(playersItems, cantEquipos){
+  return new Promise(resolve => {
+    _resolverModalPlayers = resolve;
+    const body = document.getElementById('modal-dist-players-body');
+
+    // Opciones de equipo para el select
+    const optsEquipos = Array.from({length: cantEquipos}, (_,i) =>
+      `<option value="${i+1}">Equipo ${i+1}</option>`
+    ).join('');
+
+    let html = `
+      <div style="padding:4px 0 12px;">
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 14px;background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:8px;margin-bottom:14px;">
+          <input type="checkbox" id="chk-licencia-espejada" style="width:16px;height:16px;" onchange="toggleEspejada()" />
+          <div>
+            <div style="font-weight:600;color:var(--text1);">Licencia espejada</div>
+            <div style="font-size:11px;color:var(--text3);">Los players se comparten entre todos los tótems como un sistema único</div>
+          </div>
+        </label>
+        <div id="dist-players-tabla">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Asigná cada player a un equipo:</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;">
+                <th style="text-align:left;padding:6px 8px;">Insumo player</th>
+                <th style="text-align:center;padding:6px 8px;">Cant.</th>
+                <th style="text-align:left;padding:6px 8px;">Destino</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+    playersItems.forEach((item, idx) => {
+      // Si qty > 1, mostrar una fila por unidad
+      const unidades = item.qty > 1 ? item.qty : 1;
+      for(let u = 0; u < unidades; u++){
+        html += `<tr style="border-top:1px solid var(--border2);">
+          <td style="padding:8px;font-size:12px;">${item.nombre}${unidades>1?' #'+(u+1):''}</td>
+          <td style="padding:8px;text-align:center;font-size:12px;color:var(--text3);">×1</td>
+          <td style="padding:8px;">
+            <select class="player-destino-sel" data-item-idx="${idx}" data-unit="${u}"
+              style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:12px;width:100%;">
+              ${optsEquipos}
+            </select>
+          </td>
+        </tr>`;
+      }
+    });
+
+    html += `</tbody></table></div></div>`;
+    body.innerHTML = html;
+    document.getElementById('modal-dist-players').classList.add('open');
+  });
+}
+
+function toggleEspejada(){
+  const espejada = document.getElementById('chk-licencia-espejada').checked;
+  const tabla = document.getElementById('dist-players-tabla');
+  if(tabla) tabla.style.opacity = espejada ? '0.3' : '1';
+  if(tabla) tabla.style.pointerEvents = espejada ? 'none' : '';
+}
+
+function resolverModalPlayers(confirmar){
+  document.getElementById('modal-dist-players').classList.remove('open');
+  if(_resolverModalPlayers){
+    if(confirmar){
+      // Guardar configuración en currentOP para usarla después
+      const espejada = document.getElementById('chk-licencia-espejada')?.checked || false;
+      currentOP._licenciaEspejada = espejada;
+      // Guardar asignación de destinos por player (si no espejada)
+      if(!espejada){
+        const sels = document.querySelectorAll('.player-destino-sel');
+        currentOP._playerDestinos = Array.from(sels).map(s => ({
+          itemIdx: parseInt(s.dataset.itemIdx),
+          unit: parseInt(s.dataset.unit),
+          equipo: parseInt(s.value)
+        }));
+      }
+    }
+    _resolverModalPlayers(confirmar);
+    _resolverModalPlayers = null;
+  }
+}
 </script>
+
+<!-- Modal distribución players -->
+<div class="modal-bg" id="modal-dist-players">
+  <div class="modal" style="width:560px;max-height:80vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span>🖥 Configuración de players</span>
+      <button class="modal-close" onclick="resolverModalPlayers(false)">×</button>
+    </div>
+    <div id="modal-dist-players-body"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="resolverModalPlayers(false)">Cancelar</button>
+      <button class="btn solid-green" onclick="resolverModalPlayers(true)">✓ Confirmar distribución</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
