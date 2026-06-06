@@ -1106,8 +1106,8 @@ async function confirmarBOM(){
     if(!demandaPorSku[skuId]) demandaPorSku[skuId] = {qty:0, stock:0, nombre:i.nombre};
     // Players aún no replicados: multiplicar por cantidad de equipos
     // BOM items ya replicados (equipo_num asignado): sumar directo
-    const esPlayerNuevo = i._isNew && currentPlayerItems.includes(i);
-    demandaPorSku[skuId].qty += esPlayerNuevo ? i.qty * cantEquiposVerif : i.qty;
+    // BOM items ya replicados y players son totales globales — nunca multiplicar
+    demandaPorSku[skuId].qty += i.qty;
     demandaPorSku[skuId].stock = Math.max(demandaPorSku[skuId].stock, (i._stock||0) + (i._stockDefinir||0));
   });
   const sinStock = Object.entries(demandaPorSku)
@@ -1131,9 +1131,9 @@ async function confirmarBOM(){
   // Validar que players sean divisibles por cantidad de equipos
   const cantEquipos = currentOP.cantidad || 1;
   const playersItems = currentPlayerItems.filter(i => i.sku_id);
-  if(playersItems.length && cantEquipos > 1){
-    const dist = playersItems.map(i=>'• '+i.nombre+': '+i.qty+' por equipo (total: '+i.qty*cantEquipos+')').join('\n');
-    if(!confirm('Los players se distribuirán así:\n\n'+dist+'\n\n¿Confirmás?')) return;
+  if(playersItems.length){
+    const dist = playersItems.map(i=>'• '+i.nombre+': '+i.qty+' en total (global, no por equipo)').join('\n');
+    if(!confirm('Players a asignar en esta OP:\n\n'+dist+'\n\n¿Confirmás?')) return;
   }
 
   await guardarBOM('bom_confirmada');
@@ -1141,7 +1141,9 @@ async function confirmarBOM(){
   // Si cantidad > 1, replicar items para equipos 2..N
   if(currentOP.cantidad > 1){
     try{
-      const itemsEquipo1 = await api(`op_bom_items?op_id=eq.${currentOP.id}&equipo_num=eq.1&select=*`).catch(()=>[]);
+      const itemsEquipo1Todos = await api(`op_bom_items?op_id=eq.${currentOP.id}&equipo_num=eq.1&select=*`).catch(()=>[]);
+      // Excluir players de la replicación — los players son globales, no por equipo
+      const itemsEquipo1 = (itemsEquipo1Todos||[]).filter(i => !(i.notas && i.notas.startsWith('🖥')));
       // Borrar items de equipos 2..N si existen (evitar duplicados)
       await api(`op_bom_items?op_id=eq.${currentOP.id}&equipo_num=gt.1`, 'DELETE').catch(()=>{});
       // Replicar para cada equipo
