@@ -307,7 +307,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
                 <th>Variante</th>
                 <th>Categoría</th>
                 <th style="text-align:right">Disponible</th>
-                <th style="text-align:right">Reservado</th>
+                <th style="text-align:right">Asignado</th>
                 <th style="text-align:right">Total</th>
                 <th>Estado</th>
                 <th style="text-align:center;">🏷 Etiquetado</th>
@@ -354,7 +354,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <select class="filter" id="uid-estado" onchange="renderUnidades()">
           <option value="">Todos los estados</option>
           <option value="stock">En stock</option>
-          <option value="reservado">Reservado</option>
+          <option value="reservado">Asignado</option>
           <option value="producido">Producido</option>
           <option value="baja">Baja</option>
         </select>
@@ -981,7 +981,7 @@ async function mostrarOPsReservadas(skuId, variante, el){
   const popup = document.createElement('div');
   popup.id = 'popup-reservadas';
   popup.style.cssText = 'position:fixed;background:#0d1117;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:14px;z-index:9500;min-width:220px;max-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:"DM Sans",sans-serif;';
-  popup.innerHTML = `<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:10px;">● ${variante} — Reservado en OPs</div>${opsHTML}`;
+  popup.innerHTML = `<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:10px;">● ${variante} — Asignado a OPs</div>${opsHTML}`;
 
   // Posicionar cerca del elemento clickeado
   const rect = el.getBoundingClientRect();
@@ -1034,7 +1034,7 @@ async function toggleStockDetalle(rowId, skuId){
       <div style="display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);">
         <span style="font-size:11px;color:#ffb340;font-family:'DM Mono',monospace;min-width:100px;">● ${variante}</span>
         <span style="font-size:12px;font-weight:600;color:var(--green);">${counts.stock} disponible${counts.stock!==1?'s':''}</span>
-        ${counts.reservado?`<span style="font-size:11px;color:var(--blue);cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();mostrarOPsReservadas(${skuId},'${variante}',this)">${counts.reservado} reservado${counts.reservado!==1?'s':''}</span>`:''}
+        ${counts.reservado?`<span style="font-size:11px;color:var(--blue);cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();mostrarOPsReservadas(${skuId},'${variante}',this)">${counts.reservado} asignado${counts.reservado!==1?'s':''}</span>`:''}
       </div>`).join('');
 
     content.innerHTML = html || '<span style="color:var(--text3);">Sin variantes</span>';
@@ -1399,7 +1399,7 @@ function badgeAlerta(a){
 }
 function badgeEstado(e){
   const map={stock:'ok',reservado:'bajo',producido:'qty',baja:'sin'};
-  const label={stock:'En stock',reservado:'Reservado',producido:'Producido',baja:'Baja'};
+  const label={stock:'En stock',reservado:'Asignado',producido:'Producido',baja:'Baja'};
   return `<span class="badge ${map[e]||'qty'}">${label[e]||e}</span>`;
 }
 function formatDate(iso){
