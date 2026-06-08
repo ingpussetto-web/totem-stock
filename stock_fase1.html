@@ -688,7 +688,7 @@ function renderCatalogo(){
     const varChips = vars.map(v=>`<span style="font-size:10px;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:'DM Mono',monospace;">${v.valor}</span>`).join(' ');
     return `<tr>
       <td class="td-mono td-main">${s.codigo}</td>
-      <td>${s.nombre}</td>
+      <td>${s.nombre}${s.descripcion?`<br><span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;font-weight:400;">${s.descripcion}</span>`:''}</td>
       <td style="font-size:11px;color:var(--text3)">${s.categorias?.nombre||'—'}</td>
       <td>${s.tracking==='uid'?'<span class="badge uid">UID</span>':'<span class="badge qty">Cantidad</span>'}</td>
       <td>${varChips||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
@@ -799,7 +799,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     const rowId = 'stock-det-'+d.codigo.replace(/[^a-z0-9]/gi,'_');
     const mainRow = `<tr style="cursor:${d.tracking==='uid'?'pointer':'default'}" ${d.tracking==='uid'?`onclick="toggleStockDetalle('${rowId}',${d.sku_id})"`:''}>
     <td class="td-mono" style="font-size:11.5px">${d.codigo}</td>
-    <td class="td-main">${d.nombre} ${d.tracking==='uid'?'<span style="font-size:10px;color:var(--text3);">▼</span>':''}</td>
+    <td class="td-main">${d.nombre} ${d.tracking==='uid'?'<span style="font-size:10px;color:var(--text3);">▼</span>':''}${(()=>{const sk=skus?.find(s=>s.id===d.sku_id);return sk?.descripcion?`<br><span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;font-weight:400;">${sk.descripcion}</span>`:''})()}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${d.variante||'—'}</td>
     <td style="font-size:11px;color:var(--text3)">${d.categoria||'—'}</td>
     <td class="td-num" style="color:${d.disponible<=0?'var(--red)':d.disponible<=d.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${d.disponible}</td>
