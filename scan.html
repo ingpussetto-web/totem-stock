@@ -262,17 +262,21 @@ async function renderEnStock(){
   const opsHTML = opsAgrupadas.length
     ? opsAgrupadas.map(({op, items})=>{
         const pendientesEnOP = items.length;
-        // Si solo hay 1 slot pendiente, asignar directo; si hay más, mostrar selector
-        const onclickBtn = pendientesEnOP === 1
-          ? `prepararAsignacion(${items[0].id}, ${op.id}, '${op.op_numero}', '${op.cliente}', ${JSON.stringify(items[0].notas||'')})`
-          : `mostrarSelectorSlot(${op.id}, '${op.op_numero}', '${op.cliente}')`;
+        const usaSelector = pendientesEnOP > 1;
         return `<div class="op-item">
           <div class="op-item-numero">${op.op_numero}</div>
           <div class="op-item-cliente">${op.cliente}</div>
           <div class="op-item-producto">${op.producto_nombre}</div>
           ${op.color_gabinete?`<div class="op-item-color">● Color: ${op.color_gabinete}</div>`:''}
           ${pendientesEnOP>1?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">Quedan ${pendientesEnOP} unidades por asignar en esta OP</div>`:''}
-          <button class="btn-asignar" onclick="${onclickBtn}">
+          <button class="btn-asignar"
+            data-op-id="${op.id}"
+            data-op-numero="${op.op_numero}"
+            data-cliente="${(op.cliente||'').replace(/"/g,'&quot;')}"
+            data-usa-selector="${usaSelector}"
+            data-bom-id="${!usaSelector ? items[0].id : ''}"
+            data-notas="${(!usaSelector ? (items[0].notas||'') : '').replace(/"/g,'&quot;')}"
+            onclick="handleAsignarBtn(this)">
             Asignar a esta OP
           </button>
         </div>`;
@@ -525,6 +529,20 @@ function renderError(titulo, msg){
 let pendingBomId = null;
 let pendingOpId = null;
 let pendingBomNotas = '';
+
+function handleAsignarBtn(btn){
+  const opId = parseInt(btn.dataset.opId);
+  const opNumero = btn.dataset.opNumero;
+  const cliente = btn.dataset.cliente;
+  const usaSelector = btn.dataset.usaSelector === 'true';
+  if(usaSelector){
+    mostrarSelectorSlot(opId, opNumero, cliente);
+  } else {
+    const bomId = parseInt(btn.dataset.bomId);
+    const notas = btn.dataset.notas;
+    prepararAsignacion(bomId, opId, opNumero, cliente, notas);
+  }
+}
 
 function mostrarSelectorSlot(opId, opNumero, cliente){
   const entrada = window._slotItemsPorOp?.[opId];
