@@ -548,7 +548,7 @@ async function abrirBOM(opId){
 
     // Fill SKU selector para agregar extras
     if(!allSkus.length){
-      allSkus = await api('skus?select=id,codigo,nombre,categoria_id,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
+      allSkus = await api('skus?select=id,codigo,nombre,categoria_id,categorias(nombre)&activo=eq.true&order=nombre.asc');
       // Ahora que allSkus está cargado, filtrar stock de gabinetes por color seleccionado
       if(selectedColor && selectedColor !== 'A definir'){
         for(const item of currentBOMItems){
@@ -691,7 +691,7 @@ function toggleItem(itemId){
 }
 
 async function cambiarVariante(itemId, varId){
-  const item = currentBOMItems.find(i=>i.id===itemId);
+  const item = currentBOMItems.find(i=>String(i.id)===String(itemId));
   if(!item) return;
   item.variante_id = varId ? parseInt(varId) : null;
 
@@ -723,7 +723,7 @@ async function cambiarVariante(itemId, varId){
 }
 
 function cambiarModeloMiniPC(itemId, nuevoSkuId){
-  const item = currentBOMItems.find(i=>i.id===itemId);
+  const item = currentBOMItems.find(i=>String(i.id)===String(itemId));
   if(!item || !nuevoSkuId) return;
   const modelo = item._minipcModelos.find(m=>String(m.id)===nuevoSkuId);
   if(!modelo) return;
@@ -915,6 +915,7 @@ async function cargarStockItem(item){
   if(!sku) return;
   item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
   if(sku.tracking === 'uid'){
+    // Filtrar por variante si tiene
     let query = `unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`;
     if(item.variante_id) query += `&variante_id=eq.${item.variante_id}`;
     const uds = await api(query).catch(()=>[]);
