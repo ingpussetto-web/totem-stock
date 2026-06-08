@@ -3367,7 +3367,8 @@ function sincronizarAdicionales(){
   // Agregar los activos leyendo directo del DOM
   if(document.getElementById('add-ploteo')?.checked){
     const cant = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
-    const precio = parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000;
+    const _ploteoRaw = parseFloat(document.getElementById('add-ploteo-precio')?.value);
+    const precio = isNaN(_ploteoRaw) ? 55000 : _ploteoRaw;
     cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cant, precio:precio, cat:'servicio'});
   }
   if(document.getElementById('add-seteo')?.checked){
@@ -3517,6 +3518,7 @@ function abrirNuevaCotizacion(editId){
       if(licPres) licPres.checked = !!c.licEnPresupuesto;
     }
     document.getElementById('cot-pago-tipo').value = c.pagoTipo||'senia_saldo';
+    _pagoPersonalizadoTexto = (c.pagoTipo==='personalizado') ? (c.pagoTexto||'') : '';
   } else {
     document.getElementById('cot-edit-id').value = '';
     ['cot-empresa','cot-cuit','cot-contacto','cot-tel','cot-email','cot-sistema','cot-notas','cot-lic-desc'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
@@ -3526,6 +3528,7 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-tiene-licencia').checked = false;
     document.getElementById('cot-licencia-panel').style.display = 'none';
     document.getElementById('cot-pago-tipo').value = 'senia_saldo';
+    _pagoPersonalizadoTexto = '';
   }
 
   renderPagoOpciones();
@@ -3701,7 +3704,13 @@ function toggleLicencia(){
   if(panel) panel.style.display = chk.checked?'block':'none';
 }
 
+var _pagoPersonalizadoTexto = '';
+
 function renderPagoOpciones(){
+  // Preservar texto del textarea personalizado antes de re-renderizar
+  const _prevTA = document.getElementById('pago-personalizado');
+  if(_prevTA) _pagoPersonalizadoTexto = _prevTA.value;
+
   const tipo = document.getElementById('cot-pago-tipo')?.value||'senia_saldo';
   const el = document.getElementById('cot-pago-opciones');
   if(!el) return;
@@ -3735,6 +3744,13 @@ function renderPagoOpciones(){
     +'</div>';
   } else {
     el.innerHTML = '<textarea id="pago-personalizado" rows="2" style="width:100%;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;color:var(--text);resize:vertical;" placeholder="Describí las condiciones de pago..."></textarea>';
+    setTimeout(function(){
+      var ta = document.getElementById('pago-personalizado');
+      if(ta){
+        ta.value = _pagoPersonalizadoTexto;
+        ta.addEventListener('input', function(){ _pagoPersonalizadoTexto = ta.value; });
+      }
+    }, 50);
   }
 }
 
@@ -3758,7 +3774,8 @@ function calcPagoMontos(){
   }, 0);
   // Agregar adicionales activos en tiempo real
   if(document.getElementById('add-ploteo')?.checked){
-    subtotal += (parseFloat(document.getElementById('add-ploteo-precio')?.value)||55000) * (parseInt(document.getElementById('add-ploteo-cant')?.value)||1);
+    const _pr = parseFloat(document.getElementById('add-ploteo-precio')?.value);
+    subtotal += (isNaN(_pr) ? 55000 : _pr) * (parseInt(document.getElementById('add-ploteo-cant')?.value)||1);
   }
   if(document.getElementById('add-seteo')?.checked){
     subtotal += (parseFloat(document.getElementById('add-seteo-precio')?.value)||0) * (parseInt(document.getElementById('add-seteo-cant')?.value)||1);
@@ -3799,7 +3816,8 @@ function getPagoTexto(){
   } else if(tipo==='cuota_pyme'){
     return 'Cuota Pyme en '+v('pago-cuotas')+' cuotas · Interés anual '+v('pago-interes')+'%';
   } else {
-    return v('pago-personalizado');
+    const ta = document.getElementById('pago-personalizado');
+    return ta ? ta.value : _pagoPersonalizadoTexto;
   }
 }
 
