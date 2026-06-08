@@ -1522,14 +1522,18 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     // Calcular totales
     const totalEntradas = (entradas||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
     const totalSalidas  = (salidas||[]).reduce((s,e)=>s+(e.qty||0),0);
-    const saldo         = totalEntradas - totalSalidas;
-    const saldoClass    = saldo > 0 ? 'hist-num-pos' : saldo < 0 ? 'hist-num-neg' : 'hist-num-neu';
 
-    // Stock total actual para calcular stock inicial
+    // stock.cantidad es la fuente de verdad del saldo actual
     const stockObj = (stockData||[]).find(d=>d.sku_id===skuIdInt);
-    const stockTotal = stockObj ? (stockObj.cantidad||0) : null;
-    const stockInicial = (stockTotal !== null) ? Math.max(0, stockTotal - totalEntradas) : null;
+    const stockActual = stockObj ? (stockObj.cantidad||0) : null;
+
+    // stockInicial = stockActual - totalEntradas + totalSalidas
+    const stockInicial = stockActual !== null ? Math.max(0, stockActual - totalEntradas + totalSalidas) : null;
     const totalEntradasConInicial = totalEntradas + (stockInicial||0);
+
+    // Saldo final = stockActual (fuente de verdad)
+    const saldoFinal = stockActual !== null ? stockActual : (totalEntradasConInicial - totalSalidas);
+    const saldoClass = saldoFinal > 0 ? 'hist-num-pos' : saldoFinal < 0 ? 'hist-num-neg' : 'hist-num-neu';
 
     // ── Render entradas ──
     let htmlEntradas = '';
@@ -1615,7 +1619,7 @@ async function showHistorialStock(skuId, variante, codigo, btn){
 
       <div class="hist-saldo-row">
         <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradasConInicial}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
-        <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${totalEntradasConInicial - totalSalidas >= 0 ? '+' : ''}${totalEntradasConInicial - totalSalidas}</span></span>
+        <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${saldoFinal >= 0 ? '+' : ''}${saldoFinal}</span></span>
       </div>
     `;
   } catch(e) {
