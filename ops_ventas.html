@@ -516,7 +516,8 @@ async function abrirBOM(opId){
           }
         }
       } else {
-        // Cantidad tracking: leer tabla stock
+        // Cantidad tracking: cargar variantes y leer tabla stock
+        item._variantes = await api(`variantes?sku_id=eq.${item.sku_id}&select=*`).catch(()=>[]);
         if(item.variante_id){
           const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
           item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
@@ -696,13 +697,25 @@ async function cambiarVariante(itemId, varId){
 
   // Recalcular stock para la variante seleccionada
   try{
-    if(item.variante_id && item.sku_id){
-      const uds = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&estado=eq.stock&select=id`).catch(()=>[]);
-      item._stock = uds?.length || 0;
-    } else if(item.sku_id){
-      // Sin variante seleccionada: mostrar stock total del SKU
-      const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
-      item._stock = uds?.length || 0;
+    const esCantidad = item.skus?.tracking === 'cantidad';
+    if(esCantidad){
+      // Tracking cantidad: leer tabla stock por variante
+      if(item.variante_id && item.sku_id){
+        const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
+        item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+      } else if(item.sku_id){
+        const st = await api(`stock?sku_id=eq.${item.sku_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
+        item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+      }
+    } else {
+      // Tracking UID: contar unidades
+      if(item.variante_id && item.sku_id){
+        const uds = await api(`unidades?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&estado=eq.stock&select=id`).catch(()=>[]);
+        item._stock = uds?.length || 0;
+      } else if(item.sku_id){
+        const uds = await api(`unidades?sku_id=eq.${item.sku_id}&estado=eq.stock&select=id`).catch(()=>[]);
+        item._stock = uds?.length || 0;
+      }
     }
   }catch(e){ console.warn('Error recalculando stock variante:', e.message); }
 
