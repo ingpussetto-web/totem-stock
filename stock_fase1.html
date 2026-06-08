@@ -1500,7 +1500,7 @@ async function showHistorialStock(skuId, variante, codigo, btn){
 
     // ── SALIDAS: op_bom_items → ordenes_produccion ──
     const bomItems = await api(
-      `op_bom_items?sku_id=eq.${skuIdInt}&incluido=eq.true&select=qty,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
+      `op_bom_items?sku_id=eq.${skuIdInt}&incluido=eq.true&estado=eq.asignado&select=qty,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
     ).catch(()=>[]);
 
     const entradas = recItems || [];
