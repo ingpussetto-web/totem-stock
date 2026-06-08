@@ -262,7 +262,9 @@ async function renderEnStock(){
   const opsHTML = opsAgrupadas.length
     ? opsAgrupadas.map(({op, items})=>{
         const pendientesEnOP = items.length;
-        const usaSelector = pendientesEnOP > 1;
+        // Solo mostrar selector para players (notas con 🖥) — el resto se asigna directo al primer slot
+        const esPlayer = items.some(i => (i.notas||'').startsWith('🖥'));
+        const usaSelector = pendientesEnOP > 1 && esPlayer;
         return `<div class="op-item">
           <div class="op-item-numero">${op.op_numero}</div>
           <div class="op-item-cliente">${op.cliente}</div>
