@@ -111,6 +111,16 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
   </div>
 </div>
 
+<!-- Modal selección de slot -->
+<div class="confirm-overlay" id="slot-overlay">
+  <div class="confirm-sheet">
+    <div class="confirm-title">¿A qué equipo asignás esta Mini PC?</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;" id="slot-subtitle"></div>
+    <div id="slot-lista" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;margin-bottom:16px;"></div>
+    <button class="confirm-btn-no" onclick="cerrarSlotOverlay()">Cancelar</button>
+  </div>
+</div>
+
 <!-- Confirmación asignación -->
 <div class="confirm-overlay" id="confirm-overlay">
   <div class="confirm-sheet">
@@ -236,27 +246,33 @@ async function renderEnStock(){
     return true;
   });
 
-  // Agrupar por OP — tomar el primer item pendiente de cada OP
+  // Agrupar por OP — guardar TODOS los items pendientes por OP
   const opsPorId = {};
   itemsValidos.forEach(b=>{
     const opId = b.ordenes_produccion?.id;
-    if(opId && !opsPorId[opId]){
-      opsPorId[opId] = b;
-    }
+    if(!opId) return;
+    if(!opsPorId[opId]) opsPorId[opId] = { op: b.ordenes_produccion, items: [] };
+    opsPorId[opId].items.push(b);
   });
   const opsAgrupadas = Object.values(opsPorId);
 
+  // Guardar mapa de items por OP para modal de slots
+  window._slotItemsPorOp = opsPorId;
+
   const opsHTML = opsAgrupadas.length
-    ? opsAgrupadas.map(b=>{
-        const op = b.ordenes_produccion;
-        const pendientesEnOP = itemsValidos.filter(x=>x.ordenes_produccion?.id===op.id).length;
+    ? opsAgrupadas.map(({op, items})=>{
+        const pendientesEnOP = items.length;
+        // Si solo hay 1 slot pendiente, asignar directo; si hay más, mostrar selector
+        const onclickBtn = pendientesEnOP === 1
+          ? `prepararAsignacion(${items[0].id}, ${op.id}, '${op.op_numero}', '${op.cliente}', ${JSON.stringify(items[0].notas||'')})`
+          : `mostrarSelectorSlot(${op.id}, '${op.op_numero}', '${op.cliente}')`;
         return `<div class="op-item">
           <div class="op-item-numero">${op.op_numero}</div>
           <div class="op-item-cliente">${op.cliente}</div>
           <div class="op-item-producto">${op.producto_nombre}</div>
           ${op.color_gabinete?`<div class="op-item-color">● Color: ${op.color_gabinete}</div>`:''}
           ${pendientesEnOP>1?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">Quedan ${pendientesEnOP} unidades por asignar en esta OP</div>`:''}
-          <button class="btn-asignar" onclick="prepararAsignacion(${b.id}, ${op.id}, '${op.op_numero}', '${op.cliente}', ${JSON.stringify(b.notas||'')})">
+          <button class="btn-asignar" onclick="${onclickBtn}">
             Asignar a esta OP
           </button>
         </div>`;
@@ -509,6 +525,48 @@ function renderError(titulo, msg){
 let pendingBomId = null;
 let pendingOpId = null;
 let pendingBomNotas = '';
+
+function mostrarSelectorSlot(opId, opNumero, cliente){
+  const entrada = window._slotItemsPorOp?.[opId];
+  if(!entrada) return;
+  const items = entrada.items;
+
+  document.getElementById('slot-subtitle').textContent = opNumero + ' · ' + cliente;
+
+  const lista = document.getElementById('slot-lista');
+  lista.innerHTML = items.map(item => {
+    // Generar etiqueta legible del slot
+    let label = '';
+    const notas = item.notas || '';
+    const eq = item.equipo_num;
+    if(notas.startsWith('🖥')){
+      // Es player — extraer número de equipo de notas si está
+      const match = notas.match(/Equipo\s*(\d+)/i);
+      label = match ? '🖥 Player · Equipo ' + match[1] : '🖥 Player';
+    } else if(eq){
+      label = '🖦 Gabinete · Equipo ' + eq;
+    } else {
+      label = 'Slot ' + item.id;
+    }
+    return `<button onclick="seleccionarSlot(${item.id}, ${opId}, '${opNumero}', '${cliente}', ${JSON.stringify(notas)})" 
+      style="width:100%;padding:14px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:14px;font-weight:500;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif;">
+      ${label}
+    </button>`;
+  }).join('');
+
+  const overlay = document.getElementById('slot-overlay');
+  overlay.style.display = 'flex';
+}
+
+function seleccionarSlot(bomId, opId, opNumero, cliente, notas){
+  cerrarSlotOverlay();
+  prepararAsignacion(bomId, opId, opNumero, cliente, notas);
+}
+
+function cerrarSlotOverlay(){
+  const overlay = document.getElementById('slot-overlay');
+  if(overlay) overlay.style.display = 'none';
+}
 
 function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales){
   pendingBomId = bomId;
