@@ -921,8 +921,15 @@ async function cargarStockItem(item){
     const uds = await api(query).catch(()=>[]);
     item._stock = uds?.length || 0;
   } else {
-    const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
-    item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+    // Cantidad: cargar variantes disponibles
+    item._variantes = await api(`variantes?sku_id=eq.${item.sku_id}&select=*`).catch(()=>[]);
+    if(item.variante_id){
+      const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
+      item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+    } else {
+      const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=cantidad,cantidad_reservada`).catch(()=>[]);
+      item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
+    }
   }
 }
 
