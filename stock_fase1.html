@@ -1638,7 +1638,9 @@ async function showHistorialStock(skuId, variante, codigo, btn){
         <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${saldoFinal >= 0 ? '+' : ''}${saldoFinal}</span></span>
       </div>
       <div style="margin-top:12px;text-align:right;">
-        <button onclick="abrirConteoFisico(${skuIdInt},'${nombreSku.replace(/'/g,"\'")}',${saldoFinal})" 
+        <button 
+          data-sku-id="${skuIdInt}" data-nombre="${nombreSku.replace(/"/g,'&quot;')}" data-saldo="${saldoFinal}"
+          onclick="const b=this;abrirConteoFisico(parseInt(b.dataset.skuId),b.dataset.nombre,parseInt(b.dataset.saldo))"
           style="font-size:11px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;">
           📦 Registrar conteo físico
         </button>
