@@ -548,7 +548,7 @@ async function abrirBOM(opId){
 
     // Fill SKU selector para agregar extras
     if(!allSkus.length){
-      allSkus = await api('skus?select=id,codigo,nombre,categoria_id,categorias(nombre)&activo=eq.true&order=nombre.asc');
+      allSkus = await api('skus?select=id,codigo,nombre,categoria_id,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
       // Ahora que allSkus está cargado, filtrar stock de gabinetes por color seleccionado
       if(selectedColor && selectedColor !== 'A definir'){
         for(const item of currentBOMItems){
