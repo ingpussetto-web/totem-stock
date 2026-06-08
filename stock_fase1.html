@@ -1498,6 +1498,11 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     const ocMap = {};
     (ocs||[]).forEach(o=>{ ocMap[o.id] = o; });
 
+    // ── AJUSTES de stock ──
+    const ajustes = await api(
+      `stock_ajustes?sku_id=eq.${skuIdInt}&select=*&order=created_at.asc`
+    ).catch(()=>[]);
+
     // ── SALIDAS: op_bom_items → ordenes_produccion ──
     const bomItems = await api(
       `op_bom_items?sku_id=eq.${skuIdInt}&incluido=eq.true&estado=eq.asignado&select=qty,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
@@ -1520,16 +1525,17 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     const salidas = Object.values(salidaMap);
 
     // Calcular totales
-    const totalEntradas = (entradas||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
-    const totalSalidas  = (salidas||[]).reduce((s,e)=>s+(e.qty||0),0);
+    const totalEntradas   = (entradas||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
+    const totalSalidas    = (salidas||[]).reduce((s,e)=>s+(e.qty||0),0);
+    const totalAjustes    = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
 
     // stock.cantidad es la fuente de verdad del saldo actual
     const stockObj = (stockData||[]).find(d=>d.sku_id===skuIdInt);
     const stockActual = stockObj ? (stockObj.cantidad||0) : null;
 
-    // stockInicial = stockActual - totalEntradas + totalSalidas
-    const stockInicial = stockActual !== null ? Math.max(0, stockActual - totalEntradas + totalSalidas) : null;
-    const totalEntradasConInicial = totalEntradas + (stockInicial||0);
+    // stockInicial = stockActual - totalEntradas - totalAjustes + totalSalidas
+    const stockInicial = stockActual !== null ? Math.max(0, stockActual - totalEntradas - totalAjustes + totalSalidas) : null;
+    const totalEntradasConInicial = totalEntradas + (stockInicial||0) + totalAjustes;
 
     // Saldo final = stockActual (fuente de verdad)
     const saldoFinal = stockActual !== null ? stockActual : (totalEntradasConInicial - totalSalidas);
@@ -1604,7 +1610,17 @@ async function showHistorialStock(skuId, variante, codigo, btn){
         <thead><tr>
           <th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th>
         </tr></thead>
-        <tbody>${htmlEntradas}</tbody>
+        <tbody>${htmlEntradas}${(ajustes||[]).map(a=>{
+          const fecha = a.created_at ? new Date(a.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+          const dif = a.diferencia >= 0 ? '+'+a.diferencia : a.diferencia;
+          const difClass = a.diferencia >= 0 ? 'hist-num-pos' : 'hist-num-neg';
+          return `<tr>
+            <td>${fecha}</td>
+            <td style="color:var(--text2);font-style:italic;">Conteo físico</td>
+            <td style="color:var(--text3);font-size:11px;">${a.motivo||''}</td>
+            <td style="text-align:right;"><span class="${difClass}">${dif}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
       </table>
 
       <div class="hist-section-title" style="margin-top:18px;">▼ SALIDAS (asignadas a OPs)</div>
@@ -1621,10 +1637,56 @@ async function showHistorialStock(skuId, variante, codigo, btn){
         <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradasConInicial}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
         <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${saldoFinal >= 0 ? '+' : ''}${saldoFinal}</span></span>
       </div>
+      <div style="margin-top:12px;text-align:right;">
+        <button onclick="abrirConteoFisico(${skuIdInt},'${nombreSku.replace(/'/g,"\'")}',${saldoFinal})" 
+          style="font-size:11px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;">
+          📦 Registrar conteo físico
+        </button>
+      </div>
     `;
   } catch(e) {
     body.innerHTML = `<div style="color:var(--red);padding:20px;">Error cargando historial: ${e.message}</div>`;
   }
+}
+
+// ── CONTEO FÍSICO ─────────────────────────────────────────
+let _conteoSkuId = null, _conteoNombre = '', _conteoSaldoActual = 0;
+
+function abrirConteoFisico(skuId, nombre, saldoActual){
+  _conteoSkuId = skuId; _conteoNombre = nombre; _conteoSaldoActual = saldoActual;
+  document.getElementById('conteo-sku-nombre').textContent = nombre;
+  document.getElementById('conteo-saldo-actual').textContent = saldoActual;
+  document.getElementById('conteo-cantidad').value = '';
+  document.getElementById('conteo-motivo').value = '';
+  const dif = document.getElementById('conteo-diferencia');
+  dif.textContent = '—'; dif.className = '';
+  document.getElementById('modal-conteo').classList.add('open');
+}
+
+function calcularDiferenciaConteo(){
+  const contado = parseInt(document.getElementById('conteo-cantidad').value);
+  const dif = document.getElementById('conteo-diferencia');
+  if(isNaN(contado)){ dif.textContent = '—'; dif.className = ''; return; }
+  const diferencia = contado - _conteoSaldoActual;
+  dif.textContent = (diferencia >= 0 ? '+' : '') + diferencia;
+  dif.className = diferencia > 0 ? 'hist-num-pos' : diferencia < 0 ? 'hist-num-neg' : 'hist-num-neu';
+}
+
+async function confirmarConteoFisico(){
+  const contado = parseInt(document.getElementById('conteo-cantidad').value);
+  if(isNaN(contado) || contado < 0){ alert('Ingresá una cantidad válida.'); return; }
+  const motivo = document.getElementById('conteo-motivo').value.trim() || 'Conteo físico';
+  const diferencia = contado - _conteoSaldoActual;
+  try {
+    await api('stock_ajustes', 'POST', {
+      sku_id: _conteoSkuId, cantidad_contada: contado,
+      cantidad_anterior: _conteoSaldoActual, diferencia: diferencia,
+      motivo: motivo, usuario: 'Gerencia'
+    });
+    await api(`stock?sku_id=eq.${_conteoSkuId}`, 'PATCH', { cantidad: contado });
+    closeModal('modal-conteo');
+    await loadStock();
+  } catch(e){ alert('Error: ' + e.message); }
 }
 </script>
 
@@ -1636,6 +1698,35 @@ async function showHistorialStock(skuId, variante, codigo, btn){
       <button class="modal-close" onclick="closeModal('modal-hist-stock')">×</button>
     </div>
     <div id="modal-hist-body"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+  </div>
+</div>
+
+<!-- Modal conteo físico -->
+<div class="modal-bg" id="modal-conteo">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">
+      <span>📦 Conteo físico</span>
+      <button class="modal-close" onclick="closeModal('modal-conteo')">×</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:13px;color:var(--text2);">SKU: <strong id="conteo-sku-nombre"></strong></div>
+      <div style="font-size:12px;color:var(--text3);">Saldo actual en sistema: <strong id="conteo-saldo-actual"></strong> ud.</div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Cantidad contada en caja</label>
+        <input id="conteo-cantidad" type="number" min="0" oninput="calcularDiferenciaConteo()"
+          style="width:100%;margin-top:6px;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:16px;font-weight:600;" placeholder="0">
+      </div>
+      <div style="font-size:13px;color:var(--text2);">Diferencia: <strong id="conteo-diferencia">—</strong></div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Motivo (opcional)</label>
+        <input id="conteo-motivo" type="text"
+          style="width:100%;margin-top:6px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:13px;" placeholder="Ej: Reconteo, unidades encontradas...">
+      </div>
+      <button onclick="confirmarConteoFisico()"
+        style="padding:12px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;">
+        ✓ Confirmar conteo
+      </button>
+    </div>
   </div>
 </div>
 </body>
