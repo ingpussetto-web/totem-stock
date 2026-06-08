@@ -622,14 +622,14 @@ function renderBOMItem(item){
         ${m.nombre}${sinStock?' — Sin stock':' ('+m.stock+' ud.)'}
       </option>`;
     }).join('');
-    varHTML = `<select class="var-select" style="max-width:200px;" onchange="cambiarModeloMiniPC(${item.id},this.value)" ${!incluido?'disabled':''}>
+    varHTML = `<select class="var-select" style="max-width:200px;" data-item-id="${item.id}" onchange="cambiarModeloMiniPC(this.dataset.itemId,this.value)" ${!incluido?'disabled':''}>
       <option value="">Seleccionar modelo...</option>
       ${opciones}
     </select>`;
   } else if(hasVariantes && !esGabinete && !esCooller){
     // Dropdown de variantes para impresoras y periféricos
-    varHTML = `<select class="var-select" onchange="cambiarVariante(${item.id},this.value)" ${!incluido?'disabled':''}>
-      <option value="">Modelo...</option>
+    varHTML = `<select class="var-select" data-item-id="${item.id}" onchange="cambiarVariante(this.dataset.itemId,this.value)" ${!incluido?'disabled':''}>
+      <option value="">Color...</option>
       ${item._variantes.filter(v=>v.valor!=='A definir'&&v.valor!=='a definir').map(v=>`<option value="${v.id}" ${varActual==v.id?'selected':''}>${v.valor}</option>`).join('')}
     </select>`;
   } else if(esGabinete && selectedColor){
