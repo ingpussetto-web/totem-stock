@@ -114,7 +114,7 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 <!-- Modal selección de slot -->
 <div class="confirm-overlay" id="slot-overlay">
   <div class="confirm-sheet">
-    <div class="confirm-title" id="slot-title">¿A qué equipo asignás este insumo?</div>
+    <div class="confirm-title">¿A qué equipo asignás esta Mini PC?</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:16px;" id="slot-subtitle"></div>
     <div id="slot-lista" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;margin-bottom:16px;"></div>
     <button class="confirm-btn-no" onclick="cerrarSlotOverlay()">Cancelar</button>
@@ -531,11 +531,6 @@ function mostrarSelectorSlot(opId, opNumero, cliente){
   if(!entrada) return;
   const items = entrada.items;
 
-  // Título dinámico con el nombre del insumo actual
-  const nombreInsumo = unidadActual?.skus?.nombre || 'este insumo';
-  const titleEl = document.getElementById('slot-title');
-  if(titleEl) titleEl.textContent = '¿A qué equipo asignás ' + nombreInsumo + '?';
-
   document.getElementById('slot-subtitle').textContent = opNumero + ' · ' + cliente;
 
   const lista = document.getElementById('slot-lista');
@@ -553,7 +548,9 @@ function mostrarSelectorSlot(opId, opNumero, cliente){
     } else {
       label = 'Slot ' + item.id;
     }
-    return `<button onclick="seleccionarSlot(${item.id}, ${opId}, '${opNumero}', '${cliente}', ${JSON.stringify(notas)})" 
+    return `<button 
+      data-bom-id="${item.id}" data-op-id="${opId}" data-op-numero="${opNumero}" data-cliente="${cliente.replace(/"/g,'&quot;')}" data-notas="${(notas||'').replace(/"/g,'&quot;')}"
+      onclick="seleccionarSlotBtn(this)"
       style="width:100%;padding:14px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:14px;font-weight:500;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif;">
       ${label}
     </button>`;
@@ -561,6 +558,16 @@ function mostrarSelectorSlot(opId, opNumero, cliente){
 
   const overlay = document.getElementById('slot-overlay');
   overlay.style.display = 'flex';
+}
+
+function seleccionarSlotBtn(btn){
+  const bomId = parseInt(btn.dataset.bomId);
+  const opId = parseInt(btn.dataset.opId);
+  const opNumero = btn.dataset.opNumero;
+  const cliente = btn.dataset.cliente;
+  const notas = btn.dataset.notas;
+  cerrarSlotOverlay();
+  prepararAsignacion(bomId, opId, opNumero, cliente, notas);
 }
 
 function seleccionarSlot(bomId, opId, opNumero, cliente, notas){
