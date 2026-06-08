@@ -665,11 +665,12 @@ function renderBOMItem(item){
     stockHTML = `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${stockColor};white-space:nowrap;padding:2px 7px;border-radius:8px;background:${stockColor}22;border:1px solid ${stockColor}44;">${stockLabel}</span>`;
   }
 
+  const esManual = item.notas === 'Agregado manualmente';
   return `<div class="bom-item ${incluido?'':'excluido'}" id="bom-item-${item.id}">
     <button class="bom-toggle ${incluido?'on':'off'}" onclick="toggleItem('${item.id}')" title="${incluido?'Excluir':'Incluir'}">
       ${incluido?'✓':'✕'}
     </button>
-    <div class="bom-item-nombre">${item.nombre}</div>
+    <div class="bom-item-nombre">${item.nombre}${esManual?'<span style="font-size:9px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">+ Manual</span>':''}</div>
     ${varHTML}
     ${stockHTML}
     <div class="bom-item-qty" style="text-align:right;">
@@ -1126,6 +1127,20 @@ async function guardarBOM(estado){
 async function confirmarBOM(){
   if(!selectedColor || selectedColor==='A definir'){
     if(!confirm('El color del gabinete está como "A definir". ¿Confirmás igual?')) return;
+  }
+
+  // Validar items incluidos con variantes sin seleccionar
+  const sinVariante = currentBOMItems.filter(item =>
+    item.incluido !== false && item.sku_id &&
+    item._variantes && item._variantes.length > 0 &&
+    !esItemGabinete(item) &&
+    !(item.v14_key && (item.v14_key === 'cooler' || item.v14_key === 'cooler_doble')) &&
+    !item.variante_id
+  );
+  if(sinVariante.length){
+    const lista = sinVariante.map(i => '• ' + i.nombre).join('\n');
+    alert("⚠ Los siguientes ítems requieren que selecciones un modelo antes de confirmar:\n\n" + lista + "\n\nSeleccioná el modelo en la BOM y volvé a confirmar.");
+    return;
   }
   // Verificar items sin stock suficiente
   const cantEquiposVerif = currentOP.cantidad || 1;
