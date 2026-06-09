@@ -1637,14 +1637,14 @@ async function showHistorialStock(skuId, variante, codigo, btn){
         <span style="color:var(--text2);font-size:12px;">Entradas <span class="hist-num-pos">+${totalEntradasConInicial}</span> · Salidas <span class="hist-num-neg">−${totalSalidas}</span></span>
         <span style="font-size:13px;color:var(--text2);">Saldo actual: <span class="${saldoClass}">${saldoFinal >= 0 ? '+' : ''}${saldoFinal}</span></span>
       </div>
-      <div style="margin-top:12px;text-align:right;">
+      ${!_esAreaProduccion() ? `<div style="margin-top:12px;text-align:right;">
         <button 
           data-sku-id="${skuIdInt}" data-nombre="${nombreSku.replace(/"/g,'&quot;')}" data-saldo="${saldoFinal}"
           onclick="const b=this;abrirConteoFisico(parseInt(b.dataset.skuId),b.dataset.nombre,parseInt(b.dataset.saldo))"
           style="font-size:11px;padding:6px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);cursor:pointer;">
           📦 Registrar conteo físico
         </button>
-      </div>
+      </div>` : ''}
     `;
   } catch(e) {
     body.innerHTML = `<div style="color:var(--red);padding:20px;">Error cargando historial: ${e.message}</div>`;
@@ -1654,7 +1654,13 @@ async function showHistorialStock(skuId, variante, codigo, btn){
 // ── CONTEO FÍSICO ─────────────────────────────────────────
 let _conteoSkuId = null, _conteoNombre = '', _conteoSaldoActual = 0;
 
+function _esAreaProduccion(){
+  const p = new URLSearchParams(window.location.search);
+  return p.get('area') === 'produccion' || p.get('mode') === 'readonly';
+}
+
 function abrirConteoFisico(skuId, nombre, saldoActual){
+  if(_esAreaProduccion()){ return; }
   _conteoSkuId = skuId; _conteoNombre = nombre; _conteoSaldoActual = saldoActual;
   document.getElementById('conteo-sku-nombre').textContent = nombre;
   document.getElementById('conteo-saldo-actual').textContent = saldoActual;
