@@ -1417,6 +1417,13 @@ function toast(msg){
 // ─── INIT ───────────────────────────────────────────────────────────────────
 // ─── MODO READONLY ───────────────────────────────────────────
 const IS_READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
+
+// Persistir area en sessionStorage para que no se pierda al navegar internamente
+(function(){
+  const p = new URLSearchParams(window.location.search);
+  const area = p.get('area');
+  if(area) sessionStorage.setItem('tn_area', area);
+})();
 if(IS_READONLY){
   // Agregar banner de solo lectura
   document.addEventListener('DOMContentLoaded', ()=>{
@@ -1656,7 +1663,8 @@ let _conteoSkuId = null, _conteoNombre = '', _conteoSaldoActual = 0;
 
 function _esAreaProduccion(){
   const p = new URLSearchParams(window.location.search);
-  return p.get('area') === 'produccion' || p.get('mode') === 'readonly';
+  const area = p.get('area') || sessionStorage.getItem('tn_area') || '';
+  return area === 'produccion' || p.get('mode') === 'readonly';
 }
 
 function abrirConteoFisico(skuId, nombre, saldoActual){
@@ -1764,8 +1772,9 @@ async function confirmarConteoFisico(){
 // Mostrar barra solo si viene desde el área de producción
 (function(){
   const params = new URLSearchParams(window.location.search);
+  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
   const nav = document.querySelector('.prodnav');
-  if(params.get('area') !== 'produccion'){
+  if(area !== 'produccion'){
     if(nav) nav.style.display = 'none';
     return;
   }
@@ -1780,6 +1789,65 @@ async function confirmarConteoFisico(){
     const url = new URL(a.href);
     url.searchParams.set('area', 'produccion');
     a.href = url.toString();
+  });
+})();
+</script>
+
+<!-- BARRA DE NAVEGACIÓN GERENCIA -->
+<style>
+.gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
+.gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
+.gernav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
+.gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
+.gernav-icon{font-size:16px;line-height:1;}
+</style>
+<nav class="gernav">
+  <a class="gernav-btn" id="gnav-inicio" href="https://ingpussetto-web.github.io/totem-stock/index.html">
+    <span class="gernav-icon">🏠</span>Inicio
+  </a>
+  <a class="gernav-btn" id="gnav-cotizador" href="https://ingpussetto-web.github.io/totem-stock/calculador_totem_nube_v16.html">
+    <span class="gernav-icon">💰</span>Cotizador
+  </a>
+  <a class="gernav-btn" id="gnav-ops" href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html">
+    <span class="gernav-icon">✅</span>OPs
+  </a>
+  <a class="gernav-btn" id="gnav-compras" href="https://ingpussetto-web.github.io/totem-stock/compras.html">
+    <span class="gernav-icon">🛒</span>Compras
+  </a>
+  <a class="gernav-btn" id="gnav-recepcion" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html">
+    <span class="gernav-icon">📥</span>Recepción
+  </a>
+  <a class="gernav-btn active" id="gnav-stock" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html">
+    <span class="gernav-icon">📦</span>Stock
+  </a>
+  <a class="gernav-btn" id="gnav-produccion" href="https://ingpussetto-web.github.io/totem-stock/produccion.html">
+    <span class="gernav-icon">🔧</span>Producción
+  </a>
+  <a class="gernav-btn" id="gnav-inventario" href="https://ingpussetto-web.github.io/totem-stock/inventario_inicial.html">
+    <span class="gernav-icon">🏷</span>Inventario
+  </a>
+  <a class="gernav-btn" id="gnav-noticias" href="https://ingpussetto-web.github.io/totem-stock/noticias.html">
+    <span class="gernav-icon">📢</span>Noticias
+  </a>
+</nav>
+<script>
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  const nav = document.querySelector('.gernav');
+  if(area !== 'gerencia'){
+    if(nav) nav.style.display = 'none';
+    return;
+  }
+  document.body.style.paddingBottom = '70px';
+  document.querySelectorAll('.gernav-btn').forEach(a => {
+    if(a.href && !a.href.includes('index.html')){
+      try{
+        const url = new URL(a.href);
+        url.searchParams.set('area', 'gerencia');
+        a.href = url.toString();
+      }catch(e){}
+    }
   });
 })();
 </script>
