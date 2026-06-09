@@ -1784,5 +1784,52 @@ async function deshacerIngreso(recepcionId, ocNumero, ocId){
     </div>
   </div>
 </div>
+
+<!-- BARRA DE NAVEGACIÓN PRODUCCIÓN -->
+<style>
+.prodnav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;background:rgba(13,17,23,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);}
+.prodnav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;min-width:70px;}
+.prodnav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
+.prodnav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
+.prodnav-icon{font-size:18px;line-height:1;}
+</style>
+<nav class="prodnav">
+  <a class="prodnav-btn" id="nav-inicio" href="https://ingpussetto-web.github.io/totem-stock/index_produccion.html">
+    <span class="prodnav-icon">🏠</span>Inicio
+  </a>
+  <a class="prodnav-btn" id="nav-produccion" href="https://ingpussetto-web.github.io/totem-stock/produccion.html">
+    <span class="prodnav-icon">🔧</span>Producción
+  </a>
+  <a class="prodnav-btn" id="nav-recepcion" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html">
+    <span class="prodnav-icon">📥</span>Recepción
+  </a>
+  <a class="prodnav-btn" id="nav-stock" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html?mode=readonly">
+    <span class="prodnav-icon">📦</span>Stock
+  </a>
+</nav>
+<script>
+// Mostrar barra solo si viene desde el área de producción
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const nav = document.querySelector('.prodnav');
+  if(params.get('area') !== 'produccion'){
+    if(nav) nav.style.display = 'none';
+    return;
+  }
+  // Marcar botón activo según la página actual
+  const page = window.location.pathname.split('/').pop().replace('.html','');
+  const map = {produccion:'nav-produccion', recepcion:'nav-recepcion', stock_fase1:'nav-stock'};
+  const activeId = map[page];
+  if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
+  document.body.style.paddingBottom = '70px';
+  // Propagar area=produccion a los links de la barra
+  document.querySelectorAll('.prodnav-btn').forEach(a => {
+    const url = new URL(a.href);
+    url.searchParams.set('area', 'produccion');
+    a.href = url.toString();
+  });
+})();
+</script>
+
 </body>
 </html>
