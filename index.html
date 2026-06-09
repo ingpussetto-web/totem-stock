@@ -467,14 +467,22 @@ const tabNames = {
   'dashboard_produccion': 'tn_dashboard'
 };
 
+// Módulos que no van en área gerencia (abren aparte)
+const noGerencia = ['scan', 'dashboard_produccion'];
+
 document.querySelectorAll('a.mod-card').forEach(a => {
   a.addEventListener('click', function(e) {
     e.preventDefault();
     const basePath = this.href.split('?')[0];
     const fileName = basePath.split('/').pop().replace('.html','');
-    const tabName = tabNames[fileName] || 'tn_' + fileName;
-    const url = basePath + '?v=' + Date.now();
-    window.open(url, tabName);
+    if(noGerencia.includes(fileName)){
+      window.open(basePath + '?v=' + Date.now(), '_blank');
+      return;
+    }
+    const url = new URL(basePath);
+    url.searchParams.set('area', 'gerencia');
+    url.searchParams.set('v', Date.now());
+    window.location.href = url.toString();
   });
 });
 </script>

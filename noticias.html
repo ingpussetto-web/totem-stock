@@ -415,5 +415,77 @@ async function init(){
 }
 init();
 </script>
+
+<!-- BARRA DE NAVEGACIÓN GERENCIA -->
+<style>
+.gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
+.gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
+.gernav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
+.gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
+.gernav-icon{font-size:16px;line-height:1;}
+</style>
+<nav class="gernav">
+  <a class="gernav-btn" id="gnav-inicio" href="https://ingpussetto-web.github.io/totem-stock/index.html">
+    <span class="gernav-icon">🏠</span>Inicio
+  </a>
+  <a class="gernav-btn" id="gnav-cotizador" href="https://ingpussetto-web.github.io/totem-stock/calculador_totem_nube_v16.html">
+    <span class="gernav-icon">💰</span>Cotizador
+  </a>
+  <a class="gernav-btn" id="gnav-ops" href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html">
+    <span class="gernav-icon">✅</span>OPs
+  </a>
+  <a class="gernav-btn" id="gnav-compras" href="https://ingpussetto-web.github.io/totem-stock/compras.html">
+    <span class="gernav-icon">🛒</span>Compras
+  </a>
+  <a class="gernav-btn" id="gnav-recepcion" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html">
+    <span class="gernav-icon">📥</span>Recepción
+  </a>
+  <a class="gernav-btn" id="gnav-stock" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html">
+    <span class="gernav-icon">📦</span>Stock
+  </a>
+  <a class="gernav-btn" id="gnav-produccion" href="https://ingpussetto-web.github.io/totem-stock/produccion.html">
+    <span class="gernav-icon">🔧</span>Producción
+  </a>
+  <a class="gernav-btn" id="gnav-inventario" href="https://ingpussetto-web.github.io/totem-stock/inventario_inicial.html">
+    <span class="gernav-icon">🏷</span>Inventario
+  </a>
+  <a class="gernav-btn" id="gnav-noticias" href="https://ingpussetto-web.github.io/totem-stock/noticias.html">
+    <span class="gernav-icon">📢</span>Noticias
+  </a>
+</nav>
+<script>
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const nav = document.querySelector('.gernav');
+  if(params.get('area') !== 'gerencia'){
+    if(nav) nav.style.display = 'none';
+    return;
+  }
+  // Marcar botón activo
+  const page = window.location.pathname.split('/').pop().replace('.html','');
+  const map = {
+    'calculador_totem_nube_v16':'gnav-cotizador',
+    'ops_ventas':'gnav-ops',
+    'compras':'gnav-compras',
+    'recepcion':'gnav-recepcion',
+    'stock_fase1':'gnav-stock',
+    'produccion':'gnav-produccion',
+    'inventario_inicial':'gnav-inventario',
+    'noticias':'gnav-noticias'
+  };
+  const activeId = map[page];
+  if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
+  document.body.style.paddingBottom = '70px';
+  // Propagar area=gerencia a todos los links de la barra
+  document.querySelectorAll('.gernav-btn').forEach(a => {
+    if(a.href && !a.href.endsWith('index.html')){
+      const url = new URL(a.href);
+      url.searchParams.set('area', 'gerencia');
+      a.href = url.toString();
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
