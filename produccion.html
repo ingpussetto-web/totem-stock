@@ -463,6 +463,11 @@ function renderOPs(lista, vista){
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           ${esTerminada ? '<span style="font-size:11px;color:var(--green);font-weight:600;padding:3px 8px;border:1px solid var(--green);border-radius:4px;white-space:nowrap;">✓ Terminada</span>' : ''}
           ${o.v14_orden ? `<button onclick="event.stopPropagation();verDocOP('${o.v14_orden}','${o.cliente}')" style="font-size:10px;padding:4px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;">📄 Ver Doc. OP</button>` : ''}
+          <button onclick="event.stopPropagation();abrirNotas(${o.id},'${o.op_numero}','${o.cliente.replace(/'/g,"\'")}')" 
+            id="btn-notas-${o.id}"
+            style="font-size:10px;padding:4px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;position:relative;">
+            📋 Notas <span id="badge-notas-${o.id}" style="display:none;background:var(--green);color:#000;border-radius:10px;padding:0 5px;font-size:9px;font-weight:700;margin-left:3px;"></span>
+          </button>
         </div>
       </div>
       ${!esTerminada ? `<div class="op-progress-mini">
@@ -471,6 +476,10 @@ function renderOPs(lista, vista){
       </div>` : ''}
     </div>`;
   }).join('');
+
+  // Cargar badges de notas
+  const opIds = lista.map(o=>o.id);
+  if(opIds.length) setTimeout(()=>cargarBadgesNotas(opIds), 100);
 }
 
 // ─── ABRIR OP ───────────────────────────────────────────────
@@ -1492,6 +1501,220 @@ function cancelarDestino(){
     }
   });
 })();
+</script>
+
+<!-- ═══ MODAL NOTAS DE PROYECTO ═══ -->
+<div id="modal-notas" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:680px;margin:auto;overflow:hidden;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-size:15px;font-weight:600;" id="notas-titulo">Notas del proyecto</div>
+        <div style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;margin-top:2px;" id="notas-subtitulo"></div>
+      </div>
+      <button onclick="cerrarNotas()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);padding:6px 12px;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+
+    <!-- Feed de notas -->
+    <div id="notas-feed" style="max-height:380px;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px;">
+      <div style="text-align:center;color:var(--text3);font-size:12px;padding:20px;">Cargando notas...</div>
+    </div>
+
+    <!-- Formulario nueva nota -->
+    <div style="border-top:1px solid var(--border);padding:18px 22px;background:var(--surface2);">
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:10px;">Nueva nota</div>
+      
+      <!-- Autor -->
+      <div style="display:flex;gap:10px;margin-bottom:10px;">
+        <input id="nota-autor" type="text" placeholder="Tu nombre..." 
+          style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+        <select id="nota-etiqueta" style="padding:8px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:12px;cursor:pointer;">
+          <option value="">Sin etiqueta</option>
+          <option value="📦 Insumos">📦 Insumos</option>
+          <option value="⚠️ Problema">⚠️ Problema</option>
+          <option value="✅ Resuelto">✅ Resuelto</option>
+          <option value="📞 Cliente">📞 Cliente</option>
+          <option value="📝 General">📝 General</option>
+        </select>
+      </div>
+
+      <!-- Texto -->
+      <textarea id="nota-texto" rows="3" placeholder="Escribí tu nota acá..."
+        style="width:100%;padding:10px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;margin-bottom:10px;"></textarea>
+
+      <!-- Archivos -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <label for="nota-archivos" style="display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-size:12px;cursor:pointer;">
+          📎 Adjuntar archivos
+        </label>
+        <input id="nota-archivos" type="file" multiple style="display:none;" onchange="mostrarArchivosSeleccionados()">
+        <div id="archivos-seleccionados" style="font-size:11px;color:var(--text3);"></div>
+      </div>
+
+      <!-- Botón publicar -->
+      <button id="btn-publicar-nota" onclick="publicarNota()" 
+        style="width:100%;padding:10px;background:var(--green);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+        Publicar nota
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── NOTAS DE PROYECTO ────────────────────────────────────────────────
+const SUPABASE_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
+const STORAGE_BUCKET = 'op-notas-archivos';
+
+let _notasOpId = null;
+let _notasOpNumero = '';
+
+async function apiNotas(path, method='GET', body=null){
+  const opts = { method, headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type':'application/json', 'Prefer':'return=representation'} };
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(SUPABASE_URL+'/rest/v1/'+path, opts);
+  if(!r.ok){ const e=await r.text(); throw new Error(e); }
+  return r.status===204 ? null : r.json();
+}
+
+async function cargarBadgesNotas(opIds){
+  if(!opIds.length) return;
+  try{
+    const data = await apiNotas(`op_notas?op_id=in.(${opIds.join(',')})&select=op_id`);
+    const conteos = {};
+    (data||[]).forEach(n=>{ conteos[n.op_id]=(conteos[n.op_id]||0)+1; });
+    opIds.forEach(id=>{
+      const badge = document.getElementById('badge-notas-'+id);
+      const btn = document.getElementById('btn-notas-'+id);
+      if(badge && conteos[id]){
+        badge.textContent = conteos[id];
+        badge.style.display='inline';
+        if(btn) btn.style.color='var(--green)';
+      }
+    });
+  }catch(e){ console.warn('Error cargando badges notas:', e.message); }
+}
+
+async function abrirNotas(opId, opNumero, cliente){
+  _notasOpId = opId;
+  _notasOpNumero = opNumero;
+  document.getElementById('notas-titulo').textContent = cliente;
+  document.getElementById('notas-subtitulo').textContent = opNumero;
+  // Restaurar autor guardado
+  const autorGuardado = localStorage.getItem('tn_nota_autor') || '';
+  document.getElementById('nota-autor').value = autorGuardado;
+  document.getElementById('nota-texto').value = '';
+  document.getElementById('nota-etiqueta').value = '';
+  document.getElementById('archivos-seleccionados').textContent = '';
+  document.getElementById('nota-archivos').value = '';
+  document.getElementById('modal-notas').style.display = 'flex';
+  await renderFeedNotas();
+}
+
+function cerrarNotas(){
+  document.getElementById('modal-notas').style.display = 'none';
+  _notasOpId = null;
+}
+
+function mostrarArchivosSeleccionados(){
+  const files = document.getElementById('nota-archivos').files;
+  const div = document.getElementById('archivos-seleccionados');
+  if(!files.length){ div.textContent=''; return; }
+  div.textContent = Array.from(files).map(f=>f.name).join(', ');
+}
+
+async function renderFeedNotas(){
+  const feed = document.getElementById('notas-feed');
+  feed.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px;">Cargando...</div>';
+  try{
+    const notas = await apiNotas(`op_notas?op_id=eq.${_notasOpId}&select=*,op_notas_archivos(*)&order=created_at.asc`);
+    if(!notas||!notas.length){
+      feed.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:30px;">Sin notas todavía. ¡Sé el primero en dejar una!</div>';
+      return;
+    }
+    feed.innerHTML = notas.map(n=>{
+      const fecha = new Date(n.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const etiquetaHTML = n.etiqueta ? `<span style="font-size:10px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;margin-left:6px;">${n.etiqueta}</span>` : '';
+      const archivosHTML = (n.op_notas_archivos||[]).map(a=>`
+        <a href="${a.url}" target="_blank" 
+          style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--blue);text-decoration:none;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;margin-top:6px;margin-right:4px;">
+          📎 ${a.nombre_archivo}
+        </a>`).join('');
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:600;color:var(--text);">${n.autor}</span>
+          ${etiquetaHTML}
+          <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:auto;">${fecha}</span>
+        </div>
+        ${n.texto ? `<div style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;">${n.texto}</div>` : ''}
+        ${archivosHTML}
+      </div>`;
+    }).join('');
+    // Scroll al final
+    feed.scrollTop = feed.scrollHeight;
+  }catch(e){
+    feed.innerHTML=`<div style="color:var(--red);padding:20px;font-size:12px;">Error: ${e.message}</div>`;
+  }
+}
+
+async function publicarNota(){
+  const autor = document.getElementById('nota-autor').value.trim();
+  const texto = document.getElementById('nota-texto').value.trim();
+  const etiqueta = document.getElementById('nota-etiqueta').value;
+  const files = document.getElementById('nota-archivos').files;
+
+  if(!autor){ alert('Ingresá tu nombre antes de publicar.'); return; }
+  if(!texto && !files.length){ alert('Escribí algo o adjuntá un archivo.'); return; }
+
+  localStorage.setItem('tn_nota_autor', autor);
+
+  const btn = document.getElementById('btn-publicar-nota');
+  btn.textContent = 'Publicando...'; btn.disabled = true;
+
+  try{
+    // Crear nota
+    const [nota] = await apiNotas('op_notas', 'POST', { op_id: _notasOpId, autor, texto: texto||null, etiqueta: etiqueta||null });
+    
+    // Subir archivos si hay
+    if(files.length){
+      for(const file of Array.from(files)){
+        const ext = file.name.split('.').pop();
+        const path = `${_notasOpId}/${nota.id}/${Date.now()}_${file.name}`;
+        // Upload a Supabase Storage
+        const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
+          method: 'POST',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type': file.type },
+          body: file
+        });
+        if(!upRes.ok){ console.warn('Error subiendo archivo:', file.name); continue; }
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
+        await apiNotas('op_notas_archivos', 'POST', { nota_id: nota.id, nombre_archivo: file.name, url: publicUrl });
+      }
+    }
+
+    // Limpiar form y recargar feed
+    document.getElementById('nota-texto').value = '';
+    document.getElementById('nota-etiqueta').value = '';
+    document.getElementById('nota-archivos').value = '';
+    document.getElementById('archivos-seleccionados').textContent = '';
+    await renderFeedNotas();
+
+    // Actualizar badge
+    const badge = document.getElementById('badge-notas-'+_notasOpId);
+    const btnNotas = document.getElementById('btn-notas-'+_notasOpId);
+    if(badge){
+      const actual = parseInt(badge.textContent)||0;
+      badge.textContent = actual+1;
+      badge.style.display='inline';
+      if(btnNotas) btnNotas.style.color='var(--green)';
+    }
+
+  }catch(e){
+    alert('Error al publicar: '+e.message);
+  } finally {
+    btn.textContent='Publicar nota'; btn.disabled=false;
+  }
+}
 </script>
 
 </body>
