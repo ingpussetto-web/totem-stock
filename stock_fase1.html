@@ -1518,10 +1518,9 @@ async function showHistorialStock(skuId, variante, codigo, btn){
     const entradas = recItems || [];
 
     // ── Agrupar salidas por OP (evita duplicados por equipo_num) ──
-    // Solo contar OPs activas — las completadas ya fueron despachadas y su stock no está en depósito
+    // Todas las OPs se muestran en historial, completadas incluidas
     const salidaMap = {};
     (bomItems||[]).forEach(s=>{
-      if(s.ordenes_produccion?.estado === 'completada') return;
       const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
       if(!salidaMap[opNum]){
         salidaMap[opNum] = { ...s, qty: s.qty||0 };
