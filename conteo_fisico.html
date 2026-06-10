@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Conteo Físico</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.09);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:28px 32px 90px;}
+
+.page-header{margin-bottom:28px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+/* Selector SKU */
+.sku-selector{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.sku-selector label{font-size:12px;color:var(--text2);white-space:nowrap;}
+select.sku-select{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer;flex:1;min-width:250px;}
+select.sku-select:focus{outline:none;border-color:var(--green);}
+.btn{padding:8px 16px;font-size:12px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.red{border-color:var(--red);color:var(--red);}
+.btn.red:hover{background:var(--red-dim);}
+
+/* Panel principal */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;margin-bottom:16px;}
+.panel-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:16px;}
+
+/* Métricas */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:20px;}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+.metric.green{background:var(--green-dim);border-color:var(--green-border);}
+.metric.amber{background:var(--amber-dim);border-color:var(--amber-border);}
+.metric.red{background:var(--red-dim);border-color:var(--red-border);}
+.metric.blue{background:var(--blue-dim);border-color:rgba(77,159,255,0.25);}
+.metric-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;margin-bottom:5px;}
+.metric-value{font-size:24px;font-weight:600;font-family:'DM Mono',monospace;line-height:1;}
+.metric.green .metric-value{color:var(--green);}
+.metric.amber .metric-value{color:var(--amber);}
+.metric.red .metric-value{color:var(--red);}
+.metric.blue .metric-value{color:var(--blue);}
+
+/* Tablas de movimientos */
+.mov-table{width:100%;border-collapse:collapse;font-size:12px;}
+.mov-table th{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;font-weight:400;padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);}
+.mov-table td{padding:8px 8px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;}
+.mov-table tr:last-child td{border-bottom:none;}
+.mov-table td.num{font-family:'DM Mono',monospace;text-align:right;font-weight:600;}
+.mov-table td.num.pos{color:var(--green);}
+.mov-table td.num.neg{color:var(--red);}
+.mov-table td.fecha{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);}
+.badge{display:inline-block;font-size:9px;padding:2px 7px;border-radius:4px;font-family:'DM Mono',monospace;}
+.badge.completada{background:rgba(255,255,255,0.05);color:var(--text3);}
+.badge.en_produccion{background:var(--green-dim);color:var(--green);}
+.badge.asignado{background:var(--blue-dim);color:var(--blue);}
+.badge.pendiente{background:var(--amber-dim);color:var(--amber);}
+.empty-row{color:var(--text3);font-style:italic;padding:12px 8px;}
+
+/* Sección de conteo */
+.conteo-section{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:20px;margin-top:20px;}
+.conteo-title{font-size:13px;font-weight:600;margin-bottom:16px;}
+.conteo-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+.conteo-label{font-size:12px;color:var(--text2);min-width:160px;}
+.conteo-input{background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 12px;color:var(--text);font-size:18px;font-family:'DM Mono',monospace;width:100px;text-align:center;}
+.conteo-input:focus{outline:none;border-color:var(--green);}
+
+/* Conclusión */
+.conclusion{border-radius:var(--radius-lg);padding:18px 20px;margin-top:16px;display:none;}
+.conclusion.ok{background:var(--green-dim);border:1px solid var(--green-border);}
+.conclusion.alerta{background:var(--amber-dim);border:1px solid var(--amber-border);}
+.conclusion.critico{background:var(--red-dim);border:1px solid var(--red-border);}
+.conclusion-icon{font-size:20px;margin-bottom:8px;}
+.conclusion-title{font-size:14px;font-weight:600;margin-bottom:6px;}
+.conclusion-detail{font-size:12px;color:var(--text2);line-height:1.6;}
+
+/* Ajuste */
+.ajuste-section{margin-top:16px;display:none;}
+.motivo-input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;resize:none;min-height:70px;}
+.motivo-input:focus{outline:none;border-color:var(--amber);}
+.motivo-label{font-size:11px;color:var(--text2);margin-bottom:6px;display:block;}
+
+/* Estado loading */
+.loading{color:var(--text3);font-size:12px;padding:20px;text-align:center;}
+.error-msg{color:var(--red);font-size:12px;padding:12px;}
+
+/* Barra nav */
+.gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
+.gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
+.gernav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
+.gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
+.gernav-icon{font-size:16px;line-height:1;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-title">📦 Conteo Físico</div>
+  <div class="page-sub">Verificación de stock real vs registrado</div>
+</div>
+
+<!-- Selector SKU -->
+<div class="sku-selector">
+  <label>Producto a contar:</label>
+  <select class="sku-select" id="sku-select">
+    <option value="">— Seleccioná un SKU —</option>
+  </select>
+  <button class="btn green" onclick="iniciarConteo()">Cargar datos</button>
+</div>
+
+<!-- Contenido dinámico -->
+<div id="conteo-content"></div>
+
+<!-- Nav -->
+<nav class="gernav" id="gernav" style="display:none;">
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/index.html"><span class="gernav-icon">🏠</span>Inicio</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/calculador_totem_nube_v16.html"><span class="gernav-icon">💰</span>Cotizador</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html"><span class="gernav-icon">✅</span>OPs</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/compras.html"><span class="gernav-icon">🛒</span>Compras</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html"><span class="gernav-icon">📥</span>Recepción</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html"><span class="gernav-icon">📦</span>Stock</a>
+  <a class="gernav-btn active" href="https://ingpussetto-web.github.io/totem-stock/conteo_fisico.html"><span class="gernav-icon">🔢</span>Conteo</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/produccion.html"><span class="gernav-icon">🔧</span>Producción</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/inventario_inicial.html"><span class="gernav-icon">🏷</span>Inventario</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/noticias.html"><span class="gernav-icon">📢</span>Noticias</a>
+</nav>
+
+<script>
+const SUPA_URL = localStorage.getItem('supa_url') || '';
+const SUPA_KEY = localStorage.getItem('supa_key') || '';
+
+async function api(path, method='GET', body=null){
+  if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración Supabase. Configurá desde Stock → Configuración.');
+  const opts = {
+    method,
+    headers:{
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'return=representation' : ''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  if(!res.ok){ const err = await res.text(); throw new Error(err); }
+  if(res.status===204) return null;
+  return res.json();
+}
+
+function fmt_fecha(str){
+  if(!str) return '—';
+  return new Date(str).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+
+// ─── Cargar lista de SKUs ───────────────────────────────────────────────────
+async function cargarSkus(){
+  try {
+    const skus = await api('skus?select=id,codigo,nombre,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
+    const sel = document.getElementById('sku-select');
+    (skus||[]).forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.dataset.tracking = s.tracking||'cantidad';
+      opt.textContent = `${s.nombre} (${s.tracking==='uid'?'UID':'Cantidad'})`;
+      sel.appendChild(opt);
+    });
+  } catch(e){
+    document.getElementById('conteo-content').innerHTML = `<div class="error-msg">Error cargando SKUs: ${e.message}</div>`;
+  }
+}
+
+// ─── Iniciar conteo ─────────────────────────────────────────────────────────
+async function iniciarConteo(){
+  const sel = document.getElementById('sku-select');
+  const skuId = parseInt(sel.value);
+  if(!skuId){ alert('Seleccioná un SKU primero.'); return; }
+  const tracking = sel.options[sel.selectedIndex].dataset.tracking;
+  const nombre = sel.options[sel.selectedIndex].textContent.replace(/\s*\(.*\)$/,'').trim();
+
+  const content = document.getElementById('conteo-content');
+  content.innerHTML = '<div class="loading">Cargando datos...</div>';
+
+  try {
+    if(tracking === 'uid'){
+      await renderUID(skuId, nombre, content);
+    } else {
+      await renderCantidad(skuId, nombre, content);
+    }
+  } catch(e){
+    content.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+  }
+}
+
+// ─── TRACKING UID ──────────────────────────────────────────────────────────
+async function renderUID(skuId, nombre, content){
+  // Todas las unidades físicas del SKU
+  const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variantes(valor)&order=uid.asc`).catch(()=>[]);
+
+  const emitidas   = (unidades||[]).length;
+  const enStock    = (unidades||[]).filter(u=>u.estado==='stock').length;
+  const asignadas  = (unidades||[]).filter(u=>u.estado==='reservado').length;
+  const producidas = (unidades||[]).filter(u=>u.estado==='producido').length;
+  const baja       = (unidades||[]).filter(u=>u.estado==='baja').length;
+  const teorico    = enStock + asignadas;
+
+  // Salidas: op_bom_items con uid_asignado
+  const bomItems = await api(
+    `op_bom_items?sku_id=eq.${skuId}&uid_asignado=not.is.null&select=uid_asignado,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
+  ).catch(()=>[]);
+
+  // Ajustes
+  const ajustes = await api(`stock_ajustes?sku_id=eq.${skuId}&select=*&order=created_at.asc`).catch(()=>[]);
+
+  // Render
+  content.innerHTML = `
+    <div class="panel">
+      <div class="panel-title">📊 ${nombre} — Resumen de unidades</div>
+      <div class="metrics">
+        <div class="metric blue">
+          <div class="metric-label">Etiquetas emitidas</div>
+          <div class="metric-value" style="color:var(--blue);">${emitidas}</div>
+        </div>
+        <div class="metric green">
+          <div class="metric-label">En depósito (stock)</div>
+          <div class="metric-value">${enStock}</div>
+        </div>
+        <div class="metric amber">
+          <div class="metric-label">Asignadas a OPs</div>
+          <div class="metric-value" style="color:var(--amber);">${asignadas}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Producidas / salidas</div>
+          <div class="metric-value" style="color:var(--text2);">${producidas}</div>
+        </div>
+        ${baja>0?`<div class="metric red"><div class="metric-label">Baja</div><div class="metric-value">${baja}</div></div>`:''}
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">
+        <strong style="color:var(--text);">Teórico en depósito: ${teorico}</strong> 
+        <span style="color:var(--text3);">(stock ${enStock} + asignadas ${asignadas})</span>
+      </div>
+
+      <!-- Tabla de unidades -->
+      <div class="panel-title">📋 Detalle de unidades emitidas</div>
+      <table class="mov-table">
+        <thead><tr>
+          <th>UID</th><th>Variante</th><th>Estado</th><th>OP asignada</th>
+        </tr></thead>
+        <tbody>
+          ${(unidades||[]).length === 0
+            ? `<tr><td colspan="4" class="empty-row">Sin unidades registradas</td></tr>`
+            : (unidades||[]).map(u=>{
+                const bom = (bomItems||[]).find(b=>b.uid_asignado===u.uid);
+                const op  = bom?.ordenes_produccion;
+                const estadoColor = {stock:'var(--green)',reservado:'var(--blue)',producido:'var(--text3)',baja:'var(--red)'}[u.estado]||'var(--text2)';
+                const estadoLabel = {stock:'En stock',reservado:'Asignado',producido:'Producido',baja:'Baja'}[u.estado]||u.estado;
+                return `<tr>
+                  <td style="font-family:'DM Mono',monospace;font-size:11px;">${u.uid}</td>
+                  <td style="font-size:11px;color:var(--text3);">${u.variantes?.valor||'—'}</td>
+                  <td><span style="color:${estadoColor};font-size:11px;font-weight:600;">${estadoLabel}</span></td>
+                  <td style="font-size:11px;">${op ? `${op.op_numero} · ${op.cliente||'—'} <span class="badge ${op.estado}">${op.estado}</span>` : '—'}</td>
+                </tr>`;
+              }).join('')
+          }
+        </tbody>
+      </table>
+
+      ${ajustes?.length ? `
+      <div class="panel-title" style="margin-top:18px;">⚙ Ajustes previos</div>
+      <table class="mov-table">
+        <thead><tr><th>Fecha</th><th>Motivo</th><th style="text-align:right;">Diferencia</th></tr></thead>
+        <tbody>
+          ${ajustes.map(a=>`<tr>
+            <td class="fecha">${fmt_fecha(a.created_at)}</td>
+            <td>${a.motivo||'—'}</td>
+            <td class="num ${a.diferencia>=0?'pos':'neg'}">${a.diferencia>=0?'+':''}${a.diferencia}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      <!-- Conteo físico -->
+      ${renderConteoInput(skuId, nombre, teorico, 'uid')}
+    </div>
+  `;
+
+  // Bind input
+  document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(teorico, nombre, skuId));
+}
+
+// ─── TRACKING CANTIDAD ─────────────────────────────────────────────────────
+async function renderCantidad(skuId, nombre, content){
+  // Entradas por recepción
+  const ocItems = await api(`oc_items?sku_id=eq.${skuId}&select=id,oc_id`).catch(()=>[]);
+  const ocItemIds = (ocItems||[]).map(i=>i.id);
+  const ocIds = [...new Set((ocItems||[]).map(i=>i.oc_id).filter(Boolean))];
+
+  const recItems = ocItemIds.length
+    ? await api(`recepcion_items?oc_item_id=in.(${ocItemIds.join(',')})&select=cantidad_recibida,color_recibido,oc_item_id,recepcion_id,recepciones(recepcion_numero,created_at,oc_id)`).catch(()=>[])
+    : [];
+
+  const ocs = ocIds.length
+    ? await api(`ordenes_compra?id=in.(${ocIds.join(',')})&select=id,oc_numero,proveedores(razon_social)`).catch(()=>[])
+    : [];
+  const ocMap = {};
+  (ocs||[]).forEach(o=>{ ocMap[o.id] = o; });
+
+  // Ajustes
+  const ajustes = await api(`stock_ajustes?sku_id=eq.${skuId}&select=*&order=created_at.asc`).catch(()=>[]);
+
+  // Salidas por BOM
+  const bomItems = await api(
+    `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&estado=eq.asignado&select=qty,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
+  ).catch(()=>[]);
+
+  // Agrupar salidas por OP
+  const salidaMap = {};
+  (bomItems||[]).forEach(s=>{
+    const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
+    if(!salidaMap[opNum]){
+      salidaMap[opNum] = { ...s, qty: s.qty||0 };
+    } else {
+      salidaMap[opNum].qty += (s.qty||0);
+    }
+  });
+  const salidas = Object.values(salidaMap);
+
+  // Stock actual
+  const stockRow = await api(`stock?sku_id=eq.${skuId}&select=cantidad`).catch(()=>[]);
+  const stockActual = stockRow?.[0]?.cantidad ?? 0;
+
+  const totalEntradas = (recItems||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
+  const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
+  const totalSalidas  = salidas.reduce((s,e)=>s+(e.qty||0),0);
+
+  content.innerHTML = `
+    <div class="panel">
+      <div class="panel-title">📊 ${nombre} — Movimientos registrados</div>
+      <div class="metrics">
+        <div class="metric green">
+          <div class="metric-label">Total entradas</div>
+          <div class="metric-value">+${totalEntradas + totalAjustes}</div>
+        </div>
+        <div class="metric red">
+          <div class="metric-label">Total salidas</div>
+          <div class="metric-value">−${totalSalidas}</div>
+        </div>
+        <div class="metric ${stockActual<=0?'red':stockActual<=3?'amber':'green'}">
+          <div class="metric-label">Saldo en sistema</div>
+          <div class="metric-value">${stockActual}</div>
+        </div>
+      </div>
+
+      <!-- Entradas -->
+      <div class="panel-title">▼ ENTRADAS</div>
+      <table class="mov-table">
+        <thead><tr><th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th></tr></thead>
+        <tbody>
+          ${!(recItems||[]).length && !(ajustes||[]).length
+            ? `<tr><td colspan="4" class="empty-row">Sin recepciones registradas</td></tr>`
+            : [
+                ...(recItems||[]).map(e=>{
+                  const rec  = e.recepciones;
+                  const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
+                  const prov = oc?.proveedores?.razon_social || '—';
+                  const color = e.color_recibido ? `<span style="font-size:10px;color:#ff9900;margin-left:6px;">● ${e.color_recibido}</span>` : '';
+                  return `<tr>
+                    <td class="fecha">${fmt_fecha(rec?.created_at)}</td>
+                    <td>${prov}${color}</td>
+                    <td style="font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
+                    <td class="num pos">+${e.cantidad_recibida||0}</td>
+                  </tr>`;
+                }),
+                ...(ajustes||[]).map(a=>`<tr>
+                  <td class="fecha">${fmt_fecha(a.created_at)}</td>
+                  <td style="font-style:italic;color:var(--text3);">Ajuste conteo físico</td>
+                  <td style="font-size:11px;color:var(--text3);">${a.motivo||''}</td>
+                  <td class="num ${a.diferencia>=0?'pos':'neg'}">${a.diferencia>=0?'+':''}${a.diferencia}</td>
+                </tr>`)
+              ].join('')
+          }
+        </tbody>
+      </table>
+
+      <!-- Salidas -->
+      <div class="panel-title" style="margin-top:18px;">▼ SALIDAS (asignadas a OPs)</div>
+      <table class="mov-table">
+        <thead><tr><th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th></tr></thead>
+        <tbody>
+          ${!salidas.length
+            ? `<tr><td colspan="4" class="empty-row">Sin asignaciones registradas</td></tr>`
+            : salidas.map(s=>{
+                const op = s.ordenes_produccion;
+                return `<tr>
+                  <td class="fecha">${fmt_fecha(op?.updated_at)}</td>
+                  <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
+                  <td>${op?.cliente||'—'} <span class="badge ${op?.estado}">${op?.estado||'—'}</span></td>
+                  <td class="num neg">−${s.qty||0}</td>
+                </tr>`;
+              }).join('')
+          }
+        </tbody>
+      </table>
+
+      <!-- Conteo físico -->
+      ${renderConteoInput(skuId, nombre, stockActual, 'cantidad')}
+    </div>
+  `;
+
+  document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusion(stockActual, nombre, skuId));
+}
+
+// ─── HTML del input de conteo ──────────────────────────────────────────────
+function renderConteoInput(skuId, nombre, teorico, tracking){
+  return `
+    <div class="conteo-section">
+      <div class="conteo-title">🔢 Ingresá el conteo físico real</div>
+      <div class="conteo-row">
+        <span class="conteo-label">Saldo teórico en sistema:</span>
+        <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);">${teorico}</span>
+      </div>
+      <div class="conteo-row">
+        <span class="conteo-label">Cantidad contada físicamente:</span>
+        <input type="number" id="input-conteo" class="conteo-input" min="0" placeholder="0"
+               data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}" 
+               data-teorico="${teorico}" data-tracking="${tracking}">
+      </div>
+      <div id="conclusion-box"></div>
+      <div id="ajuste-section" class="ajuste-section">
+        <label class="motivo-label">Motivo del ajuste (obligatorio):</label>
+        <textarea id="input-motivo" class="motivo-input" placeholder="Ej: Unidades dañadas descartadas, error de carga inicial, robo, etc."></textarea>
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+          <button class="btn green" onclick="confirmarAjuste()">✓ Confirmar ajuste</button>
+          <button class="btn" onclick="cancelarAjuste()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ─── Calcular conclusión (cantidad) ───────────────────────────────────────
+function calcularConclusion(teorico, nombre, skuId){
+  const input = document.getElementById('input-conteo');
+  const val = input.value.trim();
+  if(val === '') { limpiarConclusion(); return; }
+  const conteo = parseInt(val);
+  if(isNaN(conteo) || conteo < 0) { limpiarConclusion(); return; }
+  mostrarConclusion(conteo, teorico, nombre, skuId);
+}
+
+// ─── Calcular conclusión (uid) ────────────────────────────────────────────
+function calcularConclusionUID(teorico, nombre, skuId){
+  calcularConclusion(teorico, nombre, skuId);
+}
+
+// ─── Mostrar conclusión ───────────────────────────────────────────────────
+function mostrarConclusion(conteo, teorico, nombre, skuId){
+  const box = document.getElementById('conclusion-box');
+  const ajusteSection = document.getElementById('ajuste-section');
+  const diferencia = conteo - teorico;
+
+  let tipo, icon, titulo, detalle;
+
+  if(diferencia === 0){
+    tipo = 'ok';
+    icon = '✅';
+    titulo = 'Coincide — no se necesita ajuste';
+    detalle = `El conteo físico (${conteo}) coincide exactamente con el saldo registrado en el sistema (${teorico}). No se requiere ninguna acción.`;
+    ajusteSection.style.display = 'none';
+  } else if(Math.abs(diferencia) <= 2){
+    tipo = 'alerta';
+    icon = '⚠️';
+    titulo = `Diferencia menor: ${diferencia > 0 ? '+' : ''}${diferencia} unidades`;
+    detalle = `El sistema dice ${teorico} pero contaste ${conteo}. 
+      ${diferencia > 0
+        ? `Hay ${diferencia} unidad(es) de más en el depósito sin registro. Puede ser una recepción no registrada.`
+        : `Faltan ${Math.abs(diferencia)} unidad(es). Revisá si hubo una salida sin escanear o una unidad dañada.`
+      }
+      Si confirmás el ajuste, el sistema va a quedar en ${conteo}.`;
+    ajusteSection.style.display = 'block';
+  } else {
+    tipo = 'critico';
+    icon = '🔴';
+    titulo = `Diferencia importante: ${diferencia > 0 ? '+' : ''}${diferencia} unidades`;
+    detalle = `El sistema dice ${teorico} pero contaste ${conteo}. 
+      ${diferencia > 0
+        ? `Hay ${diferencia} unidades de más sin trazabilidad. Revisá si hay recepciones no registradas o ingresos manuales.`
+        : `Faltan ${Math.abs(diferencia)} unidades. Revisá el historial de salidas — puede haber OPs sin escanear, unidades dañadas o un error de carga inicial.`
+      }
+      Se requiere una justificación clara antes de ajustar.`;
+    ajusteSection.style.display = 'block';
+  }
+
+  box.innerHTML = `
+    <div class="conclusion ${tipo}" id="conclusion-final" 
+         data-diferencia="${diferencia}" data-conteo="${conteo}" data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}">
+      <div class="conclusion-icon">${icon}</div>
+      <div class="conclusion-title">${titulo}</div>
+      <div class="conclusion-detail">${detalle}</div>
+    </div>
+  `;
+}
+
+function limpiarConclusion(){
+  const box = document.getElementById('conclusion-box');
+  const ajusteSection = document.getElementById('ajuste-section');
+  if(box) box.innerHTML = '';
+  if(ajusteSection) ajusteSection.style.display = 'none';
+}
+
+// ─── Confirmar ajuste ─────────────────────────────────────────────────────
+async function confirmarAjuste(){
+  const motivo = document.getElementById('input-motivo').value.trim();
+  if(!motivo){ alert('Ingresá un motivo para el ajuste.'); return; }
+
+  const conclusion = document.getElementById('conclusion-final');
+  if(!conclusion) return;
+
+  const diferencia = parseInt(conclusion.dataset.diferencia);
+  const conteo     = parseInt(conclusion.dataset.conteo);
+  const skuId      = parseInt(conclusion.dataset.skuId);
+  const nombre     = conclusion.dataset.nombre;
+
+  const input = document.getElementById('input-conteo');
+  const tracking = input.dataset.tracking;
+
+  try {
+    // 1. Registrar ajuste en stock_ajustes
+    await api('stock_ajustes', 'POST', {
+      sku_id: skuId,
+      diferencia: diferencia,
+      motivo: `Conteo físico — ${motivo}`,
+      conteo_real: conteo
+    });
+
+    // 2. Actualizar stock.cantidad si tracking=cantidad
+    if(tracking === 'cantidad'){
+      // Upsert stock
+      const stockExist = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad`).catch(()=>[]);
+      if(stockExist?.length){
+        await api(`stock?sku_id=eq.${skuId}`, 'PATCH', { cantidad: conteo });
+      } else {
+        await api('stock', 'POST', { sku_id: skuId, cantidad: conteo });
+      }
+    }
+
+    // Feedback
+    document.getElementById('ajuste-section').style.display = 'none';
+    document.getElementById('conclusion-box').innerHTML = `
+      <div class="conclusion ok">
+        <div class="conclusion-icon">✅</div>
+        <div class="conclusion-title">Ajuste registrado correctamente</div>
+        <div class="conclusion-detail">
+          ${nombre} ajustado a <strong>${conteo}</strong> unidades.<br>
+          Diferencia registrada: ${diferencia > 0 ? '+' : ''}${diferencia} · Motivo: ${motivo}
+        </div>
+      </div>
+    `;
+    document.getElementById('input-conteo').value = '';
+
+  } catch(e){
+    alert('Error al guardar el ajuste: ' + e.message);
+  }
+}
+
+function cancelarAjuste(){
+  document.getElementById('input-motivo').value = '';
+  document.getElementById('ajuste-section').style.display = 'none';
+  limpiarConclusion();
+  document.getElementById('input-conteo').value = '';
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  const nav = document.getElementById('gernav');
+
+  if(area === 'gerencia'){
+    if(nav) nav.style.display = 'flex';
+    document.body.style.paddingBottom = '90px';
+    // Propagar area=gerencia a todos los links
+    document.querySelectorAll('.gernav-btn').forEach(a => {
+      if(a.href && !a.href.includes('index.html')){
+        try{
+          const url = new URL(a.href);
+          url.searchParams.set('area', 'gerencia');
+          a.href = url.toString();
+        }catch(e){}
+      }
+    });
+  }
+
+  if(!SUPA_URL || !SUPA_KEY){
+    document.getElementById('conteo-content').innerHTML = `
+      <div class="error-msg">⚠️ Sin configuración de Supabase. Entrá a Stock → Configuración y guardá las credenciales.</div>
+    `;
+    return;
+  }
+
+  cargarSkus();
+})();
+</script>
+
+</body>
+</html>
