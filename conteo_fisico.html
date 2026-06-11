@@ -297,7 +297,7 @@ async function renderUID(skuId, nombre, content){
   `;
 
   // Bind input
-  document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(teorico, nombre, skuId));
+  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(teorico, nombre, skuId));
 }
 
 // ─── TRACKING CANTIDAD ─────────────────────────────────────────────────────
@@ -419,7 +419,7 @@ async function renderCantidad(skuId, nombre, content){
     </div>
   `;
 
-  document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusion(stockActual, nombre, skuId));
+  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusion(stockActual, nombre, skuId));
 }
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
