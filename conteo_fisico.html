@@ -141,6 +141,7 @@ select.sku-select:focus{outline:none;border-color:var(--green);}
 <script>
 const SUPA_URL = localStorage.getItem('supa_url') || '';
 const SUPA_KEY = localStorage.getItem('supa_key') || '';
+const READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
 
 async function api(path, method='GET', body=null){
   if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración Supabase. Configurá desde Stock → Configuración.');
@@ -423,6 +424,13 @@ async function renderCantidad(skuId, nombre, content){
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
 function renderConteoInput(skuId, nombre, teorico, tracking){
+  if(READONLY){
+    return `
+      <div class="conteo-section" style="opacity:0.5;pointer-events:none;">
+        <div class="conteo-title">🔒 Solo consulta — saldo teórico en sistema: ${teorico}</div>
+      </div>
+    `;
+  }
   return `
     <div class="conteo-section">
       <div class="conteo-title">🔢 Ingresá el conteo físico real</div>
