@@ -560,9 +560,8 @@ function mostrarSelectorSlot(opId, opNumero, cliente){
     const notas = item.notas || '';
     const eq = item.equipo_num;
     if(notas.startsWith('🖥')){
-      // Es player — extraer número de equipo de notas si está
-      const match = notas.match(/Equipo\s*(\d+)/i);
-      label = match ? '🖥 Player · Equipo ' + match[1] : '🖥 Player';
+      // Es player — usar equipo_num directamente
+      label = eq ? '🖥 Player · Equipo ' + eq : '🖥 Player';
     } else if(eq){
       label = '🖦 Gabinete · Equipo ' + eq;
     } else {
