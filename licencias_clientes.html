@@ -208,13 +208,12 @@ td.nombre{color:var(--text);font-weight:500;font-size:13px;}
       <div class="form-group">
         <label class="form-label">Tipo *</label>
         <select class="form-select" id="f-tipo">
-          <option value="Agro">Agro</option>
-          <option value="Salud">Salud</option>
-          <option value="Retail">Retail</option>
-          <option value="Gastronomia">Gastronomía</option>
-          <option value="Educacion">Educación</option>
-          <option value="Corporativo">Corporativo</option>
-          <option value="Gobierno">Gobierno</option>
+          <option value="Turnero">Turnero</option>
+          <option value="Publicidad Digital">Publicidad Digital</option>
+          <option value="Autogestion y Pagos">Autogestión y Pagos</option>
+          <option value="Agente IA">Agente IA</option>
+          <option value="Vigilancia Remota">Vigilancia Remota</option>
+          <option value="Atencion Remota">Atención Remota</option>
           <option value="Otro">Otro</option>
         </select>
       </div>
@@ -360,12 +359,13 @@ function getCotAsoc(p){
   return cotizaciones.find(c => c.numero && c.numero.replace('COT-','') === p.orden) || null;
 }
 
-// ─── Proyectos con licencia (tienen ítems de licencia o están en estados clave) ──
+// ─── Proyectos con licencia (solo los que tienen ítem cat=licencia) ──────────
+function getLicenciaItem(p){
+  return (p.items||[]).find(i => i.cat === 'licencia');
+}
 function proyectosConLicencia(){
-  return proyectos.filter(p => {
-    const estados = ['despachado','instalado','en_produccion','listo_despacho'];
-    return estados.includes(p.estado);
-  });
+  const estados = ['despachado','instalado','en_produccion','listo_despacho'];
+  return proyectos.filter(p => estados.includes(p.estado) && getLicenciaItem(p));
 }
 
 // ─── Render tabla ────────────────────────────────────────────────────────────
@@ -403,7 +403,11 @@ function renderTabla(){
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${p.orden||'—'}</td>
       <td class="nombre">${p.cliente}</td>
-      <td style="font-size:11px;">${p.notas||'—'}<br>${cot?.contacto?`<span style="color:var(--text3);">${cot.contacto}</span>`:''}</td>
+      <td style="font-size:11px;">
+        ${getLicenciaItem(p)?.desc ? `<span style="color:var(--green);font-size:10px;">🔑 ${getLicenciaItem(p).desc}</span><br>` : ''}
+        ${p.notas||'—'}
+        ${cot?.contacto?`<br><span style="color:var(--text3);">${cot.contacto}</span>`:''}
+      </td>
       <td><span class="badge ${p.estado}">${estadoLabel}</span></td>
       <td>${gestorHtml}</td>
       <td style="text-align:right;">
@@ -434,14 +438,15 @@ function abrirModal(orden){
   document.getElementById('f-notas-cliente').value = '';
   document.getElementById('f-activo').value = 'true';
 
-  // Licencia
-  document.getElementById('f-descripcion').value = p.notas || cot?.sistema || '';
+  // Licencia — tomar datos del ítem cat=licencia
+  const licItem = getLicenciaItem(p);
+  document.getElementById('f-descripcion').value = licItem?.desc || p.notas || cot?.sistema || '';
   document.getElementById('f-fecha-alta').value = new Date().toISOString().split('T')[0];
   document.getElementById('f-orden').value = orden;
-  document.getElementById('f-precio').value = '';
-  document.getElementById('f-puestos').value = '';
+  document.getElementById('f-precio').value = licItem?.precio || '';
+  document.getElementById('f-puestos').value = licItem?.cant ? `x${licItem.cant}` : '';
   document.getElementById('f-notas-lic').value = '';
-  document.getElementById('f-estado-lic').value = p.estado === 'instalado' ? 'activa' : 'comprometida';
+  document.getElementById('f-estado-lic').value = licItem?.estado || (p.estado === 'instalado' ? 'activa' : 'comprometida');
 
   // Si ya está sincronizado, mostrar título diferente
   const title = sync ? `Editar sincronización · ${p.cliente}` : `Sincronizar · ${p.cliente}`;
