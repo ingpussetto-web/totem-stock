@@ -344,8 +344,14 @@ async function renderCantidad(skuId, nombre, content){
   const totalEntradas = (recItems||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
   const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
   const totalSalidas  = salidas.reduce((s,e)=>s+(e.qty||0),0);
-  // Saldo teórico calculado desde movimientos reales, no desde stock.cantidad
-  const saldoTeorico = totalEntradas + totalAjustes - totalSalidas;
+
+  // Si no hay recepciones ni ajustes, el stock fue cargado manualmente — usarlo como base
+  const sinMovimientos = totalEntradas === 0 && totalAjustes === 0;
+  const stockBase = sinMovimientos ? stockActual : 0;
+  // Saldo teórico: movimientos reales, o stock manual si no hay historial
+  const saldoTeorico = sinMovimientos
+    ? stockActual - totalSalidas
+    : totalEntradas + totalAjustes - totalSalidas;
 
   content.innerHTML = `
     <div class="panel">
@@ -353,7 +359,7 @@ async function renderCantidad(skuId, nombre, content){
       <div class="metrics">
         <div class="metric green">
           <div class="metric-label">Total entradas</div>
-          <div class="metric-value">+${totalEntradas + totalAjustes}</div>
+          <div class="metric-value">+${sinMovimientos ? stockActual : (totalEntradas + totalAjustes)}</div>
         </div>
         <div class="metric red">
           <div class="metric-label">Total salidas</div>
@@ -371,7 +377,12 @@ async function renderCantidad(skuId, nombre, content){
         <thead><tr><th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th></tr></thead>
         <tbody>
           ${!(recItems||[]).length && !(ajustes||[]).length
-            ? `<tr><td colspan="4" class="empty-row">Sin recepciones registradas</td></tr>`
+            ? `<tr>
+                <td class="fecha">—</td>
+                <td style="font-style:italic;color:var(--amber);">Stock inicial cargado manualmente</td>
+                <td style="font-size:11px;color:var(--text3);">Sin recepción formal registrada</td>
+                <td class="num pos">+${stockActual}</td>
+              </tr>`
             : [
                 ...(recItems||[]).map(e=>{
                   const rec  = e.recepciones;
