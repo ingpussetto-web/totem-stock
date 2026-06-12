@@ -124,6 +124,22 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 .semaforo-dot.rojo{background:var(--red);}
 .semaforo-nombre{font-size:11px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .semaforo-fecha{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;}
+
+/* Semáforo header colapsable */
+.semaforo-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin-bottom:0;}
+.semaforo-header.open .semaforo-arrow{transform:rotate(180deg);}
+.semaforo-arrow{font-size:12px;color:var(--text3);transition:transform 0.2s;}
+.semaforo-body{overflow:hidden;transition:max-height 0.25s ease;max-height:0;}
+.semaforo-body.open{max-height:2000px;}
+.semaforo-filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.semaforo-filter{padding:4px 12px;border-radius:20px;font-size:11px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;}
+.semaforo-filter.active{background:var(--surface2);color:var(--text);border-color:var(--green);}
+
+/* Variantes en conteo */
+.variante-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;}
+.variante-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.variante-nombre{font-size:13px;font-weight:600;}
+.variante-stock{font-size:11px;color:var(--text2);}
 </style>
 </head>
 <body>
@@ -154,8 +170,20 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 
 <!-- Semáforo de últimos conteos -->
 <div class="semaforo-panel" id="semaforo-panel">
-  <div class="semaforo-title">📅 Estado de control — últimos conteos por insumo</div>
-  <div class="semaforo-grid" id="semaforo-grid"><div style="color:var(--text3);font-size:12px;">Cargando...</div></div>
+  <div class="semaforo-header" id="semaforo-header" onclick="toggleSemaforo()">
+    <div class="semaforo-title" style="margin-bottom:0;">📅 Estado de control — últimos conteos por insumo</div>
+    <span class="semaforo-arrow" id="semaforo-arrow">▼</span>
+  </div>
+  <div class="semaforo-body" id="semaforo-body">
+    <div style="height:12px;"></div>
+    <div class="semaforo-filters">
+      <button class="semaforo-filter active" onclick="filtrarSemaforo('todos',this)">Todos</button>
+      <button class="semaforo-filter" onclick="filtrarSemaforo('rojo',this)">🔴 Sin controlar</button>
+      <button class="semaforo-filter" onclick="filtrarSemaforo('amarillo',this)">🟡 Demorados</button>
+      <button class="semaforo-filter" onclick="filtrarSemaforo('verde',this)">🟢 Al día</button>
+    </div>
+    <div class="semaforo-grid" id="semaforo-grid"><div style="color:var(--text3);font-size:12px;">Cargando...</div></div>
+  </div>
 </div>
 
 <!-- Contenido dinámico -->
@@ -264,6 +292,29 @@ function diasDesde(fechaStr){
   return Math.floor((Date.now() - new Date(fechaStr).getTime()) / 86400000);
 }
 
+let _semaforoFiltro = 'todos';
+let _semaforoAbierto = false;
+
+function toggleSemaforo(){
+  _semaforoAbierto = !_semaforoAbierto;
+  const body = document.getElementById('semaforo-body');
+  const header = document.getElementById('semaforo-header');
+  if(_semaforoAbierto){
+    body.classList.add('open');
+    header.classList.add('open');
+  } else {
+    body.classList.remove('open');
+    header.classList.remove('open');
+  }
+}
+
+function filtrarSemaforo(filtro, btn){
+  _semaforoFiltro = filtro;
+  document.querySelectorAll('.semaforo-filter').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSemaforo();
+}
+
 function renderSemaforo(){
   const grid = document.getElementById('semaforo-grid');
   if(!grid) return;
@@ -281,13 +332,14 @@ function renderSemaforo(){
     return orden[a.color]-orden[b.color];
   });
 
-  grid.innerHTML = items.map(({s,color,label})=>`
+  const filtrados = _semaforoFiltro === 'todos' ? items : items.filter(i=>i.color===_semaforoFiltro);
+  grid.innerHTML = filtrados.length ? filtrados.map(({s,color,label})=>`
     <div class="semaforo-item" onclick="seleccionarDesdeSemaforo(${s.id}, ${s.categorias?.id||'null'})">
       <div class="semaforo-dot ${color}"></div>
       <span class="semaforo-nombre">${s.nombre}</span>
       <span class="semaforo-fecha">${label}</span>
     </div>
-  `).join('');
+  `).join('') : `<div style="color:var(--text3);font-size:12px;padding:8px;">Sin insumos en esta categoría de control.</div>`;
 }
 
 function seleccionarDesdeSemaforo(skuId, catId){
@@ -456,9 +508,10 @@ async function renderCantidad(skuId, nombre, content){
   });
   const salidas = Object.values(salidaMap);
 
-  // Stock actual
-  const stockRow = await api(`stock?sku_id=eq.${skuId}&select=cantidad`).catch(()=>[]);
-  const stockActual = stockRow?.[0]?.cantidad ?? 0;
+  // Stock actual — puede tener variantes
+  const stockRows = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
+  const tieneVariantes = (stockRows||[]).some(r=>r.variante_id !== null);
+  const stockActual = (stockRows||[]).reduce((s,r)=>s+(r.cantidad||0),0);
 
   const totalEntradas = (recItems||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
   const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
@@ -466,7 +519,6 @@ async function renderCantidad(skuId, nombre, content){
 
   // Si no hay recepciones ni ajustes, el stock fue cargado manualmente — usarlo como base
   const sinMovimientos = totalEntradas === 0 && totalAjustes === 0;
-  const stockBase = sinMovimientos ? stockActual : 0;
   // Saldo teórico: movimientos reales, o stock manual si no hay historial
   const saldoTeorico = sinMovimientos
     ? stockActual - totalSalidas
@@ -547,19 +599,59 @@ async function renderCantidad(skuId, nombre, content){
       </table>
 
       <!-- Conteo físico -->
-      ${renderConteoInput(skuId, nombre, saldoTeorico, 'cantidad')}
+      ${renderConteoInput(skuId, nombre, saldoTeorico, 'cantidad', stockRows)}
     </div>
   `;
 
-  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusion(saldoTeorico, nombre, skuId));
+  if(!READONLY && !tieneVariantes){
+    const inp = document.getElementById('input-conteo');
+    if(inp) inp.addEventListener('input', ()=>calcularConclusion(saldoTeorico, nombre, skuId));
+  }
 }
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
-function renderConteoInput(skuId, nombre, teorico, tracking){
+function renderConteoInput(skuId, nombre, teorico, tracking, stockRows){
   if(READONLY){
     return `
       <div class="conteo-section" style="opacity:0.5;pointer-events:none;">
         <div class="conteo-title">🔒 Solo consulta — saldo teórico en sistema: ${teorico}</div>
+      </div>
+    `;
+  }
+  const tieneVar = (stockRows||[]).some(r=>r.variante_id !== null);
+  if(tieneVar){
+    const variantesHtml = (stockRows||[]).map(r=>`
+      <div class="variante-card">
+        <div class="variante-header">
+          <span class="variante-nombre">● ${r.variantes?.valor||'Sin variante'}</span>
+          <span class="variante-stock">Stock sistema: ${r.cantidad||0}</span>
+        </div>
+        <div class="conteo-row">
+          <span class="conteo-label">Conteo físico:</span>
+          <input type="number" class="conteo-input input-variante" min="0" placeholder="0"
+                 data-variante-id="${r.variante_id}" data-variante-nombre="${r.variantes?.valor||''}"
+                 data-stock-id="${r.id}" data-teorico="${r.cantidad||0}"
+                 oninput="calcularConclusionVariantes(${skuId},'${nombre.replace(/'/g,"\'")}')">
+        </div>
+        <div class="variante-conclusion" id="concl-var-${r.variante_id}"></div>
+      </div>
+    `).join('');
+    return `
+      <div class="conteo-section">
+        <div class="conteo-title">🔢 Conteo por variante</div>
+        <input type="hidden" id="input-conteo" data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}" data-teorico="${teorico}" data-tracking="${tracking}">
+        ${variantesHtml}
+        <div id="conclusion-box"></div>
+        <div id="ajuste-section" class="ajuste-section">
+          <div id="motivo-wrap">
+            <label class="motivo-label" id="motivo-label">Motivo del ajuste (obligatorio si hay diferencias):</label>
+            <textarea id="input-motivo" class="motivo-input" placeholder="Ej: Unidades dañadas, robo, error de carga..."></textarea>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn green" id="btn-confirmar-ajuste" onclick="confirmarAjusteVariantes(${skuId},'${nombre.replace(/'/g,"\'")}')">✓ Confirmar conteo</button>
+            <button class="btn" onclick="cancelarAjuste()">Cancelar</button>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -748,6 +840,85 @@ async function confirmarAjuste(){
   } catch(e){
     alert('Error al guardar: ' + e.message);
   }
+}
+
+function calcularConclusionVariantes(skuId, nombre){
+  const inputs = document.querySelectorAll('.input-variante');
+  let hayDiferencia = false;
+  inputs.forEach(inp=>{
+    const val = inp.value.trim();
+    if(val === '') return;
+    const contado = parseInt(val);
+    const teorico = parseInt(inp.dataset.teorico)||0;
+    const dif = contado - teorico;
+    const varId = inp.dataset.varianteId;
+    const box = document.getElementById(`concl-var-${varId}`);
+    if(!box) return;
+    if(dif === 0){
+      box.innerHTML = `<span style="font-size:11px;color:var(--green);">✓ Coincide</span>`;
+    } else {
+      hayDiferencia = true;
+      box.innerHTML = `<span style="font-size:11px;color:${dif>0?'var(--amber)':'var(--red)'};">${dif>0?'+':''}${dif} diferencia</span>`;
+    }
+  });
+  // Mostrar sección de confirmar si al menos un input tiene valor
+  const alguno = [...inputs].some(i=>i.value.trim()!=='');
+  const ajusteSection = document.getElementById('ajuste-section');
+  if(alguno && ajusteSection) ajusteSection.style.display='block';
+  const motivoWrap = document.getElementById('motivo-wrap');
+  if(motivoWrap) motivoWrap.style.display = hayDiferencia ? 'block' : 'none';
+  const btn = document.getElementById('btn-confirmar-ajuste');
+  if(btn) btn.textContent = hayDiferencia ? '✓ Confirmar ajuste' : '✓ Registrar conteo sin novedad';
+}
+
+async function confirmarAjusteVariantes(skuId, nombre){
+  const inputs = document.querySelectorAll('.input-variante');
+  const motivo = document.getElementById('input-motivo')?.value.trim()||'';
+  const hayDiferencia = [...inputs].some(i=>{
+    const v=i.value.trim(); if(!v) return false;
+    return parseInt(v) !== parseInt(i.dataset.teorico||'0');
+  });
+  if(hayDiferencia && !motivo){ alert('Ingresá un motivo para el ajuste.'); return; }
+  const usuario = localStorage.getItem('tn_usuario')||'Gerencia';
+  try {
+    for(const inp of inputs){
+      const val = inp.value.trim();
+      if(val === '') continue;
+      const contado = parseInt(val);
+      const teorico = parseInt(inp.dataset.teorico)||0;
+      const dif = contado - teorico;
+      const varianteId = inp.dataset.varianteId;
+      const varianteNombre = inp.dataset.varianteNombre;
+      const stockId = inp.dataset.stockId;
+      // Registrar conteo
+      await api('stock_conteos', 'POST', {
+        sku_id: skuId, cantidad_teorica: teorico, cantidad_contada: contado,
+        diferencia: dif, hubo_ajuste: dif!==0, usuario,
+        notas: dif!==0 ? `Conteo físico ${varianteNombre} — ${motivo}` : `Conteo sin novedad (${varianteNombre})`
+      });
+      if(dif !== 0){
+        await api('stock_ajustes', 'POST', {
+          sku_id: skuId, diferencia: dif,
+          motivo: `Conteo físico ${varianteNombre} — ${motivo}`, conteo_real: contado
+        });
+        // Actualizar stock de esa variante
+        if(stockId){
+          await api(`stock?id=eq.${stockId}`, 'PATCH', { cantidad: contado });
+        }
+      }
+    }
+    // Actualizar semáforo
+    _ultimosConteos[skuId] = { sku_id: skuId, fecha: new Date().toISOString(), diferencia: hayDiferencia?1:0 };
+    renderSemaforo();
+    document.getElementById('ajuste-section').style.display='none';
+    document.getElementById('conclusion-box').innerHTML = `
+      <div class="conclusion ok">
+        <div class="conclusion-icon">✅</div>
+        <div class="conclusion-title">${hayDiferencia?'Ajuste registrado':'Conteo registrado sin diferencias'}</div>
+        <div class="conclusion-detail">${nombre} — conteo por variante completado.</div>
+      </div>`;
+    inputs.forEach(i=>i.value='');
+  } catch(e){ alert('Error: '+e.message); }
 }
 
 function cancelarAjuste(){
