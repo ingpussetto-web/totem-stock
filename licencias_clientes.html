@@ -79,6 +79,19 @@ td.nombre{color:var(--text);font-weight:500;font-size:13px;}
 .gestor-status.pending{color:var(--amber);}
 .gestor-status.none{color:var(--text3);}
 
+/* Panel duplicado */
+.dup-panel{background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius);padding:14px 16px;margin-top:10px;}
+.dup-title{font-size:12px;font-weight:600;color:var(--amber);margin-bottom:8px;}
+.dup-cliente{font-size:12px;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--surface3);border-radius:6px;}
+.dup-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.dup-btn{padding:6px 14px;font-size:11px;border-radius:var(--radius);cursor:pointer;font-family:'DM Sans',sans-serif;border:1px solid;transition:all 0.12s;}
+.dup-btn.vincular{border-color:var(--green);color:var(--green);background:transparent;}
+.dup-btn.vincular:hover{background:var(--green-dim);}
+.dup-btn.actualizar{border-color:var(--amber);color:var(--amber);background:transparent;}
+.dup-btn.actualizar:hover{background:var(--amber-dim);}
+.dup-btn.nuevo{border-color:var(--border2);color:var(--text2);background:transparent;}
+.dup-btn.nuevo:hover{background:rgba(255,255,255,0.05);}
+
 /* Nav */
 .gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
 .gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
@@ -257,6 +270,15 @@ td.nombre{color:var(--text);font-weight:500;font-size:13px;}
       </div>
     </div>
 
+    <div id="dup-panel" class="dup-panel" style="display:none;">
+      <div class="dup-title">⚠️ Posible cliente existente en el Gestor</div>
+      <div class="dup-cliente" id="dup-info"></div>
+      <div class="dup-actions">
+        <button class="dup-btn vincular" onclick="elegirDuplicado('vincular')">Vincular (no tocar sus datos)</button>
+        <button class="dup-btn actualizar" onclick="elegirDuplicado('actualizar')">Actualizar con datos de Totem Nube</button>
+        <button class="dup-btn nuevo" onclick="elegirDuplicado('nuevo')">Crear como nuevo cliente</button>
+      </div>
+    </div>
     <div id="modal-msg" style="display:none;padding:10px 14px;border-radius:var(--radius);font-size:12px;margin-top:10px;"></div>
 
     <div class="modal-footer">
@@ -434,21 +456,118 @@ function cerrarModal(){
   _ordenActual = null;
 }
 
+// ─── Detección de duplicados ─────────────────────────────────────────────────
+let _dupCandidato = null; // cliente encontrado en Gestor que puede ser duplicado
+
+function normalizar(str){
+  return (str||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
+}
+
+function similitud(a, b){
+  const na = normalizar(a), nb = normalizar(b);
+  if(na === nb) return 1;
+  if(na.includes(nb) || nb.includes(na)) return 0.9;
+  const wordsA = na.split(' '), wordsB = nb.split(' ');
+  const comunes = wordsA.filter(w => w.length > 2 && wordsB.includes(w));
+  return comunes.length / Math.max(wordsA.length, wordsB.length);
+}
+
+async function buscarDuplicados(nombre, cuit){
+  const todos = await apiGestor('clientes?select=id,nombre,cuit,email,contacto,activo&order=nombre.asc').catch(()=>[]);
+  
+  // Primero: buscar por CUIT exacto (coincidencia definitiva)
+  const cuitLimpio = (cuit||'').replace(/[^0-9]/g,'');
+  if(cuitLimpio.length >= 10){
+    const porCuit = (todos||[]).find(c => (c.cuit||'').replace(/[^0-9]/g,'') === cuitLimpio);
+    if(porCuit) return { ...porCuit, matchType: 'cuit' };
+  }
+
+  // Segundo: buscar por similitud de nombre
+  const sim = (todos||[]).map(c => ({ c, score: similitud(nombre, c.nombre) }))
+    .filter(x => x.score >= 0.7)
+    .sort((a,b) => b.score - a.score);
+  return sim.length ? { ...sim[0].c, matchType: 'nombre', score: sim[0].score } : null;
+}
+
+async function elegirDuplicado(opcion){
+  const panel = document.getElementById('dup-panel');
+  panel.style.display = 'none';
+
+  if(opcion === 'vincular'){
+    // Usar el candidato sin tocar nada, ir directo a crear licencia
+    await completarSincronizacion(_dupCandidato.id, false);
+  } else if(opcion === 'actualizar'){
+    // Actualizar cliente existente con datos de Totem Nube
+    await completarSincronizacion(_dupCandidato.id, true);
+  } else {
+    // Crear nuevo ignorando la coincidencia
+    await completarSincronizacion(null, false, true);
+  }
+  _dupCandidato = null;
+}
+
 // ─── Guardar en Gestor ───────────────────────────────────────────────────────
 async function guardarEnGestor(){
   const nombre = document.getElementById('f-nombre').value.trim();
-  const cuenta = document.getElementById('f-cuenta').value;
-  const precio = parseFloat(document.getElementById('f-precio').value) || 0;
   if(!nombre){ showMsg('El nombre del cliente es obligatorio.', 'red'); return; }
 
+  const btn = document.getElementById('btn-guardar');
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  document.getElementById('dup-panel').style.display = 'none';
+  document.getElementById('modal-msg').style.display = 'none';
+
+  try {
+    // Si ya está sincronizado, ir directo
+    const clienteIdExistente = sincronizados[_ordenActual]?.cliente_id;
+    if(clienteIdExistente){
+      await completarSincronizacion(clienteIdExistente, true);
+      return;
+    }
+
+    // Buscar duplicados en el Gestor
+    const cuit = document.getElementById('f-cuit').value.trim();
+    const candidato = await buscarDuplicados(nombre, cuit);
+    if(candidato){
+      _dupCandidato = candidato;
+      const estado = candidato.activo ? 'Activo' : 'Inactivo';
+      const matchLabel = candidato.matchType === 'cuit'
+        ? `<span style="color:var(--red);font-weight:600;">⚠ Coincidencia por CUIT — misma empresa</span>`
+        : `<span style="color:var(--amber);">Nombre similar (${Math.round((candidato.score||0.8)*100)}% coincidencia)</span>`;
+      document.getElementById('dup-info').innerHTML =
+        `${matchLabel}<br><br>` +
+        `<strong>${candidato.nombre}</strong><br>` +
+        (candidato.cuit ? `CUIT: ${candidato.cuit}` : 'Sin CUIT registrado') +
+        (candidato.email ? ` · ${candidato.email}` : '') +
+        (candidato.contacto ? `<br>Contacto: ${candidato.contacto}` : '') +
+        `<br><span style="font-size:10px;color:var(--text3);">ID #${candidato.id} · ${estado}</span>`;
+      document.getElementById('dup-panel').style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '✓ Sincronizar con Gestor';
+      return;
+    }
+
+    // Sin duplicado → crear nuevo
+    await completarSincronizacion(null, false, true);
+
+  } catch(e){
+    showMsg('Error: ' + e.message, 'red');
+    btn.disabled = false;
+    btn.textContent = '✓ Sincronizar con Gestor';
+  }
+}
+
+async function completarSincronizacion(clienteIdExistente, actualizarCliente, crearNuevo=false){
   const btn = document.getElementById('btn-guardar');
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
   try {
-    // 1. Crear o actualizar cliente en Gestor
-    let clienteId = sincronizados[_ordenActual]?.cliente_id;
-
+    const nombre = document.getElementById('f-nombre').value.trim();
+    const cuenta = document.getElementById('f-cuenta').value;
+    const precio = parseFloat(document.getElementById('f-precio').value) || 0;
     const fechaMigracion = new Date().toLocaleDateString('es-AR');
     const notasBase = document.getElementById('f-notas-cliente').value.trim();
     const notaCliente = `Migrado desde Totem Nube · ${fechaMigracion}${notasBase ? '\n' + notasBase : ''}`;
@@ -463,26 +582,20 @@ async function guardarEnGestor(){
       activo: document.getElementById('f-activo').value === 'true'
     };
 
-    if(clienteId){
-      // Actualizar cliente existente
+    let clienteId = clienteIdExistente;
+
+    if(crearNuevo){
+      const created = await apiGestor('clientes', 'POST', clienteData);
+      clienteId = created?.[0]?.id;
+    } else if(actualizarCliente && clienteId){
       await apiGestor(`clientes?id=eq.${clienteId}`, 'PATCH', clienteData);
-    } else {
-      // Buscar si ya existe por nombre exacto
-      const existing = await apiGestor(`clientes?nombre=eq.${encodeURIComponent(nombre)}&select=id&limit=1`);
-      if(existing?.length){
-        clienteId = existing[0].id;
-        await apiGestor(`clientes?id=eq.${clienteId}`, 'PATCH', clienteData);
-      } else {
-        const created = await apiGestor('clientes', 'POST', clienteData);
-        clienteId = created?.[0]?.id;
-      }
     }
+    // Si es "vincular": clienteId ya viene seteado, no tocamos datos del cliente
 
     if(!clienteId) throw new Error('No se pudo obtener el ID del cliente.');
 
-    // 2. Crear o actualizar licencia
+    // Crear o actualizar licencia
     let licenciaId = sincronizados[_ordenActual]?.licencia_id;
-
     const licData = {
       cliente_id: clienteId,
       cuenta,
@@ -506,13 +619,11 @@ async function guardarEnGestor(){
       licenciaId = licCreated?.[0]?.id;
     }
 
-    // 3. Guardar en sync local
     sincronizados[_ordenActual] = { cliente_id: clienteId, licencia_id: licenciaId, fecha: new Date().toISOString() };
     guardarSync();
 
     showMsg('✓ Sincronizado correctamente con el Gestor de Licencias.', 'green');
     renderTabla();
-
     setTimeout(()=>cerrarModal(), 1500);
 
   } catch(e){
