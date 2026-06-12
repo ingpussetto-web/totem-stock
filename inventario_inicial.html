@@ -191,7 +191,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
     <div class="page active" id="page-inventariar">
       <div class="page-header">
         <div class="page-title">Inventariar insumos</div>
-        <div class="page-sub">Contá las unidades físicas, generá UIDs y etiquetas para imprimir</div>
+        <div class="page-sub">Registrá nuevas unidades, generá UIDs y etiquetas para imprimir</div>
       </div>
 
       <div class="steps">
@@ -252,8 +252,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <div id="seleccion-resumen" style="font-size:13px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);"></div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">¿Cuántas unidades contaste en total?</label>
-              <input class="form-input" type="number" id="inp-cantidad" min="0" max="500" value="1" oninput="generarUidPreview()">
+              <label class="form-label">¿Cuántas unidades nuevas querés registrar?</label>
+              <input class="form-input" type="number" id="inp-cantidad" min="1" max="500" value="1" oninput="generarUidPreview()">
             </div>
             <div class="form-group">
               <label class="form-label">Prefijo UID (auto)</label>
@@ -293,7 +293,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
     <div class="page" id="page-caja">
       <div class="page-header">
         <div class="page-title">Insumos de caja</div>
-        <div class="page-sub">Registrá el stock existente de insumos que se guardan por cantidad</div>
+        <div class="page-sub">Registrá nuevas unidades de insumos que se gestionan por cantidad</div>
       </div>
 
       <div style="max-width:520px;">
@@ -317,8 +317,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         </div>
 
         <div style="margin-bottom:16px;">
-          <label class="form-label">¿Cuántas unidades contaste en total?</label>
-          <input class="form-input" type="number" id="caja-cantidad" min="0" value="0" placeholder="Ej: 38" oninput="calcularDifCaja()">
+          <label class="form-label">¿Cuántas unidades nuevas querés agregar?</label>
+          <input class="form-input" type="number" id="caja-cantidad" min="1" value="0" placeholder="Ej: 10" oninput="calcularDifCaja()">
           <div id="caja-diff-aviso" style="display:none;margin-top:8px;"></div>
         </div>
 
@@ -551,13 +551,19 @@ function generarPrefijo(codigo, variante){
 async function generarUidPreview(){
   const totalContado = parseInt(document.getElementById('inp-cantidad').value)||0;
   const prefijo = document.getElementById('inp-prefijo').value;
-  const registradas = window._unidadesRegistradas || 0;
-  const diferencia = totalContado - registradas;
+  const diferencia = totalContado; // todas son nuevas
 
   const avisoEl = document.getElementById('diff-aviso');
   const previewGroup = document.getElementById('uid-preview-group');
   const btnRegistrar = document.getElementById('btn-registrar');
   const preview = document.getElementById('uid-preview');
+
+  if(totalContado <= 0){
+    avisoEl.style.display='none';
+    previewGroup.style.display='none';
+    btnRegistrar.disabled=true;
+    return;
+  }
 
   // Buscar el último número usado para este prefijo
   let lastNum = 0;
@@ -570,32 +576,9 @@ async function generarUidPreview(){
     }
   } catch(e){}
 
-  // Caso: menos de lo registrado → alerta, no generar
-  if(diferencia < 0){
-    avisoEl.style.display = 'block';
-    avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(255,94,94,0.1);border:1px solid rgba(255,94,94,0.3);border-radius:8px;color:#ff5e5e;font-size:13px;">
-      ⚠️ Conteo menor al registrado: contaste <strong>${totalContado}</strong> pero hay <strong>${registradas}</strong> en sistema. Verificá antes de continuar.
-    </div>`;
-    previewGroup.style.display = 'none';
-    btnRegistrar.disabled = true;
-    return;
-  }
-
-  // Caso: igual → sin nuevas etiquetas
-  if(diferencia === 0){
-    avisoEl.style.display = 'block';
-    avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:8px;color:var(--green);font-size:13px;">
-      ✓ Conteo coincide con el sistema (${registradas} unidades). No hay nuevas etiquetas para generar.
-    </div>`;
-    previewGroup.style.display = 'none';
-    btnRegistrar.disabled = true;
-    return;
-  }
-
-  // Caso: más de lo registrado → generar diferencia
   avisoEl.style.display = 'block';
-  avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:8px;color:var(--amber);font-size:13px;">
-    + ${diferencia} unidad${diferencia>1?'es':''} nueva${diferencia>1?'s':''} respecto al sistema (${registradas} registradas → ${totalContado} contadas)
+  avisoEl.innerHTML = `<div style="padding:10px 14px;background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:8px;color:var(--green);font-size:13px;">
+    Se van a generar <strong>${diferencia}</strong> UID${diferencia>1?'s':''} nuevo${diferencia>1?'s':''} a partir del siguiente disponible.
   </div>`;
   previewGroup.style.display = 'block';
   btnRegistrar.disabled = false;
@@ -625,8 +608,7 @@ async function registrarYEtiquetas(){
   const varId = document.getElementById('sel-variante').value||null;
   const varObj = variantesActuales.find(v=>String(v.id)===varId)||null;
   const totalContado = parseInt(document.getElementById('inp-cantidad').value)||0;
-  const registradas = window._unidadesRegistradas || 0;
-  const cantidad = totalContado - registradas; // solo las nuevas
+  const cantidad = totalContado; // todas las que se ingresan son nuevas
   const prefijo = document.getElementById('inp-prefijo').value;
   
   if(cantidad <= 0){ toast('No hay unidades nuevas para registrar'); return; }
@@ -911,27 +893,13 @@ function calcularDifCaja(){
   const avisoEl = document.getElementById('caja-diff-aviso');
   const btnGuardar = document.getElementById('btn-guardar-caja');
 
-  if(totalContado === 0 && actual === 0){ avisoEl.style.display='none'; if(btnGuardar) btnGuardar.disabled=true; return; }
+  if(nuevas <= 0){ avisoEl.style.display='none'; if(btnGuardar) btnGuardar.disabled=true; return; }
 
-  if(diff < 0){
-    avisoEl.style.display='block';
-    avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(255,94,94,0.1);border:1px solid rgba(255,94,94,0.3);border-radius:8px;color:#ff5e5e;font-size:12px;">
-      ⚠️ Conteo menor al registrado: contaste <strong>${totalContado}</strong> pero hay <strong>${actual}</strong> en sistema. Verificá antes de continuar.
-    </div>`;
-    if(btnGuardar) btnGuardar.disabled = true;
-  } else if(diff === 0){
-    avisoEl.style.display='block';
-    avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:8px;color:var(--green);font-size:12px;">
-      ✓ Conteo coincide con el sistema (${actual} unidades). Sin cambios.
-    </div>`;
-    if(btnGuardar) btnGuardar.disabled = true;
-  } else {
-    avisoEl.style.display='block';
-    avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:8px;color:var(--amber);font-size:12px;">
-      + ${diff} unidad${diff>1?'es':''} nueva${diff>1?'s':''} (${actual} en sistema → ${totalContado} contadas)
-    </div>`;
-    if(btnGuardar) btnGuardar.disabled = false;
-  }
+  avisoEl.style.display='block';
+  avisoEl.innerHTML = `<div style="padding:8px 12px;background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:8px;color:var(--green);font-size:12px;">
+    Se van a agregar <strong>+${nuevas}</strong> unidades al stock actual (${actual} → ${actual + nuevas})
+  </div>`;
+  if(btnGuardar) btnGuardar.disabled = false;
 }
 
 async function guardarStockCaja(){
@@ -962,7 +930,7 @@ async function guardarStockCaja(){
     document.getElementById('caja-resultado').innerHTML = `
       <div style="padding:14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:8px;">
         <div style="font-size:13px;font-weight:600;color:var(--green);">✅ Stock registrado</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${skuNombre} — total: ${totalContado} unidades (+${diff} nuevas)</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${skuNombre} — stock anterior: ${actual} → nuevo total: ${totalContado} (+${diff} agregadas)</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;">Registrado por: ${nombre}</div>
       </div>`;
 
