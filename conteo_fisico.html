@@ -103,6 +103,27 @@ select.sku-select:focus{outline:none;border-color:var(--green);}
 .gernav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
 .gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
 .gernav-icon{font-size:16px;line-height:1;}
+
+/* Selector categoría */
+.cat-sku-selector{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;}
+.selector-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+.selector-group{display:flex;flex-direction:column;gap:5px;flex:1;min-width:180px;}
+.selector-label{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;}
+select.form-sel{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer;width:100%;}
+select.form-sel:focus{outline:none;border-color:var(--green);}
+
+/* Semáforo de conteos */
+.semaforo-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:16px;}
+.semaforo-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:12px;}
+.semaforo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;}
+.semaforo-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:border-color 0.12s;}
+.semaforo-item:hover{border-color:var(--border2);}
+.semaforo-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.semaforo-dot.verde{background:var(--green);}
+.semaforo-dot.amarillo{background:var(--amber);}
+.semaforo-dot.rojo{background:var(--red);}
+.semaforo-nombre{font-size:11px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.semaforo-fecha{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -112,13 +133,29 @@ select.sku-select:focus{outline:none;border-color:var(--green);}
   <div class="page-sub">Verificación de stock real vs registrado</div>
 </div>
 
-<!-- Selector SKU -->
-<div class="sku-selector">
-  <label>Producto a contar:</label>
-  <select class="sku-select" id="sku-select">
-    <option value="">— Seleccioná un SKU —</option>
-  </select>
-  <button class="btn green" onclick="iniciarConteo()">Cargar datos</button>
+<!-- Selector categoría + SKU -->
+<div class="cat-sku-selector">
+  <div class="selector-row">
+    <div class="selector-group">
+      <span class="selector-label">Categoría</span>
+      <select class="form-sel" id="cat-select" onchange="filtrarSkusPorCat()">
+        <option value="">— Todas las categorías —</option>
+      </select>
+    </div>
+    <div class="selector-group">
+      <span class="selector-label">Producto</span>
+      <select class="form-sel" id="sku-select">
+        <option value="">— Seleccioná un SKU —</option>
+      </select>
+    </div>
+    <button class="btn green" onclick="iniciarConteo()" style="white-space:nowrap;height:38px;">Cargar datos</button>
+  </div>
+</div>
+
+<!-- Semáforo de últimos conteos -->
+<div class="semaforo-panel" id="semaforo-panel">
+  <div class="semaforo-title">📅 Estado de control — últimos conteos por insumo</div>
+  <div class="semaforo-grid" id="semaforo-grid"><div style="color:var(--text3);font-size:12px;">Cargando...</div></div>
 </div>
 
 <!-- Contenido dinámico -->
@@ -167,20 +204,102 @@ function fmt_fecha(str){
 }
 
 // ─── Cargar lista de SKUs ───────────────────────────────────────────────────
-async function cargarSkus(){ // retorna promise implícita por ser async
+let _todosLosSkus = [];
+let _ultimosConteos = {};
+
+async function cargarSkus(){
   try {
-    const skus = await api('skus?select=id,codigo,nombre,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
-    const sel = document.getElementById('sku-select');
-    (skus||[]).forEach(s=>{
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.dataset.tracking = s.tracking||'cantidad';
-      opt.textContent = `${s.nombre} (${s.tracking==='uid'?'UID':'Cantidad'})`;
-      sel.appendChild(opt);
+    // Cargar SKUs y categorías
+    const skus = await api('skus?select=id,codigo,nombre,tracking,categorias(id,nombre)&activo=eq.true&order=nombre.asc');
+    _todosLosSkus = skus || [];
+
+    // Cargar últimos conteos por SKU
+    const conteos = await api('stock_conteos?select=sku_id,fecha,cantidad_contada,diferencia&order=fecha.desc').catch(()=>[]);
+    _ultimosConteos = {};
+    (conteos||[]).forEach(c=>{
+      if(!_ultimosConteos[c.sku_id]) _ultimosConteos[c.sku_id] = c;
     });
+
+    // Poblar select de categorías
+    const cats = [...new Map(_todosLosSkus.map(s=>[s.categorias?.id, s.categorias]).filter(([id])=>id)).values()];
+    const catSel = document.getElementById('cat-select');
+    cats.sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'')).forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.nombre;
+      catSel.appendChild(opt);
+    });
+
+    // Poblar SKUs (todos inicialmente)
+    filtrarSkusPorCat();
+
+    // Renderizar semáforo
+    renderSemaforo();
+
   } catch(e){
-    document.getElementById('conteo-content').innerHTML = `<div class="error-msg">Error cargando SKUs: ${e.message}</div>`;
+    document.getElementById('conteo-content').innerHTML = `<div class="error-msg">Error cargando datos: ${e.message}</div>`;
   }
+}
+
+function filtrarSkusPorCat(){
+  const catId = document.getElementById('cat-select').value;
+  const sel = document.getElementById('sku-select');
+  const valorActual = sel.value;
+  sel.innerHTML = '<option value="">— Seleccioná un SKU —</option>';
+  const filtrados = catId
+    ? _todosLosSkus.filter(s => String(s.categorias?.id) === catId)
+    : _todosLosSkus;
+  filtrados.forEach(s=>{
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.dataset.tracking = s.tracking||'cantidad';
+    opt.textContent = `${s.nombre} (${s.tracking==='uid'?'UID':'Cantidad'})`;
+    sel.appendChild(opt);
+  });
+  if(valorActual) sel.value = valorActual;
+}
+
+function diasDesde(fechaStr){
+  if(!fechaStr) return null;
+  return Math.floor((Date.now() - new Date(fechaStr).getTime()) / 86400000);
+}
+
+function renderSemaforo(){
+  const grid = document.getElementById('semaforo-grid');
+  if(!grid) return;
+  const items = _todosLosSkus.map(s=>{
+    const conteo = _ultimosConteos[s.id];
+    const dias = conteo ? diasDesde(conteo.fecha) : null;
+    let color, label;
+    if(dias === null){ color='rojo'; label='Nunca contado'; }
+    else if(dias <= 30){ color='verde'; label=`Hace ${dias}d`; }
+    else if(dias <= 60){ color='amarillo'; label=`Hace ${dias}d`; }
+    else { color='rojo'; label=`Hace ${dias}d`; }
+    return {s, color, label};
+  }).sort((a,b)=>{
+    const orden = {rojo:0,amarillo:1,verde:2};
+    return orden[a.color]-orden[b.color];
+  });
+
+  grid.innerHTML = items.map(({s,color,label})=>`
+    <div class="semaforo-item" onclick="seleccionarDesdeSemaforo(${s.id}, ${s.categorias?.id||'null'})">
+      <div class="semaforo-dot ${color}"></div>
+      <span class="semaforo-nombre">${s.nombre}</span>
+      <span class="semaforo-fecha">${label}</span>
+    </div>
+  `).join('');
+}
+
+function seleccionarDesdeSemaforo(skuId, catId){
+  if(catId){
+    const catSel = document.getElementById('cat-select');
+    catSel.value = catId;
+    filtrarSkusPorCat();
+  }
+  const sel = document.getElementById('sku-select');
+  sel.value = skuId;
+  iniciarConteo();
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 // ─── Iniciar conteo ─────────────────────────────────────────────────────────
@@ -459,10 +578,12 @@ function renderConteoInput(skuId, nombre, teorico, tracking){
       </div>
       <div id="conclusion-box"></div>
       <div id="ajuste-section" class="ajuste-section">
-        <label class="motivo-label">Motivo del ajuste (obligatorio):</label>
-        <textarea id="input-motivo" class="motivo-input" placeholder="Ej: Unidades dañadas descartadas, error de carga inicial, robo, etc."></textarea>
+        <div id="motivo-wrap">
+          <label class="motivo-label" id="motivo-label">Motivo del ajuste (obligatorio):</label>
+          <textarea id="input-motivo" class="motivo-input" placeholder="Ej: Unidades dañadas descartadas, error de carga inicial, robo, etc."></textarea>
+        </div>
         <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
-          <button class="btn green" onclick="confirmarAjuste()">✓ Confirmar ajuste</button>
+          <button class="btn green" id="btn-confirmar-ajuste" onclick="confirmarAjuste()">✓ Confirmar ajuste</button>
           <button class="btn" onclick="cancelarAjuste()">Cancelar</button>
         </div>
       </div>
@@ -496,9 +617,11 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
   if(diferencia === 0){
     tipo = 'ok';
     icon = '✅';
-    titulo = 'Coincide — no se necesita ajuste';
-    detalle = `El conteo físico (${conteo}) coincide exactamente con el saldo registrado en el sistema (${teorico}). No se requiere ninguna acción.`;
-    ajusteSection.style.display = 'none';
+    titulo = 'Coincide — sin diferencias';
+    detalle = `El conteo físico (${conteo}) coincide con el saldo del sistema (${teorico}). Registrá el conteo para dejar constancia del control.`;
+    // Mostrar sección de confirmar sin novedad
+    ajusteSection.style.display = 'block';
+    ajusteSection.dataset.sinDiferencia = 'true';
   } else if(Math.abs(diferencia) <= 2){
     tipo = 'alerta';
     icon = '⚠️';
@@ -531,6 +654,18 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
       <div class="conclusion-detail">${detalle}</div>
     </div>
   `;
+  // Adaptar UI según si hay diferencia o no
+  const motivoWrap = document.getElementById('motivo-wrap');
+  const motivoLabel = document.getElementById('motivo-label');
+  const btnConfirmar = document.getElementById('btn-confirmar-ajuste');
+  if(diferencia === 0){
+    if(motivoWrap) motivoWrap.style.display = 'none';
+    if(btnConfirmar){ btnConfirmar.textContent = '✓ Registrar conteo sin novedad'; btnConfirmar.className = 'btn green'; }
+  } else {
+    if(motivoWrap) motivoWrap.style.display = 'block';
+    if(motivoLabel) motivoLabel.textContent = 'Motivo del ajuste (obligatorio):';
+    if(btnConfirmar){ btnConfirmar.textContent = '✓ Confirmar ajuste'; btnConfirmar.className = 'btn green'; }
+  }
 }
 
 function limpiarConclusion(){
@@ -542,8 +677,9 @@ function limpiarConclusion(){
 
 // ─── Confirmar ajuste ─────────────────────────────────────────────────────
 async function confirmarAjuste(){
-  const motivo = document.getElementById('input-motivo').value.trim();
-  if(!motivo){ alert('Ingresá un motivo para el ajuste.'); return; }
+  const sinDif = parseInt(document.getElementById('conclusion-final')?.dataset.diferencia||'1') === 0;
+  const motivo = document.getElementById('input-motivo')?.value.trim() || '';
+  if(!sinDif && !motivo){ alert('Ingresá un motivo para el ajuste.'); return; }
 
   const conclusion = document.getElementById('conclusion-final');
   if(!conclusion) return;
@@ -557,41 +693,60 @@ async function confirmarAjuste(){
   const tracking = input.dataset.tracking;
 
   try {
-    // 1. Registrar ajuste en stock_ajustes
-    await api('stock_ajustes', 'POST', {
+    const usuario = localStorage.getItem('tn_usuario') || 'Gerencia';
+    const teorico = parseInt(document.getElementById('input-conteo').dataset.teorico) || 0;
+
+    // 1. Registrar SIEMPRE en stock_conteos
+    await api('stock_conteos', 'POST', {
       sku_id: skuId,
+      cantidad_teorica: teorico,
+      cantidad_contada: conteo,
       diferencia: diferencia,
-      motivo: `Conteo físico — ${motivo}`,
-      conteo_real: conteo
+      hubo_ajuste: diferencia !== 0,
+      usuario: usuario,
+      notas: diferencia !== 0 ? `Conteo físico — ${motivo}` : 'Conteo sin novedad'
     });
 
-    // 2. Actualizar stock.cantidad si tracking=cantidad
-    if(tracking === 'cantidad'){
-      // Upsert stock
-      const stockExist = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad`).catch(()=>[]);
-      if(stockExist?.length){
-        await api(`stock?sku_id=eq.${skuId}`, 'PATCH', { cantidad: conteo });
-      } else {
-        await api('stock', 'POST', { sku_id: skuId, cantidad: conteo });
+    // 2. Si hay diferencia → registrar en stock_ajustes
+    if(diferencia !== 0){
+      await api('stock_ajustes', 'POST', {
+        sku_id: skuId,
+        diferencia: diferencia,
+        motivo: `Conteo físico — ${motivo}`,
+        conteo_real: conteo
+      });
+
+      // 3. Actualizar stock.cantidad si tracking=cantidad
+      if(tracking === 'cantidad'){
+        const stockExist = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad`).catch(()=>[]);
+        if(stockExist?.length){
+          await api(`stock?sku_id=eq.${skuId}`, 'PATCH', { cantidad: conteo });
+        } else {
+          await api('stock', 'POST', { sku_id: skuId, cantidad: conteo });
+        }
       }
     }
+
+    // Actualizar semáforo en memoria
+    _ultimosConteos[skuId] = { sku_id: skuId, fecha: new Date().toISOString(), cantidad_contada: conteo, diferencia };
+    renderSemaforo();
 
     // Feedback
     document.getElementById('ajuste-section').style.display = 'none';
     document.getElementById('conclusion-box').innerHTML = `
       <div class="conclusion ok">
         <div class="conclusion-icon">✅</div>
-        <div class="conclusion-title">Ajuste registrado correctamente</div>
+        <div class="conclusion-title">${diferencia !== 0 ? 'Ajuste registrado correctamente' : 'Conteo registrado — sin diferencias'}</div>
         <div class="conclusion-detail">
-          ${nombre} ajustado a <strong>${conteo}</strong> unidades.<br>
-          Diferencia registrada: ${diferencia > 0 ? '+' : ''}${diferencia} · Motivo: ${motivo}
+          ${nombre} — conteo: <strong>${conteo}</strong> unidades.<br>
+          ${diferencia !== 0 ? `Diferencia: ${diferencia > 0 ? '+' : ''}${diferencia} · Motivo: ${motivo}` : 'El stock coincide con el sistema. ✓'}
         </div>
       </div>
     `;
     document.getElementById('input-conteo').value = '';
 
   } catch(e){
-    alert('Error al guardar el ajuste: ' + e.message);
+    alert('Error al guardar: ' + e.message);
   }
 }
 
