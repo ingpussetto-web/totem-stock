@@ -359,13 +359,15 @@ function getCotAsoc(p){
   return cotizaciones.find(c => c.numero && c.numero.replace('COT-','') === p.orden) || null;
 }
 
-// ─── Proyectos con licencia (solo los que tienen ítem cat=licencia) ──────────
-function getLicenciaItem(p){
-  return (p.items||[]).find(i => i.cat === 'licencia');
+// ─── Proyectos con licencia (cotización con licencia=true y licDesc) ─────────
+function getCotLicencia(p){
+  const cot = getCotAsoc(p);
+  if(cot?.licencia && cot?.licDesc) return cot;
+  return null;
 }
 function proyectosConLicencia(){
   const estados = ['despachado','instalado','en_produccion','listo_despacho'];
-  return proyectos.filter(p => estados.includes(p.estado) && getLicenciaItem(p));
+  return proyectos.filter(p => estados.includes(p.estado) && getCotLicencia(p));
 }
 
 // ─── Render tabla ────────────────────────────────────────────────────────────
@@ -404,7 +406,7 @@ function renderTabla(){
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${p.orden||'—'}</td>
       <td class="nombre">${p.cliente}</td>
       <td style="font-size:11px;">
-        ${getLicenciaItem(p)?.desc ? `<span style="color:var(--green);font-size:10px;">🔑 ${getLicenciaItem(p).desc}</span><br>` : ''}
+        ${getCotLicencia(p)?.licDesc ? `<span style="color:var(--green);font-size:10px;">🔑 ${getCotLicencia(p).licDesc}</span><br>` : ''}
         ${p.notas||'—'}
         ${cot?.contacto?`<br><span style="color:var(--text3);">${cot.contacto}</span>`:''}
       </td>
@@ -438,15 +440,15 @@ function abrirModal(orden){
   document.getElementById('f-notas-cliente').value = '';
   document.getElementById('f-activo').value = 'true';
 
-  // Licencia — tomar datos del ítem cat=licencia
-  const licItem = getLicenciaItem(p);
-  document.getElementById('f-descripcion').value = licItem?.desc || p.notas || cot?.sistema || '';
+  // Licencia — tomar datos de la cotización asociada
+  const cotLic = getCotLicencia(p);
+  document.getElementById('f-descripcion').value = cotLic?.licDesc || '';
   document.getElementById('f-fecha-alta').value = new Date().toISOString().split('T')[0];
   document.getElementById('f-orden').value = orden;
-  document.getElementById('f-precio').value = licItem?.precio || '';
-  document.getElementById('f-puestos').value = licItem?.cant ? `x${licItem.cant}` : '';
+  document.getElementById('f-precio').value = cotLic?.licMonto || '';
+  document.getElementById('f-puestos').value = '';
   document.getElementById('f-notas-lic').value = '';
-  document.getElementById('f-estado-lic').value = licItem?.estado || (p.estado === 'instalado' ? 'activa' : 'comprometida');
+  document.getElementById('f-estado-lic').value = p.estado === 'instalado' ? 'activa' : 'comprometida';
 
   // Si ya está sincronizado, mostrar título diferente
   const title = sync ? `Editar sincronización · ${p.cliente}` : `Sincronizar · ${p.cliente}`;
