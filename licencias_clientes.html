@@ -449,13 +449,17 @@ async function guardarEnGestor(){
     // 1. Crear o actualizar cliente en Gestor
     let clienteId = sincronizados[_ordenActual]?.cliente_id;
 
+    const fechaMigracion = new Date().toLocaleDateString('es-AR');
+    const notasBase = document.getElementById('f-notas-cliente').value.trim();
+    const notaCliente = `Migrado desde Totem Nube · ${fechaMigracion}${notasBase ? '\n' + notasBase : ''}`;
+
     const clienteData = {
       nombre,
       cuit: document.getElementById('f-cuit').value.trim() || null,
       email: document.getElementById('f-email').value.trim() || null,
       telefono: document.getElementById('f-telefono').value.trim() || null,
       contacto: document.getElementById('f-contacto').value.trim() || null,
-      notas: document.getElementById('f-notas-cliente').value.trim() || null,
+      notas: notaCliente,
       activo: document.getElementById('f-activo').value === 'true'
     };
 
@@ -488,7 +492,8 @@ async function guardarEnGestor(){
       precio_actual: precio,
       moneda: document.getElementById('f-moneda').value,
       fecha_alta: document.getElementById('f-fecha-alta').value || null,
-      notas: (document.getElementById('f-notas-lic').value.trim() || '') +
+      notas: `Migrado desde Totem Nube · ${fechaMigracion}` +
+             (document.getElementById('f-notas-lic').value.trim() ? '\n' + document.getElementById('f-notas-lic').value.trim() : '') +
              (document.getElementById('f-puestos').value.trim() ? `\nPuestos/Pantallas: ${document.getElementById('f-puestos').value.trim()}` : '') +
              `\nRef. Orden: ${_ordenActual}`,
       parametros: { orden: _ordenActual, puestos: document.getElementById('f-puestos').value.trim() }
@@ -526,13 +531,15 @@ async function guardarSoloCliente(){
   btn.disabled = true;
 
   try {
+    const fechaMig = new Date().toLocaleDateString('es-AR');
+    const notasSolo = document.getElementById('f-notas-cliente').value.trim();
     const clienteData = {
       nombre,
       cuit: document.getElementById('f-cuit').value.trim() || null,
       email: document.getElementById('f-email').value.trim() || null,
       telefono: document.getElementById('f-telefono').value.trim() || null,
       contacto: document.getElementById('f-contacto').value.trim() || null,
-      notas: document.getElementById('f-notas-cliente').value.trim() || null,
+      notas: `Migrado desde Totem Nube · ${fechaMig}${notasSolo ? '\n' + notasSolo : ''}`,
       activo: document.getElementById('f-activo').value === 'true'
     };
 
