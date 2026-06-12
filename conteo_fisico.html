@@ -344,6 +344,8 @@ async function renderCantidad(skuId, nombre, content){
   const totalEntradas = (recItems||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
   const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
   const totalSalidas  = salidas.reduce((s,e)=>s+(e.qty||0),0);
+  // Saldo teórico calculado desde movimientos reales, no desde stock.cantidad
+  const saldoTeorico = totalEntradas + totalAjustes - totalSalidas;
 
   content.innerHTML = `
     <div class="panel">
@@ -357,9 +359,9 @@ async function renderCantidad(skuId, nombre, content){
           <div class="metric-label">Total salidas</div>
           <div class="metric-value">−${totalSalidas}</div>
         </div>
-        <div class="metric ${stockActual<=0?'red':stockActual<=3?'amber':'green'}">
-          <div class="metric-label">Saldo en sistema</div>
-          <div class="metric-value">${stockActual}</div>
+        <div class="metric ${saldoTeorico<=0?'red':saldoTeorico<=3?'amber':'green'}">
+          <div class="metric-label">Saldo teórico</div>
+          <div class="metric-value">${saldoTeorico}</div>
         </div>
       </div>
 
@@ -415,11 +417,11 @@ async function renderCantidad(skuId, nombre, content){
       </table>
 
       <!-- Conteo físico -->
-      ${renderConteoInput(skuId, nombre, stockActual, 'cantidad')}
+      ${renderConteoInput(skuId, nombre, saldoTeorico, 'cantidad')}
     </div>
   `;
 
-  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusion(stockActual, nombre, skuId));
+  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusion(saldoTeorico, nombre, skuId));
 }
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
