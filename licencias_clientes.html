@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Licencias Clientes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.09);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.09);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:28px 32px 90px;}
+
+.page-header{margin-bottom:24px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+/* Tabla de proyectos */
+.tabla-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:20px;}
+.tabla-header{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+.tabla-title{font-size:13px;font-weight:600;}
+.search-input{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:7px 12px;color:var(--text);font-size:12px;width:220px;}
+.search-input:focus{outline:none;border-color:var(--green);}
+table{width:100%;border-collapse:collapse;}
+th{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;font-weight:400;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);}
+td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.02);}
+td.nombre{color:var(--text);font-weight:500;font-size:13px;}
+.badge{display:inline-block;font-size:9px;padding:2px 8px;border-radius:4px;font-family:'DM Mono',monospace;font-weight:500;}
+.badge.despachado{background:var(--green-dim);color:var(--green);}
+.badge.instalado{background:var(--blue-dim);color:var(--blue);}
+.badge.en_produccion{background:var(--amber-dim);color:var(--amber);}
+.badge.sincronizado{background:var(--green-dim);color:var(--green);}
+.badge.pendiente{background:var(--amber-dim);color:var(--amber);}
+.badge.no_aplica{background:rgba(255,255,255,0.04);color:var(--text3);}
+.btn{padding:6px 14px;font-size:11px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.purple{border-color:var(--purple);color:var(--purple);}
+.btn.purple:hover{background:var(--purple-dim);}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:620px;max-height:90vh;overflow-y:auto;padding:28px;}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:20px;letter-spacing:-0.02em;}
+.modal-section{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.form-row.full{grid-template-columns:1fr;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;font-family:'DM Mono',monospace;}
+.form-input,.form-select,.form-textarea{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 12px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;width:100%;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--green);}
+.form-textarea{min-height:70px;resize:none;}
+.form-input.readonly{color:var(--text3);background:var(--surface3);}
+.modal-footer{display:flex;gap:10px;margin-top:20px;justify-content:flex-end;flex-wrap:wrap;}
+
+/* Cuenta badges */
+.cuenta-tn{background:rgba(245,166,35,0.12);color:var(--amber);border:1px solid var(--amber-border);}
+.cuenta-gp{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.25);}
+.cuenta-vgp{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);}
+.cuenta-cp{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,0.25);}
+
+/* Estado gestor */
+.gestor-status{font-size:10px;font-family:'DM Mono',monospace;}
+.gestor-status.ok{color:var(--green);}
+.gestor-status.pending{color:var(--amber);}
+.gestor-status.none{color:var(--text3);}
+
+/* Nav */
+.gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
+.gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
+.gernav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
+.gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
+.gernav-icon{font-size:16px;line-height:1;}
+
+.loading-msg{color:var(--text3);font-size:12px;padding:20px;text-align:center;}
+.empty-msg{color:var(--text3);font-size:12px;padding:20px;text-align:center;font-style:italic;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-title">🔑 Licencias Clientes</div>
+  <div class="page-sub">Sincronización con Gestor de Licencias · Solo Gerencia</div>
+</div>
+
+<!-- Tabla de proyectos con licencia -->
+<div class="tabla-wrap">
+  <div class="tabla-header">
+    <div class="tabla-title">Proyectos con licencia de software</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" class="search-input" id="search-input" placeholder="🔍 Buscar cliente..." oninput="renderTabla()">
+      <select class="search-input" id="filtro-estado" onchange="renderTabla()" style="width:160px;">
+        <option value="">Todos los estados</option>
+        <option value="despachado">Despachado</option>
+        <option value="instalado">Instalado</option>
+        <option value="en_produccion">En producción</option>
+      </select>
+      <select class="search-input" id="filtro-gestor" onchange="renderTabla()" style="width:160px;">
+        <option value="">Todos</option>
+        <option value="sincronizado">Sincronizados</option>
+        <option value="pendiente">Pendientes</option>
+      </select>
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>N° Orden</th>
+          <th>Cliente</th>
+          <th>Sistema / Notas</th>
+          <th>Estado OP</th>
+          <th>Gestor Lic.</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tabla-body">
+        <tr><td colspan="6" class="loading-msg">Cargando proyectos...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal sincronizar -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Sincronizar con Gestor de Licencias</div>
+
+    <div class="modal-section">Datos del cliente</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Nombre / Razón Social *</label>
+        <input type="text" class="form-input" id="f-nombre" placeholder="Nombre de la empresa">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CUIT</label>
+        <input type="text" class="form-input" id="f-cuit" placeholder="30-12345678-9">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="f-email" placeholder="email@empresa.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Teléfono</label>
+        <input type="text" class="form-input" id="f-telefono" placeholder="351 2345678">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Contacto (nombre)</label>
+        <input type="text" class="form-input" id="f-contacto" placeholder="Nombre y apellido">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-select" id="f-activo">
+          <option value="true">Activo</option>
+          <option value="false">Inactivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row full">
+      <div class="form-group">
+        <label class="form-label">Notas cliente</label>
+        <textarea class="form-textarea" id="f-notas-cliente" placeholder="Notas adicionales del cliente..."></textarea>
+      </div>
+    </div>
+
+    <div class="modal-section">Datos de la licencia</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cuenta (Cartera) *</label>
+        <select class="form-select" id="f-cuenta">
+          <option value="Totem Nube">Totem Nube</option>
+          <option value="Gestion Play">Gestion Play</option>
+          <option value="Validar GP">Validar GP</option>
+          <option value="Carlos Pussetto">Carlos Pussetto</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo *</label>
+        <select class="form-select" id="f-tipo">
+          <option value="Agro">Agro</option>
+          <option value="Salud">Salud</option>
+          <option value="Retail">Retail</option>
+          <option value="Gastronomia">Gastronomía</option>
+          <option value="Educacion">Educación</option>
+          <option value="Corporativo">Corporativo</option>
+          <option value="Gobierno">Gobierno</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Estado licencia</label>
+        <select class="form-select" id="f-estado-lic">
+          <option value="activa">Activa</option>
+          <option value="comprometida">Comprometida</option>
+          <option value="pausada">Pausada</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Moneda</label>
+        <select class="form-select" id="f-moneda">
+          <option value="ARS">ARS</option>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row full">
+      <div class="form-group">
+        <label class="form-label">Descripción licencia</label>
+        <input type="text" class="form-input" id="f-descripcion" placeholder="Ej: Totem Nube Turnero 32" x2 puestos">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Precio neto (sin IVA)</label>
+        <input type="number" class="form-input" id="f-precio" placeholder="0" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Puestos / Pantallas</label>
+        <input type="text" class="form-input" id="f-puestos" placeholder="Ej: 2 tótems, 1 sala espera">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Fecha alta</label>
+        <input type="date" class="form-input" id="f-fecha-alta">
+      </div>
+      <div class="form-group">
+        <label class="form-label">N° Orden (referencia)</label>
+        <input type="text" class="form-input readonly" id="f-orden" readonly>
+      </div>
+    </div>
+    <div class="form-row full">
+      <div class="form-group">
+        <label class="form-label">Notas licencia</label>
+        <textarea class="form-textarea" id="f-notas-lic" placeholder="Notas adicionales..."></textarea>
+      </div>
+    </div>
+
+    <div id="modal-msg" style="display:none;padding:10px 14px;border-radius:var(--radius);font-size:12px;margin-top:10px;"></div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn purple" id="btn-solo-cliente" onclick="guardarSoloCliente()">Guardar solo cliente</button>
+      <button class="btn green" id="btn-guardar" onclick="guardarEnGestor()">✓ Sincronizar con Gestor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Nav -->
+<nav class="gernav" id="gernav">
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/index.html"><span class="gernav-icon">🏠</span>Inicio</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/calculador_totem_nube_v16.html"><span class="gernav-icon">💰</span>Cotizador</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html"><span class="gernav-icon">✅</span>OPs</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/compras.html"><span class="gernav-icon">🛒</span>Compras</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html"><span class="gernav-icon">📥</span>Recepción</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html"><span class="gernav-icon">📦</span>Stock</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/produccion.html"><span class="gernav-icon">🔧</span>Producción</a>
+  <a class="gernav-btn active" href="#"><span class="gernav-icon">🔑</span>Licencias</a>
+</nav>
+
+<script>
+// ─── Config Supabase Gestor de Licencias ────────────────────────────────────
+const GESTOR_URL = 'https://sjxalttgdadrkhsrekcs.supabase.co';
+const GESTOR_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqeGFsdHRnZGFkcmtoc3Jla2NzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzc1OTAsImV4cCI6MjA5NTkxMzU5MH0.CUJzkYzN1FyETWE_5gEnTjCQ4C-o_xEhDy9-0Ab6MWY';
+
+// Clave localStorage del calculador
+const LS_KEY = 'tn_calculador_v16';
+
+// ─── API Gestor ──────────────────────────────────────────────────────────────
+async function apiGestor(path, method='GET', body=null){
+  const opts = {
+    method,
+    headers:{
+      'apikey': GESTOR_KEY,
+      'Authorization': 'Bearer ' + GESTOR_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'return=representation' : ''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(GESTOR_URL + '/rest/v1/' + path, opts);
+  if(!res.ok){ const err = await res.text(); throw new Error(err); }
+  if(res.status===204) return null;
+  return res.json();
+}
+
+// ─── Estado local ────────────────────────────────────────────────────────────
+let proyectos = [];
+let cotizaciones = [];
+let sincronizados = {}; // { orden: { cliente_id, licencia_id } }
+let clientesGestor = [];
+
+const SYNC_KEY = 'tn_licencias_sync';
+
+function cargarSync(){
+  try { sincronizados = JSON.parse(localStorage.getItem(SYNC_KEY)||'{}'); } catch(e){ sincronizados={}; }
+}
+function guardarSync(){
+  localStorage.setItem(SYNC_KEY, JSON.stringify(sincronizados));
+}
+
+// ─── Cargar datos del calculador ─────────────────────────────────────────────
+function cargarDatosCalculador(){
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    proyectos = data.proyectos || [];
+    cotizaciones = data.cotizaciones || [];
+  } catch(e){
+    console.error('Error leyendo calculador:', e);
+  }
+}
+
+// ─── Obtener cotización asociada a un proyecto ───────────────────────────────
+function getCotAsoc(p){
+  return cotizaciones.find(c => c.numero && c.numero.replace('COT-','') === p.orden) || null;
+}
+
+// ─── Proyectos con licencia (tienen ítems de licencia o están en estados clave) ──
+function proyectosConLicencia(){
+  return proyectos.filter(p => {
+    const estados = ['despachado','instalado','en_produccion','listo_despacho'];
+    return estados.includes(p.estado);
+  });
+}
+
+// ─── Render tabla ────────────────────────────────────────────────────────────
+function renderTabla(){
+  const body = document.getElementById('tabla-body');
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const filtroEstado = document.getElementById('filtro-estado').value;
+  const filtroGestor = document.getElementById('filtro-gestor').value;
+
+  let lista = proyectosConLicencia().filter(p => {
+    const matchSearch = !search || p.cliente.toLowerCase().includes(search) || (p.orden||'').toLowerCase().includes(search);
+    const matchEstado = !filtroEstado || p.estado === filtroEstado;
+    const sync = sincronizados[p.orden];
+    const matchGestor = !filtroGestor || (filtroGestor==='sincronizado' ? !!sync : !sync);
+    return matchSearch && matchEstado && matchGestor;
+  });
+
+  if(!lista.length){
+    body.innerHTML = '<tr><td colspan="6" class="empty-msg">No hay proyectos que coincidan.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = lista.map(p => {
+    const sync = sincronizados[p.orden];
+    const cot = getCotAsoc(p);
+    const estadoLabel = {
+      despachado:'Despachado', instalado:'Instalado', en_produccion:'En producción',
+      listo_despacho:'Listo despacho'
+    }[p.estado] || p.estado;
+
+    const gestorHtml = sync
+      ? `<span class="gestor-status ok">✓ Sincronizado</span><br><span style="font-size:9px;color:var(--text3);">Cli #${sync.cliente_id}</span>`
+      : `<span class="gestor-status pending">⏳ Pendiente</span>`;
+
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${p.orden||'—'}</td>
+      <td class="nombre">${p.cliente}</td>
+      <td style="font-size:11px;">${p.notas||'—'}<br>${cot?.contacto?`<span style="color:var(--text3);">${cot.contacto}</span>`:''}</td>
+      <td><span class="badge ${p.estado}">${estadoLabel}</span></td>
+      <td>${gestorHtml}</td>
+      <td style="text-align:right;">
+        <button class="btn ${sync?'':'green'}" onclick="abrirModal('${p.orden}')">
+          ${sync ? '✏ Editar' : '+ Sincronizar'}
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Modal ───────────────────────────────────────────────────────────────────
+let _ordenActual = null;
+
+function abrirModal(orden){
+  _ordenActual = orden;
+  const p = proyectos.find(x => x.orden === orden);
+  if(!p) return;
+  const cot = getCotAsoc(p);
+  const sync = sincronizados[orden];
+
+  // Pre-poblar con datos del calculador
+  document.getElementById('f-nombre').value = p.cliente || '';
+  document.getElementById('f-cuit').value = cot?.cuit || p.cuit || '';
+  document.getElementById('f-email').value = cot?.email || cot?.mail || p.email || '';
+  document.getElementById('f-telefono').value = cot?.tel || cot?.telefono || p.tel || '';
+  document.getElementById('f-contacto').value = cot?.contacto || p.contacto || '';
+  document.getElementById('f-notas-cliente').value = '';
+  document.getElementById('f-activo').value = 'true';
+
+  // Licencia
+  document.getElementById('f-descripcion').value = p.notas || cot?.sistema || '';
+  document.getElementById('f-fecha-alta').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f-orden').value = orden;
+  document.getElementById('f-precio').value = '';
+  document.getElementById('f-puestos').value = '';
+  document.getElementById('f-notas-lic').value = '';
+  document.getElementById('f-estado-lic').value = p.estado === 'instalado' ? 'activa' : 'comprometida';
+
+  // Si ya está sincronizado, mostrar título diferente
+  const title = sync ? `Editar sincronización · ${p.cliente}` : `Sincronizar · ${p.cliente}`;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-msg').style.display = 'none';
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function cerrarModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  _ordenActual = null;
+}
+
+// ─── Guardar en Gestor ───────────────────────────────────────────────────────
+async function guardarEnGestor(){
+  const nombre = document.getElementById('f-nombre').value.trim();
+  const cuenta = document.getElementById('f-cuenta').value;
+  const precio = parseFloat(document.getElementById('f-precio').value) || 0;
+  if(!nombre){ showMsg('El nombre del cliente es obligatorio.', 'red'); return; }
+
+  const btn = document.getElementById('btn-guardar');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    // 1. Crear o actualizar cliente en Gestor
+    let clienteId = sincronizados[_ordenActual]?.cliente_id;
+
+    const clienteData = {
+      nombre,
+      cuit: document.getElementById('f-cuit').value.trim() || null,
+      email: document.getElementById('f-email').value.trim() || null,
+      telefono: document.getElementById('f-telefono').value.trim() || null,
+      contacto: document.getElementById('f-contacto').value.trim() || null,
+      notas: document.getElementById('f-notas-cliente').value.trim() || null,
+      activo: document.getElementById('f-activo').value === 'true'
+    };
+
+    if(clienteId){
+      // Actualizar cliente existente
+      await apiGestor(`clientes?id=eq.${clienteId}`, 'PATCH', clienteData);
+    } else {
+      // Buscar si ya existe por nombre exacto
+      const existing = await apiGestor(`clientes?nombre=eq.${encodeURIComponent(nombre)}&select=id&limit=1`);
+      if(existing?.length){
+        clienteId = existing[0].id;
+        await apiGestor(`clientes?id=eq.${clienteId}`, 'PATCH', clienteData);
+      } else {
+        const created = await apiGestor('clientes', 'POST', clienteData);
+        clienteId = created?.[0]?.id;
+      }
+    }
+
+    if(!clienteId) throw new Error('No se pudo obtener el ID del cliente.');
+
+    // 2. Crear o actualizar licencia
+    let licenciaId = sincronizados[_ordenActual]?.licencia_id;
+
+    const licData = {
+      cliente_id: clienteId,
+      cuenta,
+      tipo: document.getElementById('f-tipo').value,
+      estado: document.getElementById('f-estado-lic').value,
+      descripcion: document.getElementById('f-descripcion').value.trim() || null,
+      precio_actual: precio,
+      moneda: document.getElementById('f-moneda').value,
+      fecha_alta: document.getElementById('f-fecha-alta').value || null,
+      notas: (document.getElementById('f-notas-lic').value.trim() || '') +
+             (document.getElementById('f-puestos').value.trim() ? `\nPuestos/Pantallas: ${document.getElementById('f-puestos').value.trim()}` : '') +
+             `\nRef. Orden: ${_ordenActual}`,
+      parametros: { orden: _ordenActual, puestos: document.getElementById('f-puestos').value.trim() }
+    };
+
+    if(licenciaId){
+      await apiGestor(`licencias?id=eq.${licenciaId}`, 'PATCH', licData);
+    } else {
+      const licCreated = await apiGestor('licencias', 'POST', licData);
+      licenciaId = licCreated?.[0]?.id;
+    }
+
+    // 3. Guardar en sync local
+    sincronizados[_ordenActual] = { cliente_id: clienteId, licencia_id: licenciaId, fecha: new Date().toISOString() };
+    guardarSync();
+
+    showMsg('✓ Sincronizado correctamente con el Gestor de Licencias.', 'green');
+    renderTabla();
+
+    setTimeout(()=>cerrarModal(), 1500);
+
+  } catch(e){
+    showMsg('Error: ' + e.message, 'red');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✓ Sincronizar con Gestor';
+  }
+}
+
+async function guardarSoloCliente(){
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if(!nombre){ showMsg('El nombre del cliente es obligatorio.', 'red'); return; }
+
+  const btn = document.getElementById('btn-solo-cliente');
+  btn.disabled = true;
+
+  try {
+    const clienteData = {
+      nombre,
+      cuit: document.getElementById('f-cuit').value.trim() || null,
+      email: document.getElementById('f-email').value.trim() || null,
+      telefono: document.getElementById('f-telefono').value.trim() || null,
+      contacto: document.getElementById('f-contacto').value.trim() || null,
+      notas: document.getElementById('f-notas-cliente').value.trim() || null,
+      activo: document.getElementById('f-activo').value === 'true'
+    };
+
+    const existing = await apiGestor(`clientes?nombre=eq.${encodeURIComponent(nombre)}&select=id&limit=1`);
+    let clienteId;
+    if(existing?.length){
+      clienteId = existing[0].id;
+      await apiGestor(`clientes?id=eq.${clienteId}`, 'PATCH', clienteData);
+    } else {
+      const created = await apiGestor('clientes', 'POST', clienteData);
+      clienteId = created?.[0]?.id;
+    }
+
+    if(sincronizados[_ordenActual]){
+      sincronizados[_ordenActual].cliente_id = clienteId;
+    } else {
+      sincronizados[_ordenActual] = { cliente_id: clienteId, licencia_id: null, fecha: new Date().toISOString() };
+    }
+    guardarSync();
+    showMsg('✓ Cliente guardado en el Gestor (sin licencia aún).', 'green');
+    renderTabla();
+
+  } catch(e){
+    showMsg('Error: ' + e.message, 'red');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showMsg(txt, tipo){
+  const el = document.getElementById('modal-msg');
+  el.style.display = 'block';
+  el.style.background = tipo==='green' ? 'var(--green-dim)' : 'var(--red-dim)';
+  el.style.border = `1px solid ${tipo==='green' ? 'var(--green-border)' : 'var(--red-border)'}`;
+  el.style.color = tipo==='green' ? 'var(--green)' : 'var(--red)';
+  el.textContent = txt;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const area = params.get('area') || sessionStorage.getItem('tn_area') || 'gerencia';
+
+  // Solo gerencia
+  if(area !== 'gerencia'){
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Acceso solo para gerencia.</div>';
+    return;
+  }
+
+  // Propagar area=gerencia a links nav
+  document.querySelectorAll('.gernav-btn').forEach(a => {
+    if(a.href && !a.href.includes('#')){
+      try{
+        const url = new URL(a.href);
+        url.searchParams.set('area', 'gerencia');
+        a.href = url.toString();
+      }catch(e){}
+    }
+  });
+
+  cargarSync();
+  cargarDatosCalculador();
+  renderTabla();
+})();
+</script>
+
+</body>
+</html>
