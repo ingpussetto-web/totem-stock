@@ -167,7 +167,7 @@ function fmt_fecha(str){
 }
 
 // ─── Cargar lista de SKUs ───────────────────────────────────────────────────
-async function cargarSkus(){
+async function cargarSkus(){ // retorna promise implícita por ser async
   try {
     const skus = await api('skus?select=id,codigo,nombre,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
     const sel = document.getElementById('sku-select');
@@ -630,7 +630,15 @@ function cancelarAjuste(){
     return;
   }
 
-  cargarSkus();
+  cargarSkus().then(() => {
+    // Si viene sku_id por URL, preseleccionar y cargar automáticamente
+    const skuIdParam = params.get('sku_id');
+    if(skuIdParam){
+      const sel = document.getElementById('sku-select');
+      sel.value = skuIdParam;
+      if(sel.value) iniciarConteo();
+    }
+  });
 })();
 </script>
 

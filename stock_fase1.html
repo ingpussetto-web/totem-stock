@@ -811,7 +811,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
         : ''
       }
-      <button class="btn sm" onclick="event.stopPropagation();showHistorialStock(${d.sku_id||d.id},'${d.variante||''}','${d.codigo||''}',this)" style="margin-left:4px;">📋 Historial</button>
+      <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id='+(${d.sku_id||d.id})+'&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')" style="margin-left:4px;">📋 Historial</button>
       ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
         <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''} 
           onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
