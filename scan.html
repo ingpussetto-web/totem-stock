@@ -134,8 +134,8 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 <div class="toast" id="toast"></div>
 
 <script>
-const SUPA_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
+const SUPA_URL = localStorage.getItem('supa_url') || '';
+const SUPA_KEY = localStorage.getItem('supa_key') || '';
 
 let unidadActual = null;
 let opSeleccionada = null;
@@ -187,6 +187,12 @@ async function api(path, method='GET', body=null){
 
 async function init(){
   if(window._setupDone) return;
+
+  if(!SUPA_URL || !SUPA_KEY){
+    renderError('Sin configuración', 'Escaneá el QR de configuración desde el panel principal antes de usar el escaneo.');
+    return;
+  }
+
   const params = new URLSearchParams(window.location.search);
   const uid = params.get('uid');
 
