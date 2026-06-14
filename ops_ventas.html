@@ -1346,32 +1346,31 @@ let skusDisponibles = [];
 async function abrirBOMMaestra(){
   const pwd = prompt('Contraseña gerencia:');
   if(pwd !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
-
-  // Cargar SKUs disponibles
   skusDisponibles = await api('skus?activo=eq.true&select=id,nombre,codigo&order=nombre.asc').catch(()=>[]);
-
-  // Mostrar modal con selector de producto
+  const bomsExistentes = await api('bom_maestra?select=producto_v14&order=producto_v14.asc').catch(()=>[]);
+  const productosCon = new Set(bomsExistentes.map(b=>b.producto_v14));
   const overlay = document.createElement('div');
   overlay.id = 'modal-bom-maestra';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:24px;max-width:700px;width:100%;margin-top:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div>
-          <div style="font-size:15px;font-weight:700;">📋 BOM Maestra</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Modificar insumos base de un producto</div>
-        </div>
-        <button onclick="cerrarBOMMaestra()" style="background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 12px;cursor:pointer;">✕</button>
-      </div>
-      <div style="margin-bottom:16px;">
-        <label style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Producto</label>
-        <select id="bm-producto-sel" onchange="cargarBOMMaestraProducto()" style="width:100%;margin-top:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;">
-          <option value="">— Seleccioná un producto —</option>
-          ${PRODUCTOS_BOM.map(p=>'<option value="'+p.id+'">'+p.nombre+'</option>').join('')}
-        </select>
-      </div>
-      <div id="bm-items-area" style="min-height:100px;"></div>
-    </div>`;
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  const modelosHTML = PRODUCTOS_BOM.map(p=>{
+    const ok = productosCon.has(p.id);
+    return '<div class="bm-modelo-item" data-id="'+p.id+'" onclick="seleccionarModeloBOM(\''+p.id+'\')" style="padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid transparent;display:flex;justify-content:space-between;align-items:center;transition:all 0.15s;">'
+      +'<div style="font-size:12px;font-weight:500;line-height:1.3;">'+p.nombre+'</div>'
+      +'<div style="font-size:9px;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-left:6px;'+(ok?'background:rgba(0,229,160,0.1);color:var(--green);':'background:rgba(255,179,64,0.1);color:var(--amber);')+'">'
+      +(ok?'✓ OK':'⚠ Vacía')+'</div></div>';
+  }).join('');
+  overlay.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:960px;margin-top:10px;overflow:hidden;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border);">'
+    +'<div><div style="font-size:16px;font-weight:700;">Gestor de BOMs Maestras</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:2px;">Plantillas de insumos por modelo de producto</div></div>'
+    +'<button onclick="cerrarBOMMaestra()" style="background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 14px;cursor:pointer;font-size:13px;">Cerrar</button></div>'
+    +'<div style="display:grid;grid-template-columns:280px 1fr;min-height:500px;">'
+    +'<div style="border-right:1px solid var(--border);padding:16px;overflow-y:auto;">'
+    +'<div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Modelos</div>'
+    +'<div id="bm-lista-modelos">'+modelosHTML+'</div></div>'
+    +'<div style="padding:20px;" id="bm-editor-panel">'
+    +'<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;">'
+    +'← Selecioná un modelo para editar su BOM</div></div></div></div>';
   overlay.addEventListener('click', e=>{ if(e.target===overlay) cerrarBOMMaestra(); });
   document.body.appendChild(overlay);
 }
@@ -1379,169 +1378,139 @@ async function abrirBOMMaestra(){
 function cerrarBOMMaestra(){
   const m = document.getElementById('modal-bom-maestra');
   if(m) m.remove();
+  bomMaestraItems = [];
+  bomMaestraProducto = '';
 }
 
-async function cargarBOMMaestraProducto(){
-  const sel = document.getElementById('bm-producto-sel');
-  bomMaestraProducto = sel.value;
-  if(!bomMaestraProducto) return;
-
-  const area = document.getElementById('bm-items-area');
-  area.innerHTML = '<div style="color:var(--text3);font-size:12px;">Cargando...</div>';
-
-  // Cargar BOM maestra existente
-  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
-  
+async function seleccionarModeloBOM(productoId){
+  bomMaestraProducto = productoId;
+  document.querySelectorAll('.bm-modelo-item').forEach(el=>{
+    const sel = el.dataset.id === productoId;
+    el.style.background = sel ? 'var(--surface2)' : 'transparent';
+    el.style.borderColor = sel ? 'var(--border2)' : 'transparent';
+  });
+  const panel = document.getElementById('bm-editor-panel');
+  panel.innerHTML = '<div style="color:var(--text3);font-size:12px;">Cargando...</div>';
+  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(nombre)&order=nombre.asc').catch(()=>[]);
   if(rows && rows.length > 0){
-    // Ya tiene BOM maestra guardada
-    bomMaestraItems = rows.map(r=>({
-      id: r.id,
-      v14_key: r.v14_key,
-      sku_id: r.sku_id,
-      nombre: r.skus?.nombre || r.nombre,
-      qty: r.qty || 1
-    }));
+    bomMaestraItems = rows.map(r=>({ id:r.id, v14_key:r.v14_key, sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+    renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===productoId), false);
   } else {
-    // Sin BOM maestra — tomar de una OP activa de ese producto como base
-    const ops = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id&limit=1').catch(()=>[]);
-    if(ops && ops.length > 0){
-      const opItems = await api('op_bom_items?op_id=eq.'+ops[0].id+'&sku_id=not.is.null&select=*,skus(nombre)&order=id.asc').catch(()=>[]);
-      // Tomar items únicos por sku_id (equipo 1 como referencia)
+    const ops = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(productoId)+'&estado=not.eq.completada&select=id&limit=1').catch(()=>[]);
+    bomMaestraItems = [];
+    let desdOP = false;
+    if(ops && ops.length){
+      const opItems = await api('op_bom_items?op_id=eq.'+ops[0].id+'&sku_id=not.is.null&incluido=eq.true&select=*,skus(nombre)&order=id.asc').catch(()=>[]);
       const vistos = new Set();
-      bomMaestraItems = [];
       for(const item of opItems){
-        if((item.equipo_num||1) !== 1) continue;
+        if((item.equipo_num||1)!==1) continue;
         if(vistos.has(item.sku_id)) continue;
         vistos.add(item.sku_id);
-        bomMaestraItems.push({
-          id: null,
-          v14_key: item.v14_key,
-          sku_id: item.sku_id,
-          nombre: item.skus?.nombre || item.nombre,
-          qty: item.qty || 1
-        });
+        bomMaestraItems.push({ id:null, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.skus?.nombre||item.nombre, qty:item.qty||1 });
       }
-      if(bomMaestraItems.length > 0){
-        area.innerHTML = '<div style="font-size:11px;color:var(--amber);padding:8px 0;">⚠ Cargado desde OP activa como base. Revisá y guardá para confirmar.</div>';
-      }
-    } else {
-      bomMaestraItems = [];
+      if(bomMaestraItems.length) desdOP = true;
     }
+    renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===productoId), desdOP);
   }
-
-  renderBOMMaestraItems();
 }
 
-function renderBOMMaestraItems(){
-  const area = document.getElementById('bm-items-area');
-  if(!area) return;
-
+function renderEditorBOM(prod, desdOP){
+  const panel = document.getElementById('bm-editor-panel');
+  if(!panel) return;
+  const advertencia = desdOP
+    ? '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.3);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--amber);">⚠ Sin BOM maestra guardada. Cargada desde OP activa como base. Revisá y guardá.</div>'
+    : '';
+  const filas = bomMaestraItems.map((item,idx)=>
+    '<div style="display:grid;grid-template-columns:1fr 60px 36px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:8px;">'
+    +'<div style="font-size:13px;">'+esc(item.nombre)+'</div>'
+    +'<input type="number" value="'+item.qty+'" min="1" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:12px;text-align:center;" onchange="bomMaestraItems['+idx+'].qty=parseInt(this.value)||1">'
+    +'<button onclick="quitarItemBOMMaestra('+idx+')" style="background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:4px;padding:4px;font-size:11px;cursor:pointer;">X</button>'
+    +'</div>'
+  ).join('');
   const listaHTML = bomMaestraItems.length === 0
-    ? '<div style="color:var(--text3);font-size:12px;padding:12px 0;">Sin insumos definidos. Agregá items abajo.</div>'
-    : bomMaestraItems.map((item, idx)=>`
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-        <div style="flex:1;font-size:13px;">${item.nombre}</div>
-        <input type="number" value="${item.qty}" min="1" style="width:50px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:12px;text-align:center;"
-          onchange="bomMaestraItems[${idx}].qty=parseInt(this.value)||1">
-        <button onclick="quitarItemBOMMaestra(${idx})" style="background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;">✕</button>
-      </div>`).join('');
-
-  area.innerHTML = `
-    <div style="margin-bottom:8px;">${listaHTML}</div>
-    <div style="display:grid;grid-template-columns:1fr 80px auto;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-      <select id="bm-nuevo-sku" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);font-size:12px;">
-        <option value="">— Agregar insumo —</option>
-        ${skusDisponibles.map(s=>'<option value="'+s.id+'|'+s.nombre+'">'+s.nombre+'</option>').join('')}
-      </select>
-      <input type="number" id="bm-nuevo-qty" value="1" min="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px;color:var(--text);font-size:12px;text-align:center;">
-      <button onclick="agregarItemBOMMaestra()" style="background:var(--green-dim);border:1px solid var(--green);color:var(--green);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;">+ Agregar</button>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button onclick="guardarBOMMaestra()" style="flex:1;background:var(--green);color:#000;border:none;border-radius:8px;padding:10px;font-weight:600;font-size:13px;cursor:pointer;">💾 Guardar y aplicar a OPs activas</button>
-      <button onclick="cerrarBOMMaestra()" style="background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;">Cancelar</button>
-    </div>`;
+    ? '<div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center;">Sin insumos. Agrega items desde el selector abajo.</div>'
+    : '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">'
+      +'<div style="display:grid;grid-template-columns:1fr 60px 36px;background:var(--surface2);padding:8px 12px;border-bottom:1px solid var(--border);">'
+      +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Insumo</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;text-align:center;">Qty</div>'
+      +'<div></div></div>'+filas+'</div>';
+  const opsCopy = PRODUCTOS_BOM.filter(p=>p.id!==bomMaestraProducto).map(p=>'<option value="'+p.id+'">'+p.nombre+'</option>').join('');
+  const skuOpts = skusDisponibles.map(s=>'<option value="'+s.id+'|'+esc(s.nombre)+'">'+esc(s.nombre)+'</option>').join('');
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'
+    +'<div><div style="font-size:14px;font-weight:600;">'+esc(prod?.nombre||bomMaestraProducto)+'</div>'
+    +'<div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:monospace;">'+bomMaestraProducto+'</div></div>'
+    +'<div style="display:flex;gap:6px;">'
+    +'<select id="bm-copiar-sel" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;"><option value="">Copiar desde...</option>'+opsCopy+'</select>'
+    +'<button onclick="copiarBOMMaestra()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;">Copiar</button>'
+    +'</div></div>'+advertencia+listaHTML
+    +'<div style="display:grid;grid-template-columns:1fr 80px auto;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">'
+    +'<select id="bm-nuevo-sku" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px;color:var(--text);font-size:12px;"><option value="">-- Agrega un insumo --</option>'+skuOpts+'</select>'
+    +'<input type="number" id="bm-nuevo-qty" value="1" min="1" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px;color:var(--text);font-size:12px;text-align:center;">'
+    +'<button onclick="agregarItemBOMMaestra()" style="background:var(--green-dim);border:1px solid var(--green);color:var(--green);border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer;white-space:nowrap;">+ Agregar</button></div>'
+    +'<div style="display:flex;gap:8px;margin-top:16px;">'
+    +'<button onclick="guardarBOMMaestra()" style="flex:1;background:var(--green);color:#000;border:none;border-radius:8px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;">Guardar BOM</button></div>';
 }
 
 function quitarItemBOMMaestra(idx){
-  bomMaestraItems.splice(idx, 1);
-  renderBOMMaestraItems();
+  bomMaestraItems.splice(idx,1);
+  renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
 function agregarItemBOMMaestra(){
   const sel = document.getElementById('bm-nuevo-sku');
-  const qty = parseInt(document.getElementById('bm-nuevo-qty').value) || 1;
+  const qty = parseInt(document.getElementById('bm-nuevo-qty').value)||1;
   if(!sel.value) return;
-  const [skuId, nombre] = sel.value.split('|');
-  bomMaestraItems.push({ id: null, v14_key: 'manual_'+Date.now(), sku_id: parseInt(skuId), nombre, qty });
-  renderBOMMaestraItems();
+  const pipeIdx = sel.value.indexOf('|');
+  const skuId = parseInt(sel.value.substring(0, pipeIdx));
+  const nombre = sel.value.substring(pipeIdx+1);
+  if(bomMaestraItems.find(i=>i.sku_id===skuId)){ alert('Ese insumo ya está en la BOM.'); return; }
+  bomMaestraItems.push({ id:null, v14_key:'manual_'+Date.now(), sku_id:skuId, nombre, qty });
+  renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
+}
+
+async function copiarBOMMaestra(){
+  const sel = document.getElementById('bm-copiar-sel');
+  if(!sel.value){ alert('Selecioná un producto para copiar.'); return; }
+  if(!confirm('Esto reemplaza los insumos actuales con los del modelo seleccionado. ¿Continuar?')) return;
+  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
+  if(!rows||!rows.length){ alert('El modelo seleccionado no tiene BOM maestra cargada.'); return; }
+  bomMaestraItems = rows.map(r=>({ id:null, v14_key:'manual_'+Date.now(), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+  renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
 async function guardarBOMMaestra(){
-  if(!bomMaestraProducto || !bomMaestraItems.length){
-    alert('Seleccioná un producto y agregá al menos un insumo.');
-    return;
-  }
-  if(!confirm('¿Guardar BOM maestra y aplicar cambios a todas las OPs activas de este producto?')) return;
-
-  try {
-    // Borrar BOM maestra existente para este producto
-    await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto), 'DELETE');
-
-    // Insertar nueva BOM maestra
-    const payload = bomMaestraItems.map(item=>({
-      producto_v14: bomMaestraProducto,
-      v14_key: item.v14_key,
-      sku_id: item.sku_id,
-      nombre: item.nombre,
-      qty: item.qty,
-      activo: true
-    }));
-    await api('bom_maestra', 'POST', payload);
-
-    // Aplicar a OPs activas del mismo producto
+  if(!bomMaestraProducto||!bomMaestraItems.length){ alert('Agrega al menos un insumo.'); return; }
+  if(!confirm('¿Guardar BOM maestra y aplicar cambios a OPs activas de este producto?')) return;
+  try{
+    await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE');
+    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
+    await api('bom_maestra','POST',payload);
     const opsActivas = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id').catch(()=>[]);
-    
     for(const op of opsActivas){
-      // Obtener items ya asignados — no se tocan
       const asignados = await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.asignado&select=sku_id,equipo_num').catch(()=>[]);
       const skusAsignados = new Set(asignados.map(a=>a.sku_id+'_'+(a.equipo_num||1)));
-
-      // Borrar solo los pendientes
-      await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.pendiente', 'DELETE');
-
-      // Detectar equipos activos en esta OP (basado en asignados o default 1)
-      const equiposActivos = asignados.length > 0
-        ? [...new Set(asignados.map(a=>a.equipo_num||1))]
-        : [1];
-
-      // Insertar nueva BOM solo para insumos no asignados
+      await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.pendiente','DELETE');
+      const equipos = asignados.length > 0 ? [...new Set(asignados.map(a=>a.equipo_num||1))] : [1];
       const bomPayload = [];
-      for(const eq of equiposActivos){
+      for(const eq of equipos){
         bomMaestraItems.forEach(item=>{
-          const key = item.sku_id+'_'+eq;
-          if(!skusAsignados.has(key)){
-            bomPayload.push({
-              op_id: op.id,
-              sku_id: item.sku_id,
-              v14_key: item.v14_key,
-              nombre: item.nombre,
-              qty: item.qty,
-              incluido: true,
-              estado: 'pendiente',
-              equipo_num: eq
-            });
+          if(!skusAsignados.has(item.sku_id+'_'+eq)){
+            bomPayload.push({ op_id:op.id, sku_id:item.sku_id, v14_key:item.v14_key, nombre:item.nombre, qty:item.qty, incluido:true, estado:'pendiente', equipo_num:eq });
           }
         });
       }
-      if(bomPayload.length > 0) await api('op_bom_items', 'POST', bomPayload);
+      if(bomPayload.length) await api('op_bom_items','POST',bomPayload);
     }
-
-    alert('✅ BOM Maestra guardada y aplicada a '+opsActivas.length+' OP(s) activas.');
-    cerrarBOMMaestra();
+    document.querySelectorAll('.bm-modelo-item').forEach(el=>{
+      if(el.dataset.id===bomMaestraProducto){
+        const badge = el.querySelector('div:last-child');
+        if(badge){ badge.style.background='rgba(0,229,160,0.1)'; badge.style.color='var(--green)'; badge.textContent='✓ OK'; }
+      }
+    });
+    alert('✅ BOM Maestra guardada. OPs activas actualizadas: '+opsActivas.length);
     loadOPs();
-  } catch(e){
-    alert('Error: ' + e.message);
-  }
+  } catch(e){ alert('Error: '+e.message); }
 }
 
 // ─── MODAL DISTRIBUCIÓN PLAYERS ─────────────────────────────────────────────
