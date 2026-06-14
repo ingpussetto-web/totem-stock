@@ -246,6 +246,8 @@ let urgenciaSeleccionada = 'normal';
 let editandoId = null;
 let noticias = [];
 
+function esc(str){ return (str||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 async function api(path, method='GET', body=null){
   if(!SUPA_URL||!SUPA_KEY) throw new Error('Sin configuración');
   const opts={method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':method==='POST'?'return=representation':method==='PATCH'?'return=representation':''}};
@@ -329,10 +331,10 @@ function renderNoticias(){
           ${urgBadge}
           ${estadoBadge}
           <span class="noticia-fecha">${fecha}</span>
-          <span class="noticia-autor">por ${n.autor||'—'}</span>
+          <span class="noticia-autor">por ${esc(n.autor)||'—'}</span>
         </div>
       </div>
-      <div class="noticia-texto">${n.mensaje}</div>
+      <div class="noticia-texto">${esc(n.mensaje)}</div>
       <div class="noticia-actions">
         <button class="btn sm" onclick="openModalEdit(${n.id})">✏ Editar</button>
         ${n.activa

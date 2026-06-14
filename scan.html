@@ -140,6 +140,8 @@ const SUPA_KEY = localStorage.getItem('supa_key') || '';
 let unidadActual = null;
 let opSeleccionada = null;
 
+function esc(str){ return (str||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 async function api(path, method='GET', body=null){
   const opts = {
     method,
@@ -272,10 +274,10 @@ async function renderEnStock(){
         const esPlayer = items.some(i => (i.notas||'').startsWith('🖥'));
         const usaSelector = esPlayer;
         return `<div class="op-item">
-          <div class="op-item-numero">${op.op_numero}</div>
-          <div class="op-item-cliente">${op.cliente}</div>
-          <div class="op-item-producto">${op.producto_nombre}</div>
-          ${op.color_gabinete?`<div class="op-item-color">● Color: ${op.color_gabinete}</div>`:''}
+          <div class="op-item-numero">${esc(op.op_numero)}</div>
+          <div class="op-item-cliente">${esc(op.cliente)}</div>
+          <div class="op-item-producto">${esc(op.producto_nombre)}</div>
+          ${op.color_gabinete?`<div class="op-item-color">● Color: ${esc(op.color_gabinete)}</div>`:''}
           ${pendientesEnOP>1?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">Quedan ${pendientesEnOP} unidades por asignar en esta OP</div>`:''}
           <button class="btn-asignar"
             data-op-id="${op.id}"
@@ -300,9 +302,9 @@ async function renderEnStock(){
     </div>
 
     <div class="insumo-card">
-      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
+      <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
       ${variante?`<div class="insumo-variante">● ${variante}</div>`:''}
-      <div class="insumo-uid">${u.uid}</div>
+      <div class="insumo-uid">${esc(u.uid)}</div>
     </div>
 
     <div class="nombre-section">
@@ -368,18 +370,18 @@ async function renderReservado(){
     </div>
 
     <div class="insumo-card">
-      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
+      <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
       ${variante?`<div class="insumo-variante">● ${variante}</div>`:''}
-      <div class="insumo-uid">${u.uid}</div>
+      <div class="insumo-uid">${esc(u.uid)}</div>
     </div>
 
     ${op ? `
     <div class="asig-card">
       <div class="asig-title">Asignación actual</div>
-      <div class="asig-row"><div class="asig-key">N° Orden</div><div class="asig-val">${op.op_numero}</div></div>
-      <div class="asig-row"><div class="asig-key">Cliente</div><div class="asig-val">${op.cliente}</div></div>
-      <div class="asig-row"><div class="asig-key">Producto</div><div class="asig-val">${op.producto_nombre}</div></div>
-      ${op.color_gabinete?`<div class="asig-row"><div class="asig-key">Color</div><div class="asig-val" style="color:var(--amber)">${op.color_gabinete}</div></div>`:''}
+      <div class="asig-row"><div class="asig-key">N° Orden</div><div class="asig-val">${esc(op.op_numero)}</div></div>
+      <div class="asig-row"><div class="asig-key">Cliente</div><div class="asig-val">${esc(op.cliente)}</div></div>
+      <div class="asig-row"><div class="asig-key">Producto</div><div class="asig-val">${esc(op.producto_nombre)}</div></div>
+      ${op.color_gabinete?`<div class="asig-row"><div class="asig-key">Color</div><div class="asig-val" style="color:var(--amber)">${esc(op.color_gabinete)}</div></div>`:''}
       <div class="asig-row"><div class="asig-key">Asignado por</div><div class="asig-val">${asignadoPor}</div></div>
       <div class="asig-row"><div class="asig-key">Fecha</div><div class="asig-val">${fechaAsig}</div></div>
       ${progresoBadge}
@@ -395,8 +397,8 @@ function renderProducido(){
       <div class="estado-label">Incorporado a tótem</div>
     </div>
     <div class="insumo-card">
-      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
-      <div class="insumo-uid">${u.uid}</div>
+      <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
+      <div class="insumo-uid">${esc(u.uid)}</div>
     </div>
     <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">
       Este insumo ya fue incorporado a un equipo terminado.
@@ -412,8 +414,8 @@ function renderBaja(){
       <div class="estado-label">Dado de baja</div>
     </div>
     <div class="insumo-card">
-      <div class="insumo-nombre">${u.skus?.nombre||'—'}</div>
-      <div class="insumo-uid">${u.uid}</div>
+      <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
+      <div class="insumo-uid">${esc(u.uid)}</div>
     </div>
   `;
 }
@@ -463,9 +465,9 @@ async function renderCaja(sku){
     <div style="padding:16px 0;">
       <div style="text-align:center;margin-bottom:16px;">
         <div style="font-size:28px;margin-bottom:6px;">📦</div>
-        <div style="font-size:11px;color:var(--text3);font-family:monospace;text-transform:uppercase;letter-spacing:0.1em;">${sku.categorias?.nombre||''}</div>
-        <div style="font-size:18px;font-weight:700;margin:4px 0;">${sku.nombre}</div>
-        <div style="font-size:10px;color:var(--text3);font-family:monospace;">${sku.codigo}</div>
+        <div style="font-size:11px;color:var(--text3);font-family:monospace;text-transform:uppercase;letter-spacing:0.1em;">${esc(sku.categorias?.nombre||'')}</div>
+        <div style="font-size:18px;font-weight:700;margin:4px 0;">${esc(sku.nombre)}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:monospace;">${esc(sku.codigo)}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
         <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;">

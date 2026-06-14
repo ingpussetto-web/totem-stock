@@ -339,6 +339,8 @@ let currentBOMItems = [];
 let currentPlayerItems = []; // array separado para players
 let selectedColor = '';
 
+function esc(str){ return (str||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 // ─── API ───────────────────────────────────────────────────
 async function api(path, method='GET', body=null){
   if(!SUPA_URL||!SUPA_KEY) throw new Error('Sin configuración');
@@ -417,12 +419,12 @@ function renderOPCard(o){
     <div class="op-header">
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <div class="op-numero">${o.op_numero}</div>
+          <div class="op-numero">${esc(o.op_numero)}</div>
           <span class="badge ${estadoBadge[o.estado]}">${estadoLabel[o.estado]}</span>
-          ${o.color_gabinete?`<span style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;">● ${o.color_gabinete}</span>`:''}
+          ${o.color_gabinete?`<span style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;">● ${esc(o.color_gabinete)}</span>`:''}
         </div>
-        <div class="op-cliente">${o.cliente}</div>
-        <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
+        <div class="op-cliente">${esc(o.cliente)}</div>
+        <div class="op-producto">${esc(o.producto_nombre)} × ${o.cantidad}</div>
         <div class="op-meta">${o.v14_orden||'—'} · Creada ${fecha}</div>
       </div>
       <div class="op-actions">
