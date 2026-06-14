@@ -5324,9 +5324,28 @@ function guardarProyecto(){
   autoSave();
 }
 
-function eliminarProyecto(id){
+async function eliminarProyecto(id){
   const proy = proyectos.find(function(p){ return p.id===id; });
   if(!proy) return;
+
+  // Verificar si existe una OP asociada en Supabase antes de borrar
+  if(proy.orden){
+    try{
+      const ops = await stockAPI('ordenes_produccion?v14_orden=eq.'+encodeURIComponent(proy.orden)+'&select=op_numero,estado&limit=1');
+      if(ops && ops.length){
+        const op = ops[0];
+        const estadosActivos = ['bom_pendiente','bom_confirmada','en_produccion','iniciada'];
+        if(estadosActivos.includes(op.estado)){
+          alert('\u26a0 No se puede eliminar el proyecto "'+proy.cliente+'".\n\nTiene una Orden de Producci\u00f3n activa asociada:\n\u00b7 '+op.op_numero+' ('+op.estado+')\n\nPrimero cancel\u00e1 o complet\u00e1 la OP desde el m\u00f3dulo de Producci\u00f3n.');
+          return;
+        }
+        if(!confirm('Este proyecto tiene una OP asociada ('+op.op_numero+' \u00b7 '+op.estado+').\nEsta ya no est\u00e1 activa.\n\n\u00bfEliMin\u00e1s el proyecto igual?')) return;
+      }
+    } catch(e){
+      if(!confirm('\u26a0 No se pudo verificar si existe una OP asociada en Supabase ('+e.message+').\n\n\u00bfEliMin\u00e1s el proyecto igual bajo tu responsabilidad?')) return;
+    }
+  }
+
   const cotAsoc = cotizaciones.find(function(c){ return c.numero && c.numero.replace('COT-','') === proy.orden; })
     || { empresa: proy.cliente, fecha: Date.now(), items: proy.items.map(function(it){ return Object.assign({},it,{nombre:it.desc}); }), validez:15, pagoTexto:'—' };
   imprimirYEliminar(cotAsoc, function(){
