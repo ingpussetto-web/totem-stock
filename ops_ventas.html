@@ -1323,20 +1323,90 @@ init();
 // ─── BOM MAESTRA ──────────────────────────────────────────────────────────────
 
 const PRODUCTOS_BOM = [
-  {id:'turn_sw_22_incl', nombre:'Turnero con SW — Inclinado 22"'},
-  {id:'turn_sw_32_incl', nombre:'Turnero con SW — Inclinado 32"'},
-  {id:'turn_sw_22_vert', nombre:'Turnero con SW — Vertical 22"'},
-  {id:'turn_sw_32_vert', nombre:'Turnero con SW — Vertical 32"'},
+  // Turnero con SW
+  {id:'turn_sw_lite_pared', nombre:'Turnero con SW — Lite Plus Pared'},
+  {id:'turn_sw_lite_pie', nombre:'Turnero con SW — Lite Plus Pie'},
+  {id:'turn_sw_pos_15', nombre:'Turnero con SW — POS 15"'},
   {id:'turn_sw_19_atril', nombre:'Turnero con SW — Atril 19"'},
   {id:'turn_sw_22_atril', nombre:'Turnero con SW — Atril 22"'},
-  {id:'turn_sin_sw_22_incl', nombre:'Turnero sin SW — Inclinado 22"'},
-  {id:'turn_sin_sw_32_incl', nombre:'Turnero sin SW — Inclinado 32"'},
-  {id:'turn_sin_sw_22_vert', nombre:'Turnero sin SW — Vertical 22"'},
-  {id:'turn_sin_sw_32_vert', nombre:'Turnero sin SW — Vertical 32"'},
+  {id:'turn_sw_22_atril_imp', nombre:'Turnero con SW — Atril Importado 22"'},
+  {id:'turn_sw_22_incl', nombre:'Turnero con SW — Inclinado 22"'},
+  {id:'turn_sw_32_incl', nombre:'Turnero con SW — Inclinado 32"'},
+  {id:'turn_sw_32_vert', nombre:'Turnero con SW — Vertical 32"'},
+  {id:'turn_sw_22_ecube', nombre:'Turnero con SW — E-Cube 22"'},
+  {id:'turn_sw_32_ecube', nombre:'Turnero con SW — E-Cube 32"'},
+  {id:'turn_sw_32_ultraslim', nombre:'Turnero con SW — Ultra Slim Vertical 32"'},
+  {id:'turn_sw_22_vert_silver', nombre:'Turnero con SW — Vertical Metálico Silver 22"'},
+  // Turnero sin SW
   {id:'turn_sin_sw_19_atril', nombre:'Turnero sin SW — Atril 19"'},
   {id:'turn_sin_sw_22_atril', nombre:'Turnero sin SW — Atril 22"'},
+  {id:'turn_sin_sw_22_incl', nombre:'Turnero sin SW — Inclinado 22"'},
+  {id:'turn_sin_sw_32_incl', nombre:'Turnero sin SW — Inclinado 32"'},
+  {id:'turn_sin_sw_32_vert', nombre:'Turnero sin SW — Vertical 32"'},
+  {id:'turn_sin_sw_22_ecube', nombre:'Turnero sin SW — E-Cube 22"'},
+  {id:'turn_sin_sw_32_ecube', nombre:'Turnero sin SW — E-Cube 32"'},
+  {id:'turn_sin_sw_22_vert_silver', nombre:'Turnero sin SW — Vertical Metálico Silver 22"'},
+  {id:'turn_sin_sw_pos_15', nombre:'Turnero sin SW — POS 15"'},
+  // Vigilancia
+  {id:'vig_mdf', nombre:'Vigilancia Remota — MDF'},
+  {id:'vig_metal', nombre:'Vigilancia Remota — Metal'},
+  {id:'vig_ultraslim', nombre:'Vigilancia Remota — Ultra Slim'},
+  // Autogestón
+  {id:'auto_lite_pared', nombre:'Autogestión — Lite Plus Pared'},
+  {id:'auto_lite_pie', nombre:'Autogestión — Lite Plus Pie'},
+  {id:'auto_19_atril', nombre:'Autogestión — Atril 19"'},
+  {id:'auto_22_atril', nombre:'Autogestión — Atril 22"'},
+  {id:'auto_22_incl', nombre:'Autogestión — Inclinado 22"'},
+  {id:'auto_32_incl', nombre:'Autogestión — Inclinado 32"'},
+  {id:'auto_43_incl', nombre:'Autogestión — Inclinado 43"'},
+  {id:'auto_22_ecube', nombre:'Autogestión — E-Cube 22"'},
+  {id:'auto_32_ecube', nombre:'Autogestión — E-Cube 32"'},
+  {id:'auto_32_ultraslim', nombre:'Autogestión — Ultra Slim 32"'},
+  {id:'auto_32_vert', nombre:'Autogestión — Vertical 32"'},
+  {id:'auto_43_vert', nombre:'Autogestión — Vertical 43"'},
+  // Encuesta
+  {id:'encuesta_lite_pared', nombre:'Encuesta — Lite Plus Pared'},
+  {id:'encuesta_lite_pie', nombre:'Encuesta — Lite Plus Pie'},
+  {id:'encuesta_19_atril', nombre:'Encuesta — Atril 19"'},
+  // Publicidad
+  {id:'publ_mdf_32', nombre:'Publicidad — MDF 32"'},
+  {id:'publ_mdf_43', nombre:'Publicidad — MDF 43"'},
+  {id:'publ_mdf_50', nombre:'Publicidad — MDF 50"'},
+  {id:'publ_metal_32', nombre:'Publicidad — Metálico Vertical 32"'},
+  {id:'publ_metal_43', nombre:'Publicidad — Metálico Vertical 43"'},
+  {id:'publ_metal_50', nombre:'Publicidad — Metálico Vertical 50"'},
+  {id:'publ_gab_32', nombre:'Publicidad — Gabinete Metálico Completo 32"'},
+  {id:'publ_gab_43', nombre:'Publicidad — Gabinete Metálico Completo 43"'},
+  {id:'publ_gab_50', nombre:'Publicidad — Gabinete Metálico Completo 50"'},
+  {id:'publ_doscaras_43', nombre:'Publicidad — Dos Caras 43"'},
+  {id:'publ_doscaras_50', nombre:'Publicidad — Dos Caras 50"'},
+  {id:'publ_cano_43', nombre:'Publicidad — Caño Regulable 43"'},
+  {id:'publ_cano_50', nombre:'Publicidad — Caño Regulable 50"'},
+  {id:'publ_cano_43_prof', nombre:'Publicidad — Caño Regulable 43" Profesional'},
+  {id:'publ_cano_50_prof', nombre:'Publicidad — Caño Regulable 50" Profesional'},
+  // VideoWall
+  {id:'videowall_43', nombre:'VideoWall LED 43"'},
+  {id:'videowall_50', nombre:'VideoWall LED 50"'},
+  {id:'videowall_55', nombre:'VideoWall LED 55"'},
+  // Atención Remota
+  {id:'atencion_22_incl', nombre:'Atención Remota — Inclinado 22"'},
+  {id:'atencion_32_incl', nombre:'Atención Remota — Inclinado 32"'},
+  {id:'atencion_43_vert', nombre:'Atención Remota — Vertical 43"'},
+  {id:'atencion_32_vert', nombre:'Atención Remota — Vertical 32"'},
+  {id:'atencion_32_ultraslim', nombre:'Atención Remota — Ultra Slim 32"'},
+  {id:'atencion_22_ecube', nombre:'Atención Remota — E-Cube 22"'},
+  {id:'atencion_32_ecube', nombre:'Atención Remota — E-Cube 32"'},
+  // NubiPay
+  {id:'nubipay_pos_15', nombre:'NubiPay — POS 15" de pie'},
+  {id:'nubipay_22_incl', nombre:'NubiPay — Inclinado 22"'},
+  {id:'nubipay_32_incl', nombre:'NubiPay — Inclinado 32"'},
+  {id:'nubipay_43_vert', nombre:'NubiPay — Vertical 43"'},
+  {id:'nubipay_32_slim', nombre:'NubiPay — Slim 32"'},
+  {id:'nubipay_22_ecube', nombre:'NubiPay — E-Cube 22"'},
+  // Accesorios
   {id:'acc_minipc_beelink_n95', nombre:'Mini PC Beelink N95 8GB'},
-  {id:'atencion_32_incl', nombre:'Terminal Atención — Inclinado 32"'},
+  {id:'acc_player_hdmi', nombre:'Player HDMI'},
+  {id:'acc_impresora_termica', nombre:'Impresora Térmica XPrinter'},
 ];
 
 let bomMaestraItems = [];
@@ -1465,7 +1535,7 @@ function agregarItemBOMMaestra(){
   const skuId = parseInt(sel.value.substring(0, pipeIdx));
   const nombre = sel.value.substring(pipeIdx+1);
   if(bomMaestraItems.find(i=>i.sku_id===skuId)){ alert('Ese insumo ya está en la BOM.'); return; }
-  bomMaestraItems.push({ id:null, v14_key:'sku_'+skuId, sku_id:skuId, nombre, qty });
+  bomMaestraItems.push({ id:null, v14_key:'manual_'+Date.now(), sku_id:skuId, nombre, qty });
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
@@ -1475,7 +1545,7 @@ async function copiarBOMMaestra(){
   if(!confirm('Esto reemplaza los insumos actuales con los del modelo seleccionado. ¿Continuar?')) return;
   const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
   if(!rows||!rows.length){ alert('El modelo seleccionado no tiene BOM maestra cargada.'); return; }
-  bomMaestraItems = rows.map(r=>({ id:null, v14_key:r.v14_key||('sku_'+r.sku_id), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+  bomMaestraItems = rows.map(r=>({ id:null, v14_key:'manual_'+Date.now(), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
@@ -1484,7 +1554,7 @@ async function guardarBOMMaestra(){
   if(!confirm('¿Guardar BOM maestra y aplicar cambios a OPs activas de este producto?')) return;
   try{
     await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE');
-    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
+    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
     await api('bom_maestra','POST',payload);
     const opsActivas = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id').catch(()=>[]);
     for(const op of opsActivas){
