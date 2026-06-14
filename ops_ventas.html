@@ -1465,7 +1465,7 @@ function agregarItemBOMMaestra(){
   const skuId = parseInt(sel.value.substring(0, pipeIdx));
   const nombre = sel.value.substring(pipeIdx+1);
   if(bomMaestraItems.find(i=>i.sku_id===skuId)){ alert('Ese insumo ya está en la BOM.'); return; }
-  bomMaestraItems.push({ id:null, v14_key:'manual_'+Date.now(), sku_id:skuId, nombre, qty });
+  bomMaestraItems.push({ id:null, v14_key:'sku_'+skuId, sku_id:skuId, nombre, qty });
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
@@ -1475,24 +1475,41 @@ async function copiarBOMMaestra(){
   if(!confirm('Esto reemplaza los insumos actuales con los del modelo seleccionado. ¿Continuar?')) return;
   const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
   if(!rows||!rows.length){ alert('El modelo seleccionado no tiene BOM maestra cargada.'); return; }
-  bomMaestraItems = rows.map(r=>({ id:null, v14_key:'manual_'+Date.now(), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+  bomMaestraItems = rows.map(r=>({ id:null, v14_key:r.v14_key||('sku_'+r.sku_id), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
 async function guardarBOMMaestra(){
   if(!bomMaestraProducto||!bomMaestraItems.length){ alert('Agrega al menos un insumo.'); return; }
-  if(!confirm('¿Guardar BOM maestra para “'+PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto)?.nombre+'”? Las OPs en curso no se modifican.')) return;
+  if(!confirm('¿Guardar BOM maestra y aplicar cambios a OPs activas de este producto?')) return;
   try{
     await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE');
-    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
+    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
     await api('bom_maestra','POST',payload);
+    const opsActivas = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id').catch(()=>[]);
+    for(const op of opsActivas){
+      const asignados = await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.asignado&select=sku_id,equipo_num').catch(()=>[]);
+      const skusAsignados = new Set(asignados.map(a=>a.sku_id+'_'+(a.equipo_num||1)));
+      await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.pendiente','DELETE');
+      const equipos = asignados.length > 0 ? [...new Set(asignados.map(a=>a.equipo_num||1))] : [1];
+      const bomPayload = [];
+      for(const eq of equipos){
+        bomMaestraItems.forEach(item=>{
+          if(!skusAsignados.has(item.sku_id+'_'+eq)){
+            bomPayload.push({ op_id:op.id, sku_id:item.sku_id, v14_key:item.v14_key, nombre:item.nombre, qty:item.qty, incluido:true, estado:'pendiente', equipo_num:eq });
+          }
+        });
+      }
+      if(bomPayload.length) await api('op_bom_items','POST',bomPayload);
+    }
     document.querySelectorAll('.bm-modelo-item').forEach(el=>{
       if(el.dataset.id===bomMaestraProducto){
         const badge = el.querySelector('div:last-child');
         if(badge){ badge.style.background='rgba(0,229,160,0.1)'; badge.style.color='var(--green)'; badge.textContent='✓ OK'; }
       }
     });
-    alert('✅ BOM Maestra guardada. Las OPs en curso no fueron modificadas.');
+    alert('✅ BOM Maestra guardada. OPs activas actualizadas: '+opsActivas.length);
+    loadOPs();
   } catch(e){ alert('Error: '+e.message); }
 }
 
