@@ -504,7 +504,7 @@ document.querySelectorAll('a.mod-card').forEach(a => {
     const url = new URL(basePath);
     url.searchParams.set('area', 'gerencia');
     url.searchParams.set('v', Date.now());
-    window.location.href = url.toString();
+    window.location.replace(url.toString());
   });
 });
 </script>
