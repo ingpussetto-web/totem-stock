@@ -257,8 +257,9 @@ select.filter:focus{outline:none;border-color:var(--green);}
     </div>
     <div class="modal-sub" id="modal-bom-sub"></div>
 
-    <!-- Color gabinete -->
-    <div class="form-group">
+    <!-- Color gabinete: muestra selector solo si no está definido en la OP -->
+    <div id="color-definido" style="display:none;align-items:center;gap:8px;padding:10px 0;margin-bottom:4px;"></div>
+    <div class="form-group" id="color-section">
       <label class="form-label">Color del gabinete</label>
       <div class="color-chips" id="color-chips">
         <div class="color-chip" onclick="selectColor('Negro')">Negro</div>
@@ -537,6 +538,20 @@ async function abrirBOM(opId){
     // Color
     selectedColor = currentOP.color_gabinete || '';
     renderColorChips();
+    // Si la OP ya tiene color definido, ocultar el selector y mostrar solo el color
+    const colorSection = document.getElementById('color-section');
+    const colorDefinido = document.getElementById('color-definido');
+    if(colorSection && colorDefinido){
+      if(selectedColor && selectedColor !== 'A definir'){
+        colorSection.style.display = 'none';
+        colorDefinido.style.display = 'flex';
+        colorDefinido.innerHTML = '<span style="font-size:11px;color:var(--text3);">Color del gabinete:</span>'
+          +'<span style="font-size:13px;font-weight:600;color:var(--amber);margin-left:8px;">● '+selectedColor+'</span>';
+      } else {
+        colorSection.style.display = 'block';
+        colorDefinido.style.display = 'none';
+      }
+    }
 
     // Render BOM
     renderBOMEditor();
@@ -548,24 +563,26 @@ async function abrirBOM(opId){
     // Renderizar players existentes
     renderPlayersLista();
 
-    // Fill SKU selector para agregar extras
-    if(!allSkus.length){
-      allSkus = await api('skus?select=id,codigo,nombre,categoria_id,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
-      // Ahora que allSkus está cargado, filtrar stock de gabinetes por color seleccionado
-      if(selectedColor && selectedColor !== 'A definir'){
-        for(const item of currentBOMItems){
-          if(esItemGabinete(item) && item.sku_id){
-            const variantes = await api('variantes?sku_id=eq.'+item.sku_id+'&valor=eq.'+encodeURIComponent(selectedColor)+'&select=id').catch(()=>[]);
-            const varId = variantes?.[0]?.id;
-            if(varId){
-              const uds = await api('unidades?sku_id=eq.'+item.sku_id+'&variante_id=eq.'+varId+'&estado=eq.stock&select=id').catch(()=>[]);
-              item._stock = uds?.length || 0;
-            }
+    // Siempre validar stock de gabinete por color definido en la OP
+    if(selectedColor && selectedColor !== 'A definir'){
+      for(const item of currentBOMItems){
+        if(esItemGabinete(item) && item.sku_id){
+          const variantes = await api('variantes?sku_id=eq.'+item.sku_id+'&valor=eq.'+encodeURIComponent(selectedColor)+'&select=id').catch(()=>[]);
+          const varId = variantes?.[0]?.id;
+          if(varId){
+            item.variante_id = varId;
+            const uds = await api('unidades?sku_id=eq.'+item.sku_id+'&variante_id=eq.'+varId+'&estado=eq.stock&select=id').catch(()=>[]);
+            item._stock = uds?.length || 0;
           }
         }
       }
     }
-    // Solo mostrar insumos opcionales que tiene sentido agregar
+
+    // Fill SKU selector para agregar extras
+    if(!allSkus.length){
+      allSkus = await api('skus?select=id,codigo,nombre,categoria_id,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
+    }
+    // Solo mostrar insumos opcionales que tiene sentido agregar — con stock
     const EXTRAS_PERMITIDOS = [
       'CAMARA-WEB-HD-LOGITECH-C505',
       'LECTOR-QR-GARNIC',
@@ -577,9 +594,27 @@ async function abrirBOM(opId){
     const skusExtra = allSkus.filter(s =>
       EXTRAS_PERMITIDOS.some(cod => s.codigo?.includes(cod) || s.nombre?.toLowerCase().includes('camara') || s.nombre?.toLowerCase().includes('lector') || s.nombre?.toLowerCase().includes('parlante') || s.nombre?.toLowerCase().includes('mouse') || s.nombre?.toLowerCase().includes('boton') || s.nombre?.toLowerCase().includes('pulsador')
     ));
+    // Cargar stock para cada extra
+    const extrasConStock = await Promise.all(skusExtra.map(async s=>{
+      let stockExtra = 0;
+      try{
+        if(s.tracking==='uid'){
+          const uds = await api('unidades?sku_id=eq.'+s.id+'&estado=eq.stock&select=id').catch(()=>[]);
+          stockExtra = uds?.length||0;
+        } else {
+          const st = await api('stock?sku_id=eq.'+s.id+'&select=cantidad,cantidad_reservada').catch(()=>[]);
+          stockExtra = st?.[0] ? (st[0].cantidad-(st[0].cantidad_reservada||0)) : 0;
+        }
+      }catch(e){}
+      return {...s, _stockExtra: stockExtra};
+    }));
     const skuSel = document.getElementById('add-sku-sel');
-    skuSel.innerHTML = '<option value="">— Seleccioná insumo opcional —</option>' +
-      skusExtra.map(s=>`<option value="${s.id}">${s.nombre}</option>`).join('');
+    skuSel.innerHTML = '<option value="">— Selecioná insumo opcional —</option>' +
+      extrasConStock.map(s=>{
+        const sinStock = s._stockExtra <= 0;
+        const stockLabel = sinStock ? ' — Sin stock' : ' ('+s._stockExtra+' ud.)';
+        return `<option value="${s.id}" ${sinStock?'style="color:var(--text3);"':''}>${s.nombre}${stockLabel}</option>`;
+      }).join('');
 
     openModal('modal-bom');
   }catch(e){toast('Error: '+e.message);}
