@@ -537,16 +537,21 @@ async function abrirOP(opId){
 
     // Verificar stock de items cantidad pendientes (sin depender de alertas)
     try{
-      const cantSkuIds = [...new Set(
-        bomItems.filter(i=>i.skus?.tracking==='cantidad' && i.estado!=='asignado').map(i=>i.sku_id).filter(Boolean)
-      )];
+      // Obtener items pendientes de cantidad con su variante_id
+      const cantItems = bomItems.filter(i=>i.skus?.tracking==='cantidad' && i.estado!=='asignado' && i.sku_id);
+      const cantSkuIds = [...new Set(cantItems.map(i=>i.sku_id))];
       if(cantSkuIds.length){
-        const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
-        const stockCantMap = {};
-        (stockCant||[]).forEach(s=>{ stockCantMap[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
-        cantSkuIds.forEach(id=>{
-          const disp = stockCantMap[id] ?? -1; // -1 = no existe fila = sin stock
-          if(disp <= 0) skusConAlerta.add(id);
+        const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,variante_id,cantidad,cantidad_reservada').catch(()=>[]);
+        // Verificar cada item con su variante específica
+        cantItems.forEach(item=>{
+          // Buscar la fila de stock que corresponde a este sku + variante
+          const fila = stockCant.find(s=>{
+            if(s.sku_id !== item.sku_id) return false;
+            if(item.variante_id) return s.variante_id === item.variante_id;
+            return !s.variante_id; // sin variante
+          });
+          const disp = fila ? (fila.cantidad||0) - (fila.cantidad_reservada||0) : -1;
+          if(disp <= 0) skusConAlerta.add(item.sku_id);
         });
       }
     }catch(e){ console.warn('Stock cantidad check:', e); }
