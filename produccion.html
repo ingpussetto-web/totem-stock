@@ -1265,6 +1265,8 @@ function generarHtmlDocOP(d, cotNumero){
       <input type="text" value="${v(d.tipo_pantalla)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>`:''}
     ${d.otros_accesorios?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Otros accesorios / Propiedad del cliente</label>
       <textarea rows="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.otros_accesorios}</textarea></div>`:''}
+    ${d.obs_accesorios?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones accesorios</label>
+      <textarea rows="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.obs_accesorios}</textarea></div>`:''}
     `)}
 
     ${seccion('Vidrio y Ploteo', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -1283,6 +1285,8 @@ function generarHtmlDocOP(d, cotNumero){
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Requiere ajustes a medida</label>
         <input type="text" value="${v(d.ajustes_medida)}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;background:#f5f5f5;" readonly/></div>
     </div>
+    ${d.obs_software?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones software</label>
+      <textarea rows="2" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.obs_software}</textarea></div>`:''}
     ${d.obs_adicionales?`<div style="margin-top:8px;"><label style="font-size:10px;color:#888;text-transform:uppercase;">Observaciones adicionales del proyecto</label>
       <textarea rows="3" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;margin-top:2px;background:#f5f5f5;box-sizing:border-box;" readonly>${d.obs_adicionales}</textarea></div>`:''}
     `)}
