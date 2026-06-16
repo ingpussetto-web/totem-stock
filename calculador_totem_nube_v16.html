@@ -4619,7 +4619,7 @@ async function abrirModalOP(cotId){
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cliente / Empresa</label>
         <input id="op-cliente" type="text" value="${c.empresa||''}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Fecha Aprobación</label>
-        <input id="op-fecha" type="date" value="${new Date().toISOString().split('T')[0]}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
+        <input id="op-fecha" type="date" value="" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Nombre Ref. / Tel</label>
         <input id="op-contacto" type="text" value="${contactoStr}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Producto</label>
@@ -4861,7 +4861,7 @@ async function abrirModalOPAccesorios(c){
       '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cliente / Empresa</label>' +
         '<input id="op-cliente" type="text" value="'+(c.empresa||'')+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
       '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Fecha aprobación</label>' +
-        '<input id="op-fecha-apro" type="date" value="'+fechaHoy+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
+        '<input id="op-fecha-apro" type="date" value="" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
       '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">Nombre ref. / Tel</label>' +
         '<input id="op-contacto" type="text" value="'+contactoStr+'" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;"></div>' +
       '<div><label style="font-size:10px;color:#888;text-transform:uppercase;">📅 Fecha compromiso cliente</label>' +
@@ -4940,8 +4940,6 @@ async function guardarDocOP(){
     ploteo_vidrio: document.getElementById('op-ploteo-vidrio')?.value || '',
     ploteo_totem: document.getElementById('op-ploteo-totem')?.value || '',
     obs_ploteo: document.getElementById('op-obs-ploteo')?.value || '',
-    obs_accesorios: document.getElementById('op-obs-accesorios')?.value || '',
-    obs_software: document.getElementById('op-obs-software')?.value || '',
     config_software: (document.getElementById('op-sw') || document.getElementById('op-software'))?.value || '',
     ajustes_medida: document.getElementById('op-ajustes')?.value || '',
     obs_adicionales: document.getElementById('op-obs-adicionales')?.value || ''
@@ -4970,13 +4968,11 @@ async function cargarDocOP(cotNumero){
       'op-material','op-forma','op-pantalla','op-tactil','op-color','op-plano','op-obs-estructura',
       'op-minipc','op-so','op-windows','op-impresora','op-camara','op-qr','op-player','op-qty-player',
       'op-tipo-pantalla','op-otros','op-ploteo-vidrio','op-ploteo-totem','op-obs-ploteo',
-      'op-obs-accesorios','op-obs-software',
       'op-sw','op-ajustes','op-obs-adicionales'];
     const keys = ['cliente','contacto','fecha_aprobacion','fecha_compromiso','producto','cantidad',
       'material','forma','pantalla','tactil','color','plano','obs_estructura',
       'mini_pc','sistema_operativo','windows','impresora','camara','lector_qr','player','cantidad_players',
       'tipo_pantalla','otros_accesorios','ploteo_vidrio','ploteo_totem','obs_ploteo',
-      'obs_accesorios','obs_software',
       'config_software','ajustes_medida','obs_adicionales'];
     campos.forEach(function(id, i){
       const el = document.getElementById(id);
