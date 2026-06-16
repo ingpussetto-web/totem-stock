@@ -491,24 +491,24 @@ async function renderCantidad(skuId, nombre, content){
   // Ajustes
   const ajustes = await api(`stock_ajustes?sku_id=eq.${skuId}&select=*&order=created_at.asc`).catch(()=>[]);
 
-  // Salidas por BOM
+  // Salidas reales: solo items escaneados (uid_asignado IS NOT NULL)
   const bomItems = await api(
-    `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&estado=eq.asignado&select=qty,op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
+    `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
   ).catch(()=>[]);
 
-  // Agrupar salidas por OP
+  // Agrupar salidas por OP — cada registro es 1 unidad escaneada
   const salidaMap = {};
   (bomItems||[]).forEach(s=>{
     const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
     if(!salidaMap[opNum]){
-      salidaMap[opNum] = { ...s, qty: s.qty||0 };
+      salidaMap[opNum] = { ...s, qty: 1 };
     } else {
-      salidaMap[opNum].qty += (s.qty||0);
+      salidaMap[opNum].qty += 1;
     }
   });
   const salidas = Object.values(salidaMap);
 
-  // Stock actual — puede tener variantes
+  // Stock actual desde tabla stock (fuente de verdad)
   const stockRows = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
   const tieneVariantes = (stockRows||[]).some(r=>r.variante_id !== null);
   const stockActual = (stockRows||[]).reduce((s,r)=>s+(r.cantidad||0),0);
@@ -517,12 +517,9 @@ async function renderCantidad(skuId, nombre, content){
   const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
   const totalSalidas  = salidas.reduce((s,e)=>s+(e.qty||0),0);
 
-  // Si no hay recepciones ni ajustes, el stock fue cargado manualmente — usarlo como base
-  const sinMovimientos = totalEntradas === 0 && totalAjustes === 0;
-  // Saldo teórico: movimientos reales, o stock manual si no hay historial
-  const saldoTeorico = sinMovimientos
-    ? stockActual - totalSalidas
-    : totalEntradas + totalAjustes - totalSalidas;
+  // Saldo teórico: siempre desde stock.cantidad (fuente de verdad) menos escaneados reales
+  // Esto alinea con la vista stock_disponible
+  const saldoTeorico = stockActual - totalSalidas;
 
   content.innerHTML = `
     <div class="panel">
