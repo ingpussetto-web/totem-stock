@@ -706,35 +706,62 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
 
   let tipo, icon, titulo, detalle;
 
+  const esUID = document.getElementById('input-conteo')?.dataset.tracking === 'uid';
+
   if(diferencia === 0){
     tipo = 'ok';
     icon = '✅';
     titulo = 'Coincide — sin diferencias';
     detalle = `El conteo físico (${conteo}) coincide con el saldo del sistema (${teorico}). Registrá el conteo para dejar constancia del control.`;
-    // Mostrar sección de confirmar sin novedad
     ajusteSection.style.display = 'block';
     ajusteSection.dataset.sinDiferencia = 'true';
+  } else if(esUID && diferencia > 0){
+    // UID con unidades de más: hay unidades físicas sin etiqueta
+    tipo = 'alerta';
+    icon = '⚠️';
+    titulo = `Hay ${diferencia} unidad(es) sin etiqueta`;
+    detalle = `El sistema registra ${teorico} unidades pero contaste ${conteo}. `
+      + `Las ${diferencia} unidad(es) de más no tienen UID asignado y no pueden rastrearse. `
+      + `<strong>Generá las etiquetas desde el módulo Inventario</strong> antes de asignarlas a una OP.`;
+    ajusteSection.style.display = 'block';
+    // Cambiar botón para que solo registre el conteo sin ajustar stock
+    const btnConfirmar = document.getElementById('btn-confirmar-ajuste');
+    if(btnConfirmar){ 
+      btnConfirmar.textContent = '✓ Registrar conteo (sin ajuste)';
+      btnConfirmar.className = 'btn amber';
+    }
+    const motivoWrap = document.getElementById('motivo-wrap');
+    const motivoLabel = document.getElementById('motivo-label');
+    if(motivoWrap) motivoWrap.style.display = 'block';
+    if(motivoLabel) motivoLabel.textContent = 'Observaciones (opcional):';
+  } else if(esUID && diferencia < 0){
+    // UID con unidades de menos: UIDs registrados que no se encontraron físicamente
+    tipo = 'critico';
+    icon = '🔴';
+    titulo = `Faltan ${Math.abs(diferencia)} unidad(es) físicas`;
+    detalle = `El sistema registra ${teorico} unidades pero solo contaste ${conteo}. `
+      + `Hay ${Math.abs(diferencia)} UID(s) que no se encontraron físicamente. `
+      + `Revisá el detalle de unidades arriba para identificar cuáles faltan.`;
+    ajusteSection.style.display = 'block';
   } else if(Math.abs(diferencia) <= 2){
     tipo = 'alerta';
     icon = '⚠️';
     titulo = `Diferencia menor: ${diferencia > 0 ? '+' : ''}${diferencia} unidades`;
-    detalle = `El sistema dice ${teorico} pero contaste ${conteo}. 
-      ${diferencia > 0
-        ? `Hay ${diferencia} unidad(es) de más en el depósito sin registro. Puede ser una recepción no registrada.`
-        : `Faltan ${Math.abs(diferencia)} unidad(es). Revisá si hubo una salida sin escanear o una unidad dañada.`
-      }
-      Si confirmás el ajuste, el sistema va a quedar en ${conteo}.`;
+    detalle = `El sistema dice ${teorico} pero contaste ${conteo}. `
+      + `${diferencia > 0
+        ? `Hay ${diferencia} unidad(es) de más en el depósito sin registro.`
+        : `Faltan ${Math.abs(diferencia)} unidad(es). Revisá si hubo una salida sin escanear.`
+      } Si confirmás el ajuste, el sistema va a quedar en ${conteo}.`;
     ajusteSection.style.display = 'block';
   } else {
     tipo = 'critico';
     icon = '🔴';
     titulo = `Diferencia importante: ${diferencia > 0 ? '+' : ''}${diferencia} unidades`;
-    detalle = `El sistema dice ${teorico} pero contaste ${conteo}. 
-      ${diferencia > 0
-        ? `Hay ${diferencia} unidades de más sin trazabilidad. Revisá si hay recepciones no registradas o ingresos manuales.`
-        : `Faltan ${Math.abs(diferencia)} unidades. Revisá el historial de salidas — puede haber OPs sin escanear, unidades dañadas o un error de carga inicial.`
-      }
-      Se requiere una justificación clara antes de ajustar.`;
+    detalle = `El sistema dice ${teorico} pero contaste ${conteo}. `
+      + `${diferencia > 0
+        ? `Hay ${diferencia} unidades de más sin trazabilidad. Revisá si hay recepciones no registradas.`
+        : `Faltan ${Math.abs(diferencia)} unidades. Revisá el historial de salidas.`
+      } Se requiere una justificación clara antes de ajustar.`;
     ajusteSection.style.display = 'block';
   }
 
