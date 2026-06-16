@@ -481,7 +481,7 @@ async function abrirRecepcion(ocId){
     ocActual = ocActual[0];
 
     // Items sin precio — solo nombre, cantidad, color y SKU
-    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking)`);
+    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking,categoria_id)`);
     // Filtrar solo items con saldo pendiente (excluir los ya recibidos completamente)
     itemsActual = (todosItems||[]).filter(i => (i.cantidad - (i.cantidad_recibida||0)) > 0);
 
@@ -624,6 +624,7 @@ function procesarRecepcion(){
       sku_id: item.sku_id,
       nombre: item.nombre,
       tracking: item.skus?.tracking || item.tracking || 'cantidad',
+      categoria_id: item.skus?.categoria_id || null,
       codigo: item.skus?.codigo||'',
       cantidad_esperada: pendiente,
       cantidad_recibida: qtyRec,
@@ -854,12 +855,26 @@ async function ingresarCantidad(ri){
     ? await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=eq.${varianteId}&select=id,cantidad`)
     : await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=is.null&select=id,cantidad`);
 
+  // Insumos menores (categoria_id de 'Insumos menores'): sobreescribir stock en vez de sumar
+  const esInsumoMenor = await esCategoriaMenor(ri.sku_id, ri.categoria_id);
+
   if(stockRows?.length){
-    const nuevaCant = (stockRows[0].cantidad||0) + ri.cantidad_recibida;
+    const nuevaCant = esInsumoMenor ? ri.cantidad_recibida : (stockRows[0].cantidad||0) + ri.cantidad_recibida;
     await api(`stock?id=eq.${stockRows[0].id}`,'PATCH',{cantidad:nuevaCant,updated_at:new Date().toISOString()});
   } else {
     await api('stock','POST',[{sku_id:ri.sku_id, variante_id:varianteId, cantidad:ri.cantidad_recibida}]);
   }
+}
+
+async function esCategoriaMenor(skuId, categoriaIdLocal){
+  // Primero intentar usar el categoria_id que ya viene en el objeto
+  if(categoriaIdLocal){
+    const cat = await api('categorias?id=eq.'+categoriaIdLocal+'&select=nombre').catch(()=>[]);
+    return cat?.[0]?.nombre?.toLowerCase().includes('menor');
+  }
+  // Si no viene, consultar el SKU
+  const sku = await api('skus?id=eq.'+skuId+'&select=categoria_id,categorias(nombre)').catch(()=>[]);
+  return sku?.[0]?.categorias?.nombre?.toLowerCase().includes('menor');
 }
 
 function generarPrefijo(nombre, color){
