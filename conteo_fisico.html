@@ -830,8 +830,11 @@ async function confirmarAjuste(){
     if(diferencia !== 0){
       await api('stock_ajustes', 'POST', {
         sku_id: skuId,
+        cantidad_contada: conteo,
+        cantidad_anterior: teorico,
         diferencia: diferencia,
-        motivo: `Conteo físico — ${motivo}`
+        motivo: `Conteo físico — ${motivo}`,
+        usuario: usuario
       });
 
       // 3. Actualizar stock.cantidad si tracking=cantidad
@@ -924,8 +927,12 @@ async function confirmarAjusteVariantes(skuId, nombre){
       });
       if(dif !== 0){
         await api('stock_ajustes', 'POST', {
-          sku_id: skuId, diferencia: dif,
-          motivo: `Conteo físico ${varianteNombre} — ${motivo}`
+          sku_id: skuId,
+          cantidad_contada: contado,
+          cantidad_anterior: teorico,
+          diferencia: dif,
+          motivo: `Conteo físico ${varianteNombre} — ${motivo}`,
+          usuario: usuario
         });
         // Actualizar stock de esa variante
         if(stockId){
