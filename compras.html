@@ -1402,7 +1402,7 @@ function renderLineas(){
           oninput="lineas[${i}].precio_unitario_neto=parseFloat(this.value)||0;calcularLineBruto(${i});calcularTotales();"
           style="margin-top:4px;">
       </div>
-      <select class="iva-select" onchange="lineas[${i}].iva_pct=parseFloat(this.value);calcularLineaNeto(${i});calcularTotales();">
+      <select class="iva-select" onchange="lineas[${i}].iva_pct=parseFloat(this.value);calcularLineBruto(${i});calcularTotales();">
         <option value="21" ${l.iva_pct===21?'selected':''}>21%</option>
         <option value="10.5" ${l.iva_pct===10.5?'selected':''}>10.5%</option>
         <option value="0" ${l.iva_pct===0?'selected':''}>Sin IVA</option>
