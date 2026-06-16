@@ -563,8 +563,9 @@ async function abrirBOM(opId){
     // Renderizar players existentes
     renderPlayersLista();
 
-    // Siempre validar stock de gabinete por color definido en la OP
+    // Validar stock de gabinete por color de la OP y re-renderizar
     if(selectedColor && selectedColor !== 'A definir'){
+      let stockActualizado = false;
       for(const item of currentBOMItems){
         if(esItemGabinete(item) && item.sku_id){
           const variantes = await api('variantes?sku_id=eq.'+item.sku_id+'&valor=eq.'+encodeURIComponent(selectedColor)+'&select=id').catch(()=>[]);
@@ -573,9 +574,14 @@ async function abrirBOM(opId){
             item.variante_id = varId;
             const uds = await api('unidades?sku_id=eq.'+item.sku_id+'&variante_id=eq.'+varId+'&estado=eq.stock&select=id').catch(()=>[]);
             item._stock = uds?.length || 0;
+          } else {
+            item._stock = 0;
           }
+          stockActualizado = true;
         }
       }
+      // Re-renderizar con el stock correcto por color
+      if(stockActualizado) renderBOMEditor();
     }
 
     // Fill SKU selector para agregar extras
