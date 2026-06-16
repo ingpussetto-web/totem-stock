@@ -272,7 +272,7 @@ async function renderEnStock(){
         const pendientesEnOP = items.length;
         // Mostrar selector siempre para players (notas con 🖥), sin importar cuántos queden pendientes
         const esPlayer = items.some(i => (i.notas||'').startsWith('🖥'));
-        const usaSelector = esPlayer;
+        const usaSelector = esPlayer || pendientesEnOP > 1;
         return `<div class="op-item">
           <div class="op-item-numero">${esc(op.op_numero)}</div>
           <div class="op-item-cliente">${esc(op.cliente)}</div>
@@ -568,12 +568,14 @@ function mostrarSelectorSlot(opId, opNumero, cliente){
     const notas = item.notas || '';
     const eq = item.equipo_num;
     if(notas.startsWith('🖥')){
-      // Es player — usar equipo_num directamente
-      label = eq ? '🖥 Player · Equipo ' + eq : '🖥 Player';
+      // Es player — extraer equipo de las notas si equipo_num es null
+      const matchEq = notas.match(/Equipo\s*(\d+)/i);
+      const eqLabel = eq ? eq : (matchEq ? matchEq[1] : null);
+      label = eqLabel ? '🖥 Player · Equipo ' + eqLabel : '🖥 Player';
     } else if(eq){
-      label = '🖦 Gabinete · Equipo ' + eq;
+      label = '📦 Equipo ' + eq;
     } else {
-      label = 'Slot ' + item.id;
+      label = '📦 Equipo (sin número)';
     }
     return `<button 
       data-bom-id="${item.id}" data-op-id="${opId}" data-op-numero="${opNumero}" data-cliente="${cliente.replace(/"/g,'&quot;')}" data-notas="${(notas||'').replace(/"/g,'&quot;')}"
