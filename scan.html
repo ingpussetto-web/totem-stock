@@ -430,7 +430,14 @@ async function renderCaja(sku){
   const stockRows = await api(`stock?sku_id=eq.${sku.id}&select=id,cantidad,cantidad_reservada`).catch(()=>[]);
   cajaStockRow = stockRows?.[0];
   const total = cajaStockRow?.cantidad || 0;
-  const reservado = cajaStockRow?.cantidad_reservada || 0;
+  // Calcular reservado real desde op_bom_items (solo escaneados y asignados)
+  const asignadosReales = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id`).catch(()=>[]);
+  const reservado = (asignadosReales||[]).length;
+  // Sincronizar cantidad_reservada si difiere
+  if(cajaStockRow && reservado !== (cajaStockRow.cantidad_reservada||0)){
+    await api(`stock?id=eq.${cajaStockRow.id}`,'PATCH',{cantidad_reservada: reservado}).catch(()=>{});
+    cajaStockRow.cantidad_reservada = reservado;
+  }
   const disponible = total - reservado;
 
   // Traer OPs con este insumo pendiente de asignar
@@ -490,15 +497,15 @@ async function asignarDesdeCaja(btn){
   const bomId = btn.dataset.bomid;
   const opNum = btn.dataset.opnum;
   if(!cajaStockRow){ alert('Error: sin stock registrado'); return; }
-  const disponible = (cajaStockRow.cantidad||0) - (cajaStockRow.cantidad_reservada||0);
+  const disponible = (cajaStockRow.cantidad||0) - reservado;
   if(disponible <= 0){ alert('Sin stock disponible en caja'); return; }
   if(!confirm('¿Asignar 1 unidad de ' + cajaSkuActual.nombre + ' a ' + opNum + '?')) return;
   try{
     // Marcar BOM item como asignado
     await api('op_bom_items?id=eq.'+bomId, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
     // Descontar del stock
-    await api('stock?id=eq.'+cajaStockRow.id, 'PATCH', {cantidad_reservada: (cajaStockRow.cantidad_reservada||0) + 1});
-    cajaStockRow.cantidad_reservada = (cajaStockRow.cantidad_reservada||0) + 1;
+    await api('stock?id=eq.'+cajaStockRow.id, 'PATCH', {cantidad_reservada: reservado + 1});
+    cajaStockRow.cantidad_reservada = reservado + 1;
     // Reemplazar fila de la OP con confirmación visual
     const filaOp = btn.closest('div');
     if(filaOp) filaOp.innerHTML = '<div style="color:var(--green);font-size:12px;padding:10px 0;border-top:1px solid var(--border);">✓ Asignado a ' + opNum + '</div>';
