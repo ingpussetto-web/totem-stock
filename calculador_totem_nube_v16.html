@@ -4539,7 +4539,7 @@ function sel(id, val){
   if(el && val) el.value = val;
 }
 
-function abrirModalOP(cotId){
+async function abrirModalOP(cotId){
   const c = cotizaciones.find(function(x){ return x.id===cotId; });
   if(!c) return;
   window._opCotNumero = c.numero || '';
@@ -4710,7 +4710,7 @@ function abrirModalOP(cotId){
   overlay.addEventListener('click', function(e){ if(e.target===overlay) cerrarModalOP(); });
   document.body.appendChild(overlay);
   // Cargar datos guardados si existen
-  cargarDocOP(window._opCotNumero);
+  await cargarDocOP(window._opCotNumero);
 }
 
 function opSeccion(titulo, contenidoHTML){
@@ -4822,7 +4822,7 @@ function imprimirOP(){
   ventana.document.close();
 }
 
-function abrirModalOPAccesorios(c){
+async function abrirModalOPAccesorios(c){
   window._opCotNumero = c.numero || '';
   const proyAsoc = proyectos.find(function(p){ return p.orden === c.numero.replace('COT-',''); });
   const contactoStr = (c.contacto||proyAsoc?.contacto||'') + (c.tel||proyAsoc?.tel ? ' · Tel: '+(c.tel||proyAsoc?.tel) : '');
@@ -4905,7 +4905,7 @@ function abrirModalOPAccesorios(c){
 
   overlay.addEventListener('click', function(e){ if(e.target===overlay) cerrarModalOP(); });
   document.body.appendChild(overlay);
-  cargarDocOP(window._opCotNumero);
+  await cargarDocOP(window._opCotNumero);
 }
 
 async function guardarDocOP(){
