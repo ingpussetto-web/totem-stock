@@ -1417,11 +1417,22 @@ async function guardarNuevoInsumo(){
   const tracking = document.getElementById('ni-tracking')?.value||'cantidad';
   const tieneColores = document.getElementById('ni-tiene-colores')?.checked;
 
-  if(!nombre){ toast('Ingres\u00e1 el nombre del insumo'); return; }
-  if(!codigo){ toast('El c\u00f3digo SKU no puede estar vac\u00edo'); return; }
-  if(!categoriaId){ toast('Selecion\u00e1 una categor\u00eda'); return; }
+  if(!nombre){ toast('Ingresá el nombre del insumo'); return; }
+  if(!codigo){ toast('El código SKU no puede estar vacío'); return; }
+  if(!categoriaId){ toast('Selecioná una categoría'); return; }
+
+  // Deshabilitar botón para evitar doble clic
+  const btnGuardar = document.querySelector('#modal-nuevo-insumo button[onclick="guardarNuevoInsumo()"]');
+  if(btnGuardar){ btnGuardar.disabled = true; btnGuardar.textContent = 'Creando...'; }
 
   try{
+    // Verificar si el código ya existe antes de crear
+    const existente = await api('skus?codigo=eq.'+encodeURIComponent(codigo)+'&select=id,nombre').catch(()=>[]);
+    if(existente && existente.length){
+      toast('⚠ El código '+codigo+' ya existe. Editá el nombre o el código.');
+      if(btnGuardar){ btnGuardar.disabled = false; btnGuardar.textContent = 'Crear y agregar a la OC'; }
+      return;
+    }
     const skuRes = await api('skus','POST',[{ nombre, codigo, categoria_id: categoriaId, tracking, activo: true }]);
     const nuevoSku = skuRes[0];
     let variantes = [];
@@ -1455,6 +1466,7 @@ async function guardarNuevoInsumo(){
     toast('\u2705 Insumo creado y agregado a la OC');
   } catch(e){
     toast('Error al crear el insumo: '+e.message);
+    if(btnGuardar){ btnGuardar.disabled = false; btnGuardar.textContent = 'Crear y agregar a la OC'; }
   }
 }
 
