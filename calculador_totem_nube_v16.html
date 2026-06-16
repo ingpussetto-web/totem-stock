@@ -4780,22 +4780,32 @@ function imprimirOP(){
 
   // Clonar HTML y reemplazar inputs/selects por texto para que imprima los valores editados
   const clone = contenido.cloneNode(true);
+  // Capturar valores actuales del DOM VIVO antes de clonar
+  const liveVals = {};
+  contenido.querySelectorAll('input,select,textarea').forEach(function(el){
+    if(el.id) liveVals[el.id] = el.tagName==='SELECT' ? el.options[el.selectedIndex]?.text||el.value : el.value;
+  });
   clone.querySelectorAll('input[type="text"],input[type="number"],input[type="date"]').forEach(function(el){
     const span = document.createElement('span');
-    span.textContent = vals[el.id]||el.value||'—';
+    span.textContent = liveVals[el.id]||el.value||'—';
     span.style.cssText = 'display:inline-block;width:100%;border-bottom:1px solid #ccc;padding:2px 4px;font-size:12px;';
     el.parentNode.replaceChild(span, el);
   });
   clone.querySelectorAll('select').forEach(function(el){
     const span = document.createElement('span');
-    span.textContent = vals[el.id]||el.value||'—';
+    span.textContent = liveVals[el.id]||el.value||'—';
     span.style.cssText = 'display:inline-block;font-size:12px;font-weight:500;';
     el.parentNode.replaceChild(span, el);
   });
   clone.querySelectorAll('textarea').forEach(function(el){
     const span = document.createElement('span');
-    span.textContent = vals[el.id]||el.value||'';
-    span.style.cssText = 'display:block;font-size:12px;white-space:pre-wrap;';
+    const txt = liveVals[el.id]||el.value||'';
+    if(txt){
+      span.textContent = txt;
+      span.style.cssText = 'display:block;font-size:12px;white-space:pre-wrap;min-height:16px;';
+    } else {
+      span.style.cssText = 'display:block;font-size:12px;min-height:16px;border-bottom:1px solid #eee;';
+    }
     el.parentNode.replaceChild(span, el);
   });
   clone.querySelectorAll('.no-print').forEach(function(el){ el.remove(); });
