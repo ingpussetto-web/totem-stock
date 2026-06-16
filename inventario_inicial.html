@@ -515,11 +515,11 @@ async function irPaso2(){
 
   // Mostrar stock actual en sistema
   try{
-    const existentes = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc`);
+    const existentes = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid`);
     const cantidad = existentes?.length || 0;
-    const ultimoUid = existentes?.[0]?.uid || '';
-    const match = ultimoUid.match(/-(\d+)$/);
-    const lastNum = match ? parseInt(match[1]) : 0;
+    // Calcular el mayor número real extrayendo sufijo numérico de cada UID
+    let lastNum = 0; let ultimoUid = '';
+    (existentes||[]).forEach(u=>{ const m=u.uid.match(/-(\d+)$/); if(m){ const n=parseInt(m[1]); if(n>lastNum){lastNum=n;ultimoUid=u.uid;} } });
     const proximo = prefijo + '-' + String(lastNum+1).padStart(4,'0');
     document.getElementById('sai-cantidad').textContent = cantidad;
     document.getElementById('sai-ultimo-uid').textContent = cantidad ? ultimoUid : 'Ninguno aún';
@@ -568,12 +568,8 @@ async function generarUidPreview(){
   // Buscar el último número usado para este prefijo
   let lastNum = 0;
   try {
-    const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc&limit=1`);
-    if(existing?.length){
-      const lastUid = existing[0].uid;
-      const match = lastUid.match(/-(\d+)$/);
-      if(match) lastNum = parseInt(match[1]);
-    }
+    const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid`);
+    (existing||[]).forEach(u=>{ const m=u.uid.match(/-(\d+)$/); if(m){ const n=parseInt(m[1]); if(n>lastNum) lastNum=n; } });
   } catch(e){}
 
   avisoEl.style.display = 'block';
@@ -620,11 +616,8 @@ async function registrarYEtiquetas(){
     // Buscar último número
     let lastNum = 0;
     try {
-      const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid&order=uid.desc&limit=1`);
-      if(existing?.length){
-        const match = existing[0].uid.match(/-(\d+)$/);
-        if(match) lastNum = parseInt(match[1]);
-      }
+      const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid`);
+      (existing||[]).forEach(u=>{ const m=u.uid.match(/-(\d+)$/); if(m){ const n=parseInt(m[1]); if(n>lastNum) lastNum=n; } });
     } catch(e){}
     
     // Generar unidades
