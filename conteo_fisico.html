@@ -835,12 +835,18 @@ async function confirmarAjuste(){
       });
 
       // 3. Actualizar stock.cantidad si tracking=cantidad
+      // stock.cantidad = conteo_caja + escaneados_en_produccion
       if(tracking === 'cantidad'){
+        // Contar cuántos se escanearon y están en producción
+        const escaneados = await api(`op_bom_items?sku_id=eq.${skuId}&uid_asignado=not.is.null&estado=eq.asignado&select=id`).catch(()=>[]);
+        const totalEscaneados = (escaneados||[]).length;
+        // El total real = lo que hay en la caja + lo que ya salió a producción
+        const cantidadTotal = conteo + totalEscaneados;
         const stockExist = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad`).catch(()=>[]);
         if(stockExist?.length){
-          await api(`stock?sku_id=eq.${skuId}`, 'PATCH', { cantidad: conteo });
+          await api(`stock?sku_id=eq.${skuId}`, 'PATCH', { cantidad: cantidadTotal });
         } else {
-          await api('stock', 'POST', { sku_id: skuId, cantidad: conteo });
+          await api('stock', 'POST', { sku_id: skuId, cantidad: cantidadTotal });
         }
       }
     }
