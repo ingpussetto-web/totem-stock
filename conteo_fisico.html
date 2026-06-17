@@ -527,7 +527,7 @@ async function renderCantidad(skuId, nombre, content){
       <div class="metrics">
         <div class="metric green">
           <div class="metric-label">Total entradas</div>
-          <div class="metric-value">+${sinMovimientos ? stockActual : (totalEntradas + totalAjustes)}</div>
+          <div class="metric-value">+${!(recItems||[]).length && !(ajustes||[]).length ? stockActual : (totalEntradas + totalAjustes)}</div>
         </div>
         <div class="metric red">
           <div class="metric-label">Total salidas</div>
