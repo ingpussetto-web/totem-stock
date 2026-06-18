@@ -3932,6 +3932,28 @@ function generarPreviewHTML(c){
         +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2(totalPC)+'</td>'
       +'</tr>';
     }
+    // Agregar filas de otros periféricos activos (lector QR, cámara, etc.)
+    if(it.otrosPerifericos){
+      const NOMBRES_PERIFERICOS = {
+        impresora_termica: 'Impresora Térmica (XPrinter)',
+        camara_web:        'Cámara Web HD Logitech C505',
+        lector_qr:         'Lector QR inalámbrico'
+      };
+      Object.entries(it.otrosPerifericos).forEach(function(entry){
+        const key = entry[0]; const p = entry[1];
+        if(!p.activo) return;
+        const nombre = NOMBRES_PERIFERICOS[key] || key;
+        const ivaPer = Math.round((p.precio||0)*(p.cant||1)*0.105);
+        const totalPer = (p.precio||0)*(p.cant||1) + ivaPer;
+        rows += '<tr style="background:#f9f9fb;">'
+          +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+nombre+'</td>'
+          +'<td style="padding:5px 10px;text-align:center;font-size:12px;">'+(p.cant||1)+'</td>'
+          +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(p.precio||0)+'</td>'
+          +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(ivaPer)+'</td>'
+          +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2(totalPer)+'</td>'
+        +'</tr>';
+      });
+    }
     return rows;
   }).join('');
 
