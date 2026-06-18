@@ -704,7 +704,43 @@ function renderCatalogo(){
 // ─── STOCK ──────────────────────────────────────────────────────────────────
 async function loadStock(){
   try {
-    stockData = await api('stock_disponible?select=*&order=alerta.asc,nombre.asc');
+    // Calcular disponible dinámicamente desde op_bom_items (solo escaneados)
+    const stockRaw = await api('stock?select=id,sku_id,variante_id,cantidad&order=sku_id.asc');
+    const asignadosRaw = await api('op_bom_items?uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id').catch(()=>[]);
+    // Contar escaneados por sku_id + variante_id
+    const asigMap = {};
+    (asignadosRaw||[]).forEach(a=>{
+      const key = a.sku_id + '_' + (a.variante_id||'null');
+      asigMap[key] = (asigMap[key]||0) + 1;
+    });
+    // Actualizar cantidad_reservada en stock si difiere
+    for(const s of (stockRaw||[])){
+      const key = s.sku_id + '_' + (s.variante_id||'null');
+      const real = asigMap[key]||0;
+      // Solo actualizar si difiere (evitar writes innecesarios)
+    }
+    // Reconstruir stockData con disponible correcto
+    const skusMeta = await api('skus?select=id,codigo,nombre,stock_minimo,categoria_id,categorias(nombre)&activo=eq.true&tracking=eq.cantidad');
+    const varMeta = await api('variantes?select=id,sku_id,valor');
+    stockData = [];
+    for(const s of (stockRaw||[])){
+      const sku = (skusMeta||[]).find(sk=>sk.id===s.sku_id);
+      if(!sku) continue;
+      const variante = (varMeta||[]).find(v=>v.id===s.variante_id);
+      const key = s.sku_id + '_' + (s.variante_id||'null');
+      const escaneados = asigMap[key]||0;
+      const disponible = (s.cantidad||0) - escaneados;
+      let alerta = 'ok';
+      if(disponible<=0) alerta='sin_stock';
+      else if(sku.stock_minimo && disponible<=sku.stock_minimo) alerta='bajo';
+      stockData.push({
+        sku_id: s.sku_id, codigo: sku.codigo, nombre: sku.nombre,
+        variante: variante?.valor||null, categoria: sku.categorias?.nombre||'—',
+        cantidad: s.cantidad, cantidad_reservada: escaneados, disponible,
+        stock_minimo: sku.stock_minimo, alerta, tracking:'cantidad'
+      });
+    }
+    stockData.sort((a,b)=>a.alerta==='sin_stock'?-1:b.alerta==='sin_stock'?1:0);
     // También cargar SKUs con tracking=uid para mostrar conteo de unidades
     const uidSkus = await api('skus?select=id,codigo,nombre,stock_minimo,categorias(nombre)&tracking=eq.uid&activo=eq.true');
     // Para UIDs, contar unidades en stock
@@ -795,35 +831,114 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">◻</div>No hay datos de stock</div></td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(d=>{
+  // Agrupar filas de tracking=cantidad que comparten sku_id (tienen variantes)
+  const qtyGroups = {};
+  const qtyOrder = [];
+  rows.filter(d=>d.tracking==='cantidad').forEach(d=>{
+    if(!qtyGroups[d.sku_id]){
+      qtyGroups[d.sku_id] = [];
+      qtyOrder.push(d.sku_id);
+    }
+    qtyGroups[d.sku_id].push(d);
+  });
+  const uidRows2 = rows.filter(d=>d.tracking==='uid');
+
+  // Construir filas: primero UID (comportamiento original), luego cantidad agrupada
+  const htmlRows = [];
+
+  // UID rows (sin cambios)
+  uidRows2.forEach(d=>{
     const rowId = 'stock-det-'+d.codigo.replace(/[^a-z0-9]/gi,'_');
-    const mainRow = `<tr style="cursor:${d.tracking==='uid'?'pointer':'default'}" ${d.tracking==='uid'?`onclick="toggleStockDetalle('${rowId}',${d.sku_id})"`:''}>
-    <td class="td-mono" style="font-size:11.5px">${d.codigo}</td>
-    <td class="td-main">${d.nombre} ${d.tracking==='uid'?'<span style="font-size:10px;color:var(--text3);">▼</span>':''}</td>
-    <td class="td-mono" style="font-size:11px;color:var(--text3)">${d.variante||'—'}</td>
-    <td style="font-size:11px;color:var(--text3)">${d.categoria||'—'}</td>
-    <td class="td-num" style="color:${d.disponible<=0?'var(--red)':d.disponible<=d.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${d.disponible}</td>
-    <td class="td-num" style="color:var(--text3)">${d.cantidad_reservada||0}</td>
-    <td class="td-num">${d.cantidad||0}</td>
-    <td>${badgeAlerta(d.alerta)}</td>
-    <td class="td-actions" style="text-align:center;">
-      ${d.tracking==='uid'
-        ? `<button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>`
-        : ''
-      }
-      <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id='+(${d.sku_id||d.id})+'&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')" style="margin-left:4px;">📋 Historial</button>
-      ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
-        <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''} 
-          onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
-          style="width:15px;height:15px;accent-color:var(--green);cursor:pointer;">
-      </label>` : ''}
-    </td>
-  </tr>`;
-    const detalleRow = d.tracking==='uid'
-      ? `<tr id="${rowId}" style="display:none;"><td colspan="9" style="padding:0 16px 12px;background:var(--surface2);"><div id="${rowId}-content" style="font-size:12px;color:var(--text2);padding:8px 0;">Cargando variantes...</div></td></tr>`
-      : '';
-    return mainRow + detalleRow;
-  }).join('');
+    htmlRows.push(`<tr style="cursor:pointer" onclick="toggleStockDetalle('${rowId}',${d.sku_id})">
+      <td class="td-mono" style="font-size:11.5px">${d.codigo}</td>
+      <td class="td-main">${d.nombre} <span style="font-size:10px;color:var(--text3);">▼</span></td>
+      <td class="td-mono" style="font-size:11px;color:var(--text3)">—</td>
+      <td style="font-size:11px;color:var(--text3)">${d.categoria||'—'}</td>
+      <td class="td-num" style="color:${d.disponible<=0?'var(--red)':d.disponible<=d.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${d.disponible}</td>
+      <td class="td-num" style="color:var(--text3)">${d.cantidad_reservada||0}</td>
+      <td class="td-num">${d.cantidad||0}</td>
+      <td>${badgeAlerta(d.alerta)}</td>
+      <td class="td-actions" style="text-align:center;">
+        <button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>
+        <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')" style="margin-left:4px;">📋 Historial</button>
+      </td>
+    </tr>
+    <tr id="${rowId}" style="display:none;"><td colspan="9" style="padding:0 16px 12px;background:var(--surface2);"><div id="${rowId}-content" style="font-size:12px;color:var(--text2);padding:8px 0;">Cargando variantes...</div></td></tr>`);
+  });
+
+  // Cantidad rows agrupadas por sku_id
+  qtyOrder.forEach(skuId=>{
+    const grupo = qtyGroups[skuId];
+    const d0 = grupo[0];
+    const tieneVariantes = grupo.length > 1 || grupo[0].variante;
+    const totalDisp = grupo.reduce((s,r)=>s+(r.disponible||0),0);
+    const totalAsig = grupo.reduce((s,r)=>s+(r.cantidad_reservada||0),0);
+    const totalCant = grupo.reduce((s,r)=>s+(r.cantidad||0),0);
+    const alertaGlobal = totalDisp<=0?'sin_stock':(d0.stock_minimo && totalDisp<=d0.stock_minimo)?'bajo':'ok';
+    const rowId = 'stock-qty-'+String(skuId);
+
+    if(tieneVariantes){
+      // Fila principal colapsable con flecha
+      htmlRows.push(`<tr style="cursor:pointer" onclick="toggleQtyDetalle('${rowId}')">
+        <td class="td-mono" style="font-size:11.5px">${d0.codigo}</td>
+        <td class="td-main">${d0.nombre} <span style="font-size:10px;color:var(--text3);" id="${rowId}-arrow">▼</span></td>
+        <td class="td-mono" style="font-size:11px;color:var(--text3)">—</td>
+        <td style="font-size:11px;color:var(--text3)">${d0.categoria||'—'}</td>
+        <td class="td-num" style="color:${totalDisp<=0?'var(--red)':d0.stock_minimo&&totalDisp<=d0.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${totalDisp}</td>
+        <td class="td-num" style="color:var(--text3)">${totalAsig}</td>
+        <td class="td-num">${totalCant}</td>
+        <td>${badgeAlerta(alertaGlobal)}</td>
+        <td class="td-actions" style="text-align:center;">
+          <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${skuId}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')">📋 Historial</button>
+          ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="Etiquetado">
+            <input type="checkbox" ${etiquetadoMap[d0.sku_id+'_'+(d0.variante||'')]?'checked':''}
+              onchange="toggleEtiquetado(${d0.sku_id},'${d0.variante||''}',this.checked)"
+              style="width:15px;height:15px;accent-color:var(--green);cursor:pointer;">
+          </label>` : ''}
+        </td>
+      </tr>
+      <tr id="${rowId}" style="display:none;">
+        <td colspan="9" style="padding:0 16px 12px;background:var(--surface2);">
+          <div style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0;">
+            ${grupo.map(r=>`
+              <div style="display:flex;align-items:center;gap:8px;min-width:180px;">
+                <span style="font-size:11px;color:#ffb340;font-family:'DM Mono',monospace;">● ${r.variante||'Sin variante'}</span>
+                <span style="font-size:11px;color:${r.disponible<=0?'var(--red)':r.disponible<=r.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600;">${r.disponible} disponibles</span>
+                ${r.cantidad_reservada?`<span style="font-size:11px;color:var(--blue);">${r.cantidad_reservada} asignado${r.cantidad_reservada!==1?'s':''}</span>`:''}
+                ${!IS_READONLY?`<label onclick="event.stopPropagation()" style="cursor:pointer;" title="${etiquetadoMap[r.sku_id+'_'+(r.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
+                  <input type="checkbox" ${etiquetadoMap[r.sku_id+'_'+(r.variante||'')]?'checked':''}
+                    onchange="toggleEtiquetado(${r.sku_id},'${r.variante||''}',this.checked)"
+                    style="width:13px;height:13px;accent-color:var(--green);cursor:pointer;">
+                </label>`:''}
+              </div>`).join('')}
+          </div>
+        </td>
+      </tr>`);
+    } else {
+      // Fila simple sin variantes
+      const d = grupo[0];
+      htmlRows.push(`<tr>
+        <td class="td-mono" style="font-size:11.5px">${d.codigo}</td>
+        <td class="td-main">${d.nombre}</td>
+        <td class="td-mono" style="font-size:11px;color:var(--text3)">—</td>
+        <td style="font-size:11px;color:var(--text3)">${d.categoria||'—'}</td>
+        <td class="td-num" style="color:${d.disponible<=0?'var(--red)':d.disponible<=d.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600">${d.disponible}</td>
+        <td class="td-num" style="color:var(--text3)">${d.cantidad_reservada||0}</td>
+        <td class="td-num">${d.cantidad||0}</td>
+        <td>${badgeAlerta(d.alerta)}</td>
+        <td class="td-actions" style="text-align:center;">
+          <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')">📋 Historial</button>
+          ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
+            <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''}
+              onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
+              style="width:15px;height:15px;accent-color:var(--green);cursor:pointer;">
+          </label>` : ''}
+        </td>
+      </tr>`);
+    }
+  });
+
+  tbody.innerHTML = htmlRows.join('');
 }
 
 // ─── ETIQUETADO ─────────────────────────────────────────────────────────────
@@ -993,6 +1108,16 @@ async function mostrarOPsReservadas(skuId, variante, el){
   setTimeout(()=>{
     document.addEventListener('click', function cerrar(){ popup.remove(); document.removeEventListener('click', cerrar); }, {once:true});
   }, 50);
+}
+
+// ─── TOGGLE CANTIDAD CON VARIANTES ─────────────────────────────────────────
+function toggleQtyDetalle(rowId){
+  const row = document.getElementById(rowId);
+  if(!row) return;
+  const arrow = document.getElementById(rowId+'-arrow');
+  const visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'table-row';
+  if(arrow) arrow.textContent = visible ? '▼' : '▲';
 }
 
 // ─── STOCK DETALLE POR VARIANTE ────────────────────────────────────────────

@@ -488,121 +488,258 @@ async function renderCantidad(skuId, nombre, content){
   const ocMap = {};
   (ocs||[]).forEach(o=>{ ocMap[o.id] = o; });
 
-  // Ajustes
+  // Ajustes (con variante_id si existe)
   const ajustes = await api(`stock_ajustes?sku_id=eq.${skuId}&select=*&order=created_at.asc`).catch(()=>[]);
 
-  // Salidas reales: solo items escaneados (uid_asignado IS NOT NULL)
+  // Salidas reales: solo items escaneados (uid_asignado IS NOT NULL), con variante_id
   const bomItems = await api(
-    `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=op_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
+    `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=op_id,variante_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
   ).catch(()=>[]);
-
-  // Agrupar salidas por OP — cada registro es 1 unidad escaneada
-  const salidaMap = {};
-  (bomItems||[]).forEach(s=>{
-    const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
-    if(!salidaMap[opNum]){
-      salidaMap[opNum] = { ...s, qty: 1 };
-    } else {
-      salidaMap[opNum].qty += 1;
-    }
-  });
-  const salidas = Object.values(salidaMap);
 
   // Stock actual desde tabla stock (fuente de verdad)
   const stockRows = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
   const tieneVariantes = (stockRows||[]).some(r=>r.variante_id !== null);
-  const stockActual = (stockRows||[]).reduce((s,r)=>s+(r.cantidad||0),0);
 
-  const totalEntradas = (recItems||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
-  const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
-  const totalSalidas  = salidas.reduce((s,e)=>s+(e.qty||0),0);
+  if(tieneVariantes){
+    // ── Modo por variante ──────────────────────────────────────────────────
+    const stockActualTotal = (stockRows||[]).reduce((s,r)=>s+(r.cantidad||0),0);
+    const totalSalidasTotal = (bomItems||[]).length;
+    const saldoTotal = stockActualTotal - totalSalidasTotal;
 
-  // Saldo teórico: siempre desde stock.cantidad (fuente de verdad) menos escaneados reales
-  // Esto alinea con la vista stock_disponible
-  const saldoTeorico = stockActual - totalSalidas;
+    // Construir HTML de cada variante
+    const variantesHtml = (stockRows||[]).map(row=>{
+      const varId   = row.variante_id;
+      const varNom  = row.variantes?.valor || 'Sin variante';
+      const stockVar = row.cantidad || 0;
 
-  content.innerHTML = `
-    <div class="panel">
-      <div class="panel-title">📊 ${nombre} — Movimientos registrados</div>
-      <div class="metrics">
-        <div class="metric green">
-          <div class="metric-label">Total entradas</div>
-          <div class="metric-value">+${!(recItems||[]).length && !(ajustes||[]).length ? stockActual : (totalEntradas + totalAjustes)}</div>
+      // Entradas de esta variante: por color_recibido (texto) que coincida con el nombre de variante
+      const recVar = (recItems||[]).filter(e=>{
+        const colorRec = (e.color_recibido||'').toLowerCase().trim();
+        const colorVar = varNom.toLowerCase().trim();
+        return colorRec === colorVar || colorRec === '' && stockRows.length === 1;
+      });
+
+      // Ajustes de esta variante
+      const ajVar = (ajustes||[]).filter(a=> a.variante_id === varId || (!a.variante_id && stockRows.length === 1));
+
+      // Salidas de esta variante
+      const bomVar = (bomItems||[]).filter(b=> b.variante_id === varId || (!b.variante_id && stockRows.length === 1));
+
+      // Agrupar salidas por OP
+      const salidaMap = {};
+      bomVar.forEach(s=>{
+        const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
+        if(!salidaMap[opNum]){ salidaMap[opNum] = { ...s, qty: 1 }; }
+        else { salidaMap[opNum].qty += 1; }
+      });
+      const salidasVar = Object.values(salidaMap);
+      const totalSalidasVar = salidasVar.reduce((s,e)=>s+(e.qty||0),0);
+      const totalEntradasVar = recVar.reduce((s,e)=>s+(e.cantidad_recibida||0),0);
+      const totalAjustesVar  = ajVar.reduce((s,a)=>s+(a.diferencia||0),0);
+      const saldoVar = stockVar - totalSalidasVar;
+      const sinRecVar = !recVar.length && !ajVar.length;
+
+      return `
+        <div class="variante-card" style="margin-bottom:18px;">
+          <div class="variante-header">
+            <span class="variante-nombre">● ${varNom}</span>
+            <span class="variante-stock ${saldoVar<=0?'red':saldoVar<=3?'amber':'green'}" style="font-family:'DM Mono',monospace;font-weight:600;color:${saldoVar<=0?'var(--red)':saldoVar<=3?'var(--amber)':'var(--green)'};">
+              Disponible: ${saldoVar}
+            </span>
+          </div>
+          <div class="metrics" style="margin-bottom:12px;">
+            <div class="metric green">
+              <div class="metric-label">Entradas</div>
+              <div class="metric-value">+${sinRecVar ? stockVar : (totalEntradasVar + totalAjustesVar)}</div>
+            </div>
+            <div class="metric red">
+              <div class="metric-label">Salidas</div>
+              <div class="metric-value">−${totalSalidasVar}</div>
+            </div>
+            <div class="metric ${saldoVar<=0?'red':saldoVar<=3?'amber':'green'}">
+              <div class="metric-label">Saldo sistema</div>
+              <div class="metric-value">${saldoVar}</div>
+            </div>
+          </div>
+
+          <div class="panel-title">▼ ENTRADAS</div>
+          <table class="mov-table">
+            <thead><tr><th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th></tr></thead>
+            <tbody>
+              ${sinRecVar
+                ? `<tr>
+                    <td class="fecha">—</td>
+                    <td style="font-style:italic;color:var(--amber);">Stock inicial cargado manualmente</td>
+                    <td style="font-size:11px;color:var(--text3);">Sin recepción formal registrada</td>
+                    <td class="num pos">+${stockVar}</td>
+                  </tr>`
+                : [
+                    ...recVar.map(e=>{
+                      const rec  = e.recepciones;
+                      const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
+                      const prov = oc?.proveedores?.razon_social || '—';
+                      return `<tr>
+                        <td class="fecha">${fmt_fecha(rec?.created_at)}</td>
+                        <td>${prov}</td>
+                        <td style="font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
+                        <td class="num pos">+${e.cantidad_recibida||0}</td>
+                      </tr>`;
+                    }),
+                    ...ajVar.map(a=>`<tr>
+                      <td class="fecha">${fmt_fecha(a.created_at)}</td>
+                      <td style="font-style:italic;color:var(--text3);">Ajuste conteo físico</td>
+                      <td style="font-size:11px;color:var(--text3);">${a.motivo||''}</td>
+                      <td class="num ${a.diferencia>=0?'pos':'neg'}">${a.diferencia>=0?'+':''}${a.diferencia}</td>
+                    </tr>`)
+                  ].join('')
+              }
+            </tbody>
+          </table>
+
+          <div class="panel-title" style="margin-top:14px;">▼ SALIDAS (asignadas a OPs)</div>
+          <table class="mov-table">
+            <thead><tr><th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th></tr></thead>
+            <tbody>
+              ${!salidasVar.length
+                ? `<tr><td colspan="4" class="empty-row">Sin asignaciones registradas</td></tr>`
+                : salidasVar.map(s=>{
+                    const op = s.ordenes_produccion;
+                    return `<tr>
+                      <td class="fecha">${fmt_fecha(op?.updated_at)}</td>
+                      <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
+                      <td>${op?.cliente||'—'} <span class="badge ${op?.estado}">${op?.estado||'—'}</span></td>
+                      <td class="num neg">−${s.qty||0}</td>
+                    </tr>`;
+                  }).join('')
+              }
+            </tbody>
+          </table>
         </div>
-        <div class="metric red">
-          <div class="metric-label">Total salidas</div>
-          <div class="metric-value">−${totalSalidas}</div>
+      `;
+    }).join('');
+
+    content.innerHTML = `
+      <div class="panel">
+        <div class="panel-title">📊 ${nombre} — Movimientos por variante</div>
+        <div class="metrics" style="margin-bottom:20px;">
+          <div class="metric blue">
+            <div class="metric-label">Stock total sistema</div>
+            <div class="metric-value" style="color:var(--blue);">${stockActualTotal}</div>
+          </div>
+          <div class="metric red">
+            <div class="metric-label">Total salidas</div>
+            <div class="metric-value">−${totalSalidasTotal}</div>
+          </div>
+          <div class="metric ${saldoTotal<=0?'red':saldoTotal<=3?'amber':'green'}">
+            <div class="metric-label">Disponible total</div>
+            <div class="metric-value">${saldoTotal}</div>
+          </div>
         </div>
-        <div class="metric ${saldoTeorico<=0?'red':saldoTeorico<=3?'amber':'green'}">
-          <div class="metric-label">Saldo teórico</div>
-          <div class="metric-value">${saldoTeorico}</div>
-        </div>
+        ${variantesHtml}
+        ${renderConteoInput(skuId, nombre, saldoTotal, 'cantidad', stockRows)}
       </div>
+    `;
 
-      <!-- Entradas -->
-      <div class="panel-title">▼ ENTRADAS</div>
-      <table class="mov-table">
-        <thead><tr><th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th></tr></thead>
-        <tbody>
-          ${!(recItems||[]).length && !(ajustes||[]).length
-            ? `<tr>
-                <td class="fecha">—</td>
-                <td style="font-style:italic;color:var(--amber);">Stock inicial cargado manualmente</td>
-                <td style="font-size:11px;color:var(--text3);">Sin recepción formal registrada</td>
-                <td class="num pos">+${stockActual}</td>
-              </tr>`
-            : [
-                ...(recItems||[]).map(e=>{
-                  const rec  = e.recepciones;
-                  const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
-                  const prov = oc?.proveedores?.razon_social || '—';
-                  const color = e.color_recibido ? `<span style="font-size:10px;color:#ff9900;margin-left:6px;">● ${e.color_recibido}</span>` : '';
+  } else {
+    // ── Modo sin variantes (lógica original) ──────────────────────────────
+    const stockActual = (stockRows||[]).reduce((s,r)=>s+(r.cantidad||0),0);
+    const totalEntradas = (recItems||[]).reduce((s,e)=>s+(e.cantidad_recibida||0),0);
+    const totalAjustes  = (ajustes||[]).reduce((s,a)=>s+(a.diferencia||0),0);
+
+    // Agrupar salidas por OP
+    const salidaMap = {};
+    (bomItems||[]).forEach(s=>{
+      const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
+      if(!salidaMap[opNum]){ salidaMap[opNum] = { ...s, qty: 1 }; }
+      else { salidaMap[opNum].qty += 1; }
+    });
+    const salidas = Object.values(salidaMap);
+    const totalSalidas = salidas.reduce((s,e)=>s+(e.qty||0),0);
+    const saldoTeorico = stockActual - totalSalidas;
+
+    content.innerHTML = `
+      <div class="panel">
+        <div class="panel-title">📊 ${nombre} — Movimientos registrados</div>
+        <div class="metrics">
+          <div class="metric green">
+            <div class="metric-label">Total entradas</div>
+            <div class="metric-value">+${!(recItems||[]).length && !(ajustes||[]).length ? stockActual : (totalEntradas + totalAjustes)}</div>
+          </div>
+          <div class="metric red">
+            <div class="metric-label">Total salidas</div>
+            <div class="metric-value">−${totalSalidas}</div>
+          </div>
+          <div class="metric ${saldoTeorico<=0?'red':saldoTeorico<=3?'amber':'green'}">
+            <div class="metric-label">Saldo teórico</div>
+            <div class="metric-value">${saldoTeorico}</div>
+          </div>
+        </div>
+
+        <!-- Entradas -->
+        <div class="panel-title">▼ ENTRADAS</div>
+        <table class="mov-table">
+          <thead><tr><th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th></tr></thead>
+          <tbody>
+            ${!(recItems||[]).length && !(ajustes||[]).length
+              ? `<tr>
+                  <td class="fecha">—</td>
+                  <td style="font-style:italic;color:var(--amber);">Stock inicial cargado manualmente</td>
+                  <td style="font-size:11px;color:var(--text3);">Sin recepción formal registrada</td>
+                  <td class="num pos">+${stockActual}</td>
+                </tr>`
+              : [
+                  ...(recItems||[]).map(e=>{
+                    const rec  = e.recepciones;
+                    const oc   = rec?.oc_id ? ocMap[rec.oc_id] : null;
+                    const prov = oc?.proveedores?.razon_social || '—';
+                    const color = e.color_recibido ? `<span style="font-size:10px;color:#ff9900;margin-left:6px;">● ${e.color_recibido}</span>` : '';
+                    return `<tr>
+                      <td class="fecha">${fmt_fecha(rec?.created_at)}</td>
+                      <td>${prov}${color}</td>
+                      <td style="font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
+                      <td class="num pos">+${e.cantidad_recibida||0}</td>
+                    </tr>`;
+                  }),
+                  ...(ajustes||[]).map(a=>`<tr>
+                    <td class="fecha">${fmt_fecha(a.created_at)}</td>
+                    <td style="font-style:italic;color:var(--text3);">Ajuste conteo físico</td>
+                    <td style="font-size:11px;color:var(--text3);">${a.motivo||''}</td>
+                    <td class="num ${a.diferencia>=0?'pos':'neg'}">${a.diferencia>=0?'+':''}${a.diferencia}</td>
+                  </tr>`)
+                ].join('')
+            }
+          </tbody>
+        </table>
+
+        <!-- Salidas -->
+        <div class="panel-title" style="margin-top:18px;">▼ SALIDAS (asignadas a OPs)</div>
+        <table class="mov-table">
+          <thead><tr><th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th></tr></thead>
+          <tbody>
+            ${!salidas.length
+              ? `<tr><td colspan="4" class="empty-row">Sin asignaciones registradas</td></tr>`
+              : salidas.map(s=>{
+                  const op = s.ordenes_produccion;
                   return `<tr>
-                    <td class="fecha">${fmt_fecha(rec?.created_at)}</td>
-                    <td>${prov}${color}</td>
-                    <td style="font-size:11px;color:var(--text3);">${oc?.oc_numero||'—'} · ${rec?.recepcion_numero||'—'}</td>
-                    <td class="num pos">+${e.cantidad_recibida||0}</td>
+                    <td class="fecha">${fmt_fecha(op?.updated_at)}</td>
+                    <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
+                    <td>${op?.cliente||'—'} <span class="badge ${op?.estado}">${op?.estado||'—'}</span></td>
+                    <td class="num neg">−${s.qty||0}</td>
                   </tr>`;
-                }),
-                ...(ajustes||[]).map(a=>`<tr>
-                  <td class="fecha">${fmt_fecha(a.created_at)}</td>
-                  <td style="font-style:italic;color:var(--text3);">Ajuste conteo físico</td>
-                  <td style="font-size:11px;color:var(--text3);">${a.motivo||''}</td>
-                  <td class="num ${a.diferencia>=0?'pos':'neg'}">${a.diferencia>=0?'+':''}${a.diferencia}</td>
-                </tr>`)
-              ].join('')
-          }
-        </tbody>
-      </table>
+                }).join('')
+            }
+          </tbody>
+        </table>
 
-      <!-- Salidas -->
-      <div class="panel-title" style="margin-top:18px;">▼ SALIDAS (asignadas a OPs)</div>
-      <table class="mov-table">
-        <thead><tr><th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th></tr></thead>
-        <tbody>
-          ${!salidas.length
-            ? `<tr><td colspan="4" class="empty-row">Sin asignaciones registradas</td></tr>`
-            : salidas.map(s=>{
-                const op = s.ordenes_produccion;
-                return `<tr>
-                  <td class="fecha">${fmt_fecha(op?.updated_at)}</td>
-                  <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
-                  <td>${op?.cliente||'—'} <span class="badge ${op?.estado}">${op?.estado||'—'}</span></td>
-                  <td class="num neg">−${s.qty||0}</td>
-                </tr>`;
-              }).join('')
-          }
-        </tbody>
-      </table>
+        <!-- Conteo físico -->
+        ${renderConteoInput(skuId, nombre, saldoTeorico, 'cantidad', stockRows)}
+      </div>
+    `;
 
-      <!-- Conteo físico -->
-      ${renderConteoInput(skuId, nombre, saldoTeorico, 'cantidad', stockRows)}
-    </div>
-  `;
-
-  if(!READONLY && !tieneVariantes){
-    const inp = document.getElementById('input-conteo');
-    if(inp) inp.addEventListener('input', ()=>calcularConclusion(saldoTeorico, nombre, skuId));
+    if(!READONLY){
+      const inp = document.getElementById('input-conteo');
+      if(inp) inp.addEventListener('input', ()=>calcularConclusion(saldoTeorico, nombre, skuId));
+    }
   }
 }
 
