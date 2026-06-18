@@ -992,7 +992,7 @@ async function confirmarAjuste(){
     _ultimosConteos[skuId] = { sku_id: skuId, fecha: new Date().toISOString(), cantidad_contada: conteo, diferencia };
     renderSemaforo();
 
-    // Feedback
+    // Feedback + recarga del historial
     document.getElementById('ajuste-section').style.display = 'none';
     document.getElementById('conclusion-box').innerHTML = `
       <div class="conclusion ok">
@@ -1004,7 +1004,8 @@ async function confirmarAjuste(){
         </div>
       </div>
     `;
-    document.getElementById('input-conteo').value = '';
+    // Recargar historial para mostrar el ajuste recién guardado
+    setTimeout(() => iniciarConteo(), 800);
 
   } catch(e){
     alert('Error al guardar: ' + e.message);
@@ -1091,6 +1092,8 @@ async function confirmarAjusteVariantes(skuId, nombre){
         <div class="conclusion-detail">${nombre} — conteo por variante completado.</div>
       </div>`;
     inputs.forEach(i=>i.value='');
+    // Recargar historial
+    setTimeout(() => iniciarConteo(), 800);
   } catch(e){ alert('Error: '+e.message); }
 }
 
