@@ -901,7 +901,7 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
 
   box.innerHTML = `
     <div class="conclusion ${tipo}" id="conclusion-final" 
-         data-diferencia="${diferencia}" data-conteo="${conteo}" data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}">
+         data-diferencia="${diferencia}" data-conteo="${conteo}" data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}" data-tracking="${document.getElementById('input-conteo')?.dataset?.tracking||''}">
       <div class="conclusion-icon">${icon}</div>
       <div class="conclusion-title">${titulo}</div>
       <div class="conclusion-detail">${detalle}</div>
@@ -943,7 +943,7 @@ async function confirmarAjuste(){
   const nombre     = conclusion.dataset.nombre;
 
   const input = document.getElementById('input-conteo');
-  const tracking = input.dataset.tracking;
+  const tracking = conclusion.dataset.tracking || input?.dataset?.tracking || '';
 
   try {
     const usuario = localStorage.getItem('tn_usuario') || 'Gerencia';
