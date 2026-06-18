@@ -291,8 +291,6 @@ tr:hover td{background:rgba(255,255,255,0.015);}
           <option value="">Todos los estados</option>
           <option value="con_stock">Con stock</option>
           <option value="sin_stock">Sin stock</option>
-          <option value="pendiente_etiqueta">⚠ Pendiente etiqueta</option>
-          <option value="etiquetado">✓ Etiquetado</option>
         </select>
         <div class="spacer"></div>
         <button class="btn" onclick="loadStock()">↻ Actualizar</button>
@@ -310,7 +308,6 @@ tr:hover td{background:rgba(255,255,255,0.015);}
                 <th style="text-align:right">Asignado</th>
                 <th style="text-align:right">Total</th>
                 <th>Estado</th>
-                <th style="text-align:center;">🏷 Etiquetado</th>
               </tr>
             </thead>
             <tbody id="stock-tbody">
@@ -793,21 +790,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
   const varianteFil = document.getElementById('stock-variante')?.value||'';
   const alertFil = document.getElementById('stock-alerta')?.value||'';
 
-  // Mapa de etiquetado: sku_id+variante → {etiquetado, variante_id}
-  const etiquetadoMap = {};
-  const varianteIdMap = {}; // para hacer PATCH
-  (skus||[]).forEach(s=>{
-    if(s.variantes?.length){
-      s.variantes.forEach(v=>{
-        const key = s.id+'_'+(v.valor||'');
-        etiquetadoMap[key] = v.etiquetado||false;
-        varianteIdMap[key] = v.id;
-      });
-    } else {
-      // SKU sin variantes (tracking=cantidad) — usar sku_id como clave
-      etiquetadoMap[s.id+'_'] = false;
-    }
-  });
+
 
   let rows = [...(qtyData||[]), ...(uidData||[])].filter(d=>{
     if(search && !d.codigo?.toLowerCase().includes(search) && !d.nombre?.toLowerCase().includes(search)) return false;
@@ -819,9 +802,6 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
     if(alertFil){
       if(alertFil==='con_stock' && d.disponible<=0) return false;
       if(alertFil==='sin_stock' && d.disponible>0) return false;
-      const etiq = etiquetadoMap[d.sku_id+'_'+(d.variante||'')];
-      if(alertFil==='pendiente_etiqueta' && etiq) return false;
-      if(alertFil==='etiquetado' && !etiq) return false;
     }
     return true;
   });
@@ -890,11 +870,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         <td>${badgeAlerta(alertaGlobal)}</td>
         <td class="td-actions" style="text-align:center;">
           <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${skuId}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')">📋 Historial</button>
-          ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="Etiquetado">
-            <input type="checkbox" ${etiquetadoMap[d0.sku_id+'_'+(d0.variante||'')]?'checked':''}
-              onchange="toggleEtiquetado(${d0.sku_id},'${d0.variante||''}',this.checked)"
-              style="width:15px;height:15px;accent-color:var(--green);cursor:pointer;">
-          </label>` : ''}
+
         </td>
       </tr>
       <tr id="${rowId}" style="display:none;">
@@ -905,11 +881,6 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
                 <span style="font-size:11px;color:#ffb340;font-family:'DM Mono',monospace;">● ${r.variante||'Sin variante'}</span>
                 <span style="font-size:11px;color:${r.disponible<=0?'var(--red)':r.disponible<=r.stock_minimo?'var(--amber)':'var(--green)'};font-weight:600;">${r.disponible} disponibles</span>
                 ${r.cantidad_reservada?`<span style="font-size:11px;color:var(--blue);">${r.cantidad_reservada} asignado${r.cantidad_reservada!==1?'s':''}</span>`:''}
-                ${!IS_READONLY?`<label onclick="event.stopPropagation()" style="cursor:pointer;" title="${etiquetadoMap[r.sku_id+'_'+(r.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
-                  <input type="checkbox" ${etiquetadoMap[r.sku_id+'_'+(r.variante||'')]?'checked':''}
-                    onchange="toggleEtiquetado(${r.sku_id},'${r.variante||''}',this.checked)"
-                    style="width:13px;height:13px;accent-color:var(--green);cursor:pointer;">
-                </label>`:''}
               </div>`).join('')}
           </div>
         </td>
@@ -928,11 +899,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         <td>${badgeAlerta(d.alerta)}</td>
         <td class="td-actions" style="text-align:center;">
           <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')">📋 Historial</button>
-          ${!IS_READONLY ? `<label onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;" title="${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'Etiquetado':'Pendiente etiqueta'}">
-            <input type="checkbox" ${etiquetadoMap[d.sku_id+'_'+(d.variante||'')]?'checked':''}
-              onchange="toggleEtiquetado(${d.sku_id},'${d.variante||''}',this.checked)"
-              style="width:15px;height:15px;accent-color:var(--green);cursor:pointer;">
-          </label>` : ''}
+
         </td>
       </tr>`);
     }
@@ -941,24 +908,6 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
   tbody.innerHTML = htmlRows.join('');
 }
 
-// ─── ETIQUETADO ─────────────────────────────────────────────────────────────
-async function toggleEtiquetado(skuId, variante, etiquetado){
-  try{
-    const key = skuId+'_'+(variante||'');
-    const varId = varianteIdMap[key];
-    if(varId){
-      await api(`variantes?id=eq.${varId}`, 'PATCH', {etiquetado});
-      etiquetadoMap[key] = etiquetado;
-      // Actualizar color del label sin re-renderizar
-      const label = event.target.closest('label');
-      if(label) label.title = etiquetado ? 'Etiquetado' : 'Pendiente etiqueta';
-      toast(etiquetado ? '🏷 Etiquetado' : '⚠ Pendiente etiqueta');
-    } else {
-      // SKU sin variantes — crear una variante dummy o manejar con otra tabla
-      toast('Este insumo no tiene variantes — no se puede marcar etiquetado aún');
-    }
-  }catch(e){ toast('Error: '+e.message); }
-}
 
 // ─── PENDIENTES DE INGRESO ──────────────────────────────────────────────────
 async function loadPendientesIngreso(){
@@ -1566,7 +1515,7 @@ async function init(){
     showPage('dashboard');
     // Pre-load categorías y skus
     categorias = await api('categorias?select=*&order=orden.asc').catch(()=>[]);
-    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor,etiquetado)&order=codigo.asc&activo=eq.true').catch(()=>[]);
+    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc&activo=eq.true').catch(()=>[]);
     fillCatFilters();
   } else {
     // Si no hay config, ir a config page
