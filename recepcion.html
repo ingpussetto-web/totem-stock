@@ -856,14 +856,17 @@ async function ingresarCantidad(ri){
     : await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=is.null&select=id,cantidad`);
 
   // Insumos menores (categoria_id de 'Insumos menores'): sobreescribir stock en vez de sumar
-  const esInsumoMenor = await esCategoriaMenor(ri.sku_id, ri.categoria_id);
+  const esInsumoMenor = await esCategoriaMenor(ri.sku_id, ri.categoria_id).catch(()=>false);
 
   if(stockRows?.length){
     const nuevaCant = esInsumoMenor ? ri.cantidad_recibida : (stockRows[0].cantidad||0) + ri.cantidad_recibida;
     await api(`stock?id=eq.${stockRows[0].id}`,'PATCH',{cantidad:nuevaCant,updated_at:new Date().toISOString()});
   } else {
+    // No existe fila de stock — crear
     await api('stock','POST',[{sku_id:ri.sku_id, variante_id:varianteId, cantidad:ri.cantidad_recibida}]);
   }
+  // Marcar como ingresado
+  await api(`recepcion_items?recepcion_id=eq.${ri.recepcion_id||ri._recId}&oc_item_id=eq.${ri.oc_item_id}`,'PATCH',{ingresado_a_stock:true}).catch(()=>{});
 }
 
 async function esCategoriaMenor(skuId, categoriaIdLocal){
@@ -1441,8 +1444,17 @@ async function confirmarVerificacionCaja(){
   }
 
   // Ingresar al stock
+  const errores = [];
   for(const ri of _vcajaItems){
-    await ingresarCantidad(ri);
+    try{
+      await ingresarCantidad(ri);
+    }catch(e){
+      console.error('Error ingresando', ri.nombre, e);
+      errores.push(ri.nombre + ': ' + e.message);
+    }
+  }
+  if(errores.length){
+    toast('⚠ Algunos ítems no se ingresaron al stock: ' + errores.join(', '));
   }
 
   // Marcar recepción como confirmada
