@@ -3911,19 +3911,19 @@ function generarPreviewHTML(c){
 
   // Items rows
   const itemsHTML = c.items.map(function(it,i){
-    const iva = Math.round(it.precio*it.cant*0.105);
-    const total = it.precio*it.cant + iva;
+    const ivaUnit = Math.round(it.precio*0.105);         // IVA unitario
+    const total = (it.precio + ivaUnit) * it.cant;       // Total bruto × cant
     let rows = '<tr>'
       +'<td style="padding:7px 10px;">'+it.nombre+'</td>'
       +'<td style="padding:7px 10px;text-align:center;">'+it.cant+'</td>'
       +'<td style="padding:7px 10px;text-align:right;">'+fmt2(it.precio)+'</td>'
-      +'<td style="padding:7px 10px;text-align:right;">'+fmt2(iva)+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;">'+fmt2(ivaUnit)+'</td>'
       +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(total)+'</td>'
     +'</tr>';
     // Agregar fila de Mini PC si existe
     if(it.minipc && it.minipc.precio){
-      const ivaPC = Math.round(it.minipc.precio*it.cant*0.21);
-      const totalPC = it.minipc.precio*it.cant + ivaPC;
+      const ivaPC = Math.round(it.minipc.precio*0.21);       // IVA unitario 21%
+      const totalPC = (it.minipc.precio + ivaPC) * it.cant;  // Total bruto × cant
       rows += '<tr style="background:#f9f9fb;">'
         +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+it.minipc.nombre+'</td>'
         +'<td style="padding:5px 10px;text-align:center;font-size:12px;">'+it.cant+'</td>'
@@ -3943,8 +3943,9 @@ function generarPreviewHTML(c){
         const key = entry[0]; const p = entry[1];
         if(!p.activo) return;
         const nombre = NOMBRES_PERIFERICOS[key] || key;
-        const ivaPer = Math.round((p.precio||0)*(p.cant||1)*0.105);
-        const totalPer = (p.precio||0)*(p.cant||1) + ivaPer;
+        const ivaPerUnit = Math.round((p.precio||0)*0.105);            // IVA unitario
+        const ivaPer = ivaPerUnit;
+        const totalPer = ((p.precio||0) + ivaPerUnit) * (p.cant||1);  // Total bruto × cant
         rows += '<tr style="background:#f9f9fb;">'
           +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+nombre+'</td>'
           +'<td style="padding:5px 10px;text-align:center;font-size:12px;">'+(p.cant||1)+'</td>'
