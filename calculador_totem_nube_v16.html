@@ -4066,6 +4066,24 @@ function generarPreviewHTML(c){
   if(el) el.innerHTML = html;
 }
 
+function expandirItemsProyecto(items){
+  const resultado = [];
+  items.forEach(function(it){
+    resultado.push({desc: it.nombre||it.desc, cat: it.cat||'equipo', cant: it.cant, precio: it.precio});
+    if(it.minipc && it.minipc.precio){
+      resultado.push({desc: it.minipc.nombre||'Mini PC', cat: 'periferico', cant: it.cant, precio: it.minipc.precio});
+    }
+    if(it.otrosPerifericos){
+      const NOMBRES = {impresora_termica:'Impresora Térmica (XPrinter)', camara_web:'Cámara Web HD Logitech C505', lector_qr:'Lector QR inalámbrico'};
+      Object.entries(it.otrosPerifericos).forEach(function(e){
+        const key = e[0]; const p = e[1];
+        if(p.activo) resultado.push({desc: NOMBRES[key]||key, cat:'periferico', cant: p.cant||1, precio: p.precio||0});
+      });
+    }
+  });
+  return resultado;
+}
+
 function aprobarCotizacion(){
   const c = window._cotPreview;
   if(!c){ cerrarPreview(); return; }
@@ -4089,7 +4107,7 @@ function aprobarCotizacion(){
     anio: new Date().getFullYear(),
     estado: 'iniciado',
     notas: c.sistema||'',
-    items: c.items.map(function(it){ return {desc:it.nombre, cat:it.cat||'equipo', cant:it.cant, precio:it.precio}; })
+    items: expandirItemsProyecto(c.items)
   };
   if(c.transporte && c.transporteMonto){
     proyecto.items.push({desc:'Servicio de transporte', cat:'servicio', cant:1, precio:c.transporteMonto});
@@ -4146,7 +4164,7 @@ function cambiarEstadoCot(id, estado){
         anio: new Date().getFullYear(),
         estado: 'iniciado',
         notas: c.sistema||'',
-        items: c.items.map(function(it){ return {desc:it.nombre||it.desc, cat:it.cat||'equipo', cant:it.cant, precio:it.precio}; })
+        items: expandirItemsProyecto(c.items)
       };
       if(c.transporte && c.transporteMonto){
         proyecto.items.push({desc:'Servicio de transporte', cat:'servicio', cant:1, precio:c.transporteMonto});
