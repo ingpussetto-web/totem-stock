@@ -1728,7 +1728,12 @@ async function publicarNota(){
           headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
           body: file
         });
-        if(!upRes.ok){ console.warn('Error subiendo archivo:', file.name); continue; }
+        if(!upRes.ok){
+          const errBody = await upRes.text().catch(()=>'');
+          console.error('Error subiendo archivo:', file.name, upRes.status, errBody);
+          alert(`Error ${upRes.status} subiendo "${file.name}": ${errBody}`);
+          continue;
+        }
         const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
         await apiNotas('op_notas_archivos', 'POST', { nota_id: nota.id, nombre_archivo: file.name, url: publicUrl });
       }
