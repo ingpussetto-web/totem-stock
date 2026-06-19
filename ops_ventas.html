@@ -220,6 +220,25 @@ select.filter:focus{outline:none;border-color:var(--green);}
           <option value="en_produccion">En producción</option>
           <option value="completada">Completada</option>
         </select>
+        <select class="filter" id="ops-categoria" onchange="renderOPs()">
+          <option value="">Todas las categorías</option>
+          <option value="turn_sw">Turnero con SW</option>
+          <option value="turn_sin_sw">Turnero sin SW</option>
+          <option value="vig">Vigilancia</option>
+          <option value="auto">Autogestión</option>
+          <option value="publ">Publicidad</option>
+          <option value="atencion">Atención Remota</option>
+          <option value="nubipay">NubiPay</option>
+          <option value="encuesta">Encuesta</option>
+          <option value="videowall">VideoWall</option>
+          <option value="acc">Accesorios</option>
+          <option value="custom">Custom</option>
+        </select>
+        <select class="filter" id="ops-bom" onchange="renderOPs()">
+          <option value="">Con y sin BOM</option>
+          <option value="con">Con BOM</option>
+          <option value="sin">Sin BOM</option>
+        </select>
       </div>
 
       <div id="ops-list"><div class="loading"><div class="spinner"></div>Cargando órdenes...</div></div>
@@ -383,6 +402,9 @@ async function checkConnection(){
 
 // ─── LOAD OPs ───────────────────────────────────────────────
 async function loadOPs(){
+  // Cargar qué productos tienen BOM maestra para el filtro
+  const bomsExistentes = await api('bom_maestra?select=producto_v14').catch(()=>[]);
+  window._bomsExistentes = [...new Set((bomsExistentes||[]).map(b=>b.producto_v14))];
   try{
     ops = await api('op_progreso?select=*&order=created_at.desc');
     // Metrics
@@ -397,9 +419,15 @@ async function loadOPs(){
 function renderOPs(){
   const search = document.getElementById('ops-search')?.value.toLowerCase()||'';
   const estadoFil = document.getElementById('ops-estado')?.value||'';
+  const categoriaFil = document.getElementById('ops-categoria')?.value||'';
+  const bomFil = document.getElementById('ops-bom')?.value||'';
+  const productosCon = new Set(window._bomsExistentes||[]);
   let rows = ops.filter(o=>{
     if(search && !o.op_numero?.toLowerCase().includes(search) && !o.cliente?.toLowerCase().includes(search)) return false;
     if(estadoFil && o.estado!==estadoFil) return false;
+    if(categoriaFil && !(o.producto_v14||'').startsWith(categoriaFil)) return false;
+    if(bomFil==='con' && !productosCon.has(o.producto_v14)) return false;
+    if(bomFil==='sin' && productosCon.has(o.producto_v14)) return false;
     return true;
   });
   const el = document.getElementById('ops-list');
@@ -436,7 +464,7 @@ function renderOPCard(o){
           ? `<button class="btn solid-green sm" onclick="liberarAProduccion(${o.id})">→ Liberar a Producción</button>`
           : ''}
         ${o.estado==='en_produccion'
-          ? `<a href="https://ingpussetto-web.github.io/totem-stock/produccion.html" target="_blank" class="btn green sm">→ Ir a Producción</a>`
+          ? `<a href="https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia" target="_blank" class="btn green sm">→ Ir a Producción</a>`
           : ''}
         ${o.estado==='en_produccion'
           ? `<button class="btn green sm" onclick="cambiarEstado(${o.id},'completada')">✓ Marcar completada</button>`
@@ -1300,7 +1328,7 @@ async function liberarAProduccion(opId){
     // Preguntar si ir a producción
     setTimeout(()=>{
       if(confirm('OP liberada. ¿Ir al módulo de Producción ahora?')){
-        window.open('https://ingpussetto-web.github.io/totem-stock/produccion.html','_blank');
+        window.open('https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia','_blank');
       }
     }, 500);
   }catch(e){toast('Error: '+e.message);}
@@ -1592,26 +1620,18 @@ async function copiarBOMMaestra(){
 
 async function guardarBOMMaestra(){
   if(!bomMaestraProducto||!bomMaestraItems.length){ alert('Agrega al menos un insumo.'); return; }
-  if(!confirm('¿Guardar BOM maestra y aplicar cambios a OPs activas de este producto?')) return;
+  const prod = PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto);
+  if(!confirm('¿Guardar BOM maestra para “'+(prod?.nombre||bomMaestraProducto)+'”? Las OPs en curso no se modifican.')) return;
   try{
-    await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE');
-    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
+    // Backup de la BOM actual antes de tocar nada
+    const bomActual = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=*').catch(()=>[]);
+    // POST primero - si falla, la BOM original queda intacta
+    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
     await api('bom_maestra','POST',payload);
-    const opsActivas = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&estado=not.eq.completada&select=id').catch(()=>[]);
-    for(const op of opsActivas){
-      const asignados = await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.asignado&select=sku_id,equipo_num').catch(()=>[]);
-      const skusAsignados = new Set(asignados.map(a=>a.sku_id+'_'+(a.equipo_num||1)));
-      await api('op_bom_items?op_id=eq.'+op.id+'&estado=eq.pendiente','DELETE');
-      const equipos = asignados.length > 0 ? [...new Set(asignados.map(a=>a.equipo_num||1))] : [1];
-      const bomPayload = [];
-      for(const eq of equipos){
-        bomMaestraItems.forEach(item=>{
-          if(!skusAsignados.has(item.sku_id+'_'+eq)){
-            bomPayload.push({ op_id:op.id, sku_id:item.sku_id, v14_key:item.v14_key, nombre:item.nombre, qty:item.qty, incluido:true, estado:'pendiente', equipo_num:eq });
-          }
-        });
-      }
-      if(bomPayload.length) await api('op_bom_items','POST',bomPayload);
+    // Solo si el POST tuvo exito, borrar los registros viejos por ID
+    if(bomActual && bomActual.length){
+      const idsViejos = bomActual.map(b=>b.id).join(',');
+      await api('bom_maestra?id=in.('+idsViejos+')','DELETE');
     }
     document.querySelectorAll('.bm-modelo-item').forEach(el=>{
       if(el.dataset.id===bomMaestraProducto){
@@ -1619,8 +1639,7 @@ async function guardarBOMMaestra(){
         if(badge){ badge.style.background='rgba(0,229,160,0.1)'; badge.style.color='var(--green)'; badge.textContent='✓ OK'; }
       }
     });
-    alert('✅ BOM Maestra guardada. OPs activas actualizadas: '+opsActivas.length);
-    loadOPs();
+    alert('✅ BOM Maestra guardada. Las OPs en curso no fueron modificadas.');
   } catch(e){ alert('Error: '+e.message); }
 }
 
