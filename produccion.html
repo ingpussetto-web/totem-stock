@@ -1665,7 +1665,7 @@ async function renderFeedNotas(){
           <span style="font-size:12px;font-weight:600;color:var(--text);">${n.autor}</span>
           ${etiquetaHTML}
           <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:auto;">${fecha}</span>
-          <button onclick="editarNota(${n.id}, ${JSON.stringify(n.texto||'')})" title="Editar nota"
+          <button onclick="editarNota(${n.id})" title="Editar nota"
             style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;line-height:1;"
             onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text3)'">✏</button>
           <button onclick="borrarNota(${n.id})" title="Eliminar nota"
@@ -1692,8 +1692,10 @@ async function renderFeedNotas(){
   }
 }
 
-function editarNota(notaId, textoActual){
-  document.getElementById('nota-texto-'+notaId).style.display = 'none';
+function editarNota(notaId){
+  const textoEl = document.getElementById('nota-texto-'+notaId);
+  const textoActual = textoEl ? textoEl.textContent : '';
+  textoEl.style.display = 'none';
   document.getElementById('nota-edit-'+notaId).style.display = 'block';
   const inp = document.getElementById('nota-edit-input-'+notaId);
   if(inp){ inp.value = textoActual; inp.focus(); }
