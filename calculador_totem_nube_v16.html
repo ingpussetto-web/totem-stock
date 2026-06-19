@@ -7014,17 +7014,17 @@ async function verificarPreciosActualizados(){
 }
 
 async function crearOP(proyId){
-  proyId = typeof proyId === 'string' ? parseInt(proyId) : proyId;
-  let p = proyectos.find(function(x){ return x.id === proyId; });
-  // Si no se encuentra, recargar proyectos desde Supabase (puede ser recién creado)
+  // Buscar por id exacto (numérico o string)
+  let p = proyectos.find(function(x){ return x.id == proyId; }); // == para tolerar int vs string
   if(!p){
+    // Si no se encuentra, recargar proyectos desde Supabase
     try{
       const proyRows = await stockAPI('proyectos_cotizador?select=*&order=id.asc');
       if(proyRows && proyRows.length > 0){
         proyectos = proyRows.map(function(r){
           return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', mes:parseInt(r.mes)||0, anio:parseInt(r.anio)||0, estado:r.estado||'', notas:r.notas||'', items: r.items ? JSON.parse(r.items) : [] };
         });
-        p = proyectos.find(function(x){ return x.id === proyId; });
+        p = proyectos.find(function(x){ return x.id == proyId; });
       }
     }catch(e){}
   }
