@@ -1660,16 +1660,28 @@ async function renderFeedNotas(){
           style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--blue);text-decoration:none;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;margin-top:6px;margin-right:4px;">
           📎 ${a.nombre_archivo}
         </a>`).join('');
-      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;">
+      return `<div id="nota-card-${n.id}" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="font-size:12px;font-weight:600;color:var(--text);">${n.autor}</span>
           ${etiquetaHTML}
           <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:auto;">${fecha}</span>
+          <button onclick="editarNota(${n.id}, ${JSON.stringify(n.texto||'')})" title="Editar nota"
+            style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;line-height:1;"
+            onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text3)'">✏</button>
           <button onclick="borrarNota(${n.id})" title="Eliminar nota"
             style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;line-height:1;"
             onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">✕</button>
         </div>
-        ${n.texto ? `<div style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;">${n.texto}</div>` : ''}
+        <div id="nota-texto-${n.id}" style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;">${n.texto||''}</div>
+        <div id="nota-edit-${n.id}" style="display:none;margin-top:8px;">
+          <textarea id="nota-edit-input-${n.id}" style="width:100%;min-height:80px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:13px;color:var(--text);resize:vertical;box-sizing:border-box;">${n.texto||''}</textarea>
+          <div style="display:flex;gap:8px;margin-top:6px;">
+            <button onclick="guardarEdicionNota(${n.id})"
+              style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;">Guardar</button>
+            <button onclick="cancelarEdicionNota(${n.id})"
+              style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:5px 14px;font-size:12px;color:var(--text2);cursor:pointer;">Cancelar</button>
+          </div>
+        </div>
         ${archivosHTML}
       </div>`;
     }).join('');
@@ -1678,6 +1690,31 @@ async function renderFeedNotas(){
   }catch(e){
     feed.innerHTML=`<div style="color:var(--red);padding:20px;font-size:12px;">Error: ${e.message}</div>`;
   }
+}
+
+function editarNota(notaId, textoActual){
+  document.getElementById('nota-texto-'+notaId).style.display = 'none';
+  document.getElementById('nota-edit-'+notaId).style.display = 'block';
+  const inp = document.getElementById('nota-edit-input-'+notaId);
+  if(inp){ inp.value = textoActual; inp.focus(); }
+}
+
+function cancelarEdicionNota(notaId){
+  document.getElementById('nota-texto-'+notaId).style.display = 'block';
+  document.getElementById('nota-edit-'+notaId).style.display = 'none';
+}
+
+async function guardarEdicionNota(notaId){
+  const inp = document.getElementById('nota-edit-input-'+notaId);
+  if(!inp) return;
+  const nuevoTexto = inp.value.trim();
+  if(!nuevoTexto){ alert('El texto no puede estar vacío.'); return; }
+  try{
+    await apiNotas(`op_notas?id=eq.${notaId}`, 'PATCH', { texto: nuevoTexto });
+    // Actualizar inline sin recargar todo el feed
+    document.getElementById('nota-texto-'+notaId).textContent = nuevoTexto;
+    cancelarEdicionNota(notaId);
+  }catch(e){ alert('Error al guardar: '+e.message); }
 }
 
 async function borrarNota(notaId){
