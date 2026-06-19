@@ -541,16 +541,24 @@ async function abrirOP(opId){
       const cantItems = bomItems.filter(i=>i.skus?.tracking==='cantidad' && i.estado!=='asignado' && i.sku_id);
       const cantSkuIds = [...new Set(cantItems.map(i=>i.sku_id))];
       if(cantSkuIds.length){
-        const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,variante_id,cantidad,cantidad_reservada').catch(()=>[]);
+        const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,variante_id,cantidad').catch(()=>[]);
+        // Calcular reservado real desde op_bom_items (solo escaneados)
+        const asignadosReales = cantSkuIds.length
+          ? await api('op_bom_items?sku_id=in.('+cantSkuIds.join(',')+')'+'&uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id').catch(()=>[])
+          : [];
         // Verificar cada item con su variante específica
         cantItems.forEach(item=>{
-          // Buscar la fila de stock que corresponde a este sku + variante
           const fila = stockCant.find(s=>{
             if(s.sku_id !== item.sku_id) return false;
             if(item.variante_id) return s.variante_id === item.variante_id;
-            return !s.variante_id; // sin variante
+            return !s.variante_id;
           });
-          const disp = fila ? (fila.cantidad||0) - (fila.cantidad_reservada||0) : -1;
+          const escaneados = (asignadosReales||[]).filter(a=>{
+            if(a.sku_id !== item.sku_id) return false;
+            if(item.variante_id) return a.variante_id === item.variante_id;
+            return !a.variante_id;
+          }).length;
+          const disp = fila ? (fila.cantidad||0) - escaneados : -1;
           if(disp <= 0) skusConAlerta.add(item.sku_id);
         });
       }
@@ -609,9 +617,12 @@ async function procesarCaja(sku){
     return;
   }
   // Verificar stock disponible
-  const stockRows = await api(`stock?sku_id=eq.${sku.id}&variante_id=is.null&select=id,cantidad,cantidad_reservada`).catch(()=>[]);
+  const stockRows = await api(`stock?sku_id=eq.${sku.id}&variante_id=is.null&select=id,cantidad`).catch(()=>[]);
   const stockRow = stockRows?.[0];
-  const disponible = stockRow ? (stockRow.cantidad - (stockRow.cantidad_reservada||0)) : 0;
+  // Calcular reservado real desde op_bom_items
+  const asignadosRealesProd = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id`).catch(()=>[]);
+  const reservadoReal = (asignadosRealesProd||[]).length;
+  const disponible = stockRow ? (stockRow.cantidad - reservadoReal) : 0;
 
   if(disponible <= 0){
     scanArea.className='scan-area error';
@@ -624,7 +635,7 @@ async function procesarCaja(sku){
   // Asignar item en BOM
   await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'});
   // Descontar del stock
-  await api(`stock?id=eq.${stockRow.id}`, 'PATCH', {cantidad_reservada: (stockRow.cantidad_reservada||0) + 1});
+  await api(`stock?id=eq.${stockRow.id}`, 'PATCH', {cantidad_reservada: reservadoReal + 1});
 
   item.estado = 'asignado';
   item.uid_asignado = sku.codigo+'-CAJA';
@@ -1649,11 +1660,14 @@ async function renderFeedNotas(){
           style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--blue);text-decoration:none;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;margin-top:6px;margin-right:4px;">
           📎 ${a.nombre_archivo}
         </a>`).join('');
-      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="font-size:12px;font-weight:600;color:var(--text);">${n.autor}</span>
           ${etiquetaHTML}
           <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:auto;">${fecha}</span>
+          <button onclick="borrarNota(${n.id})" title="Eliminar nota"
+            style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;line-height:1;"
+            onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">✕</button>
         </div>
         ${n.texto ? `<div style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;">${n.texto}</div>` : ''}
         ${archivosHTML}
@@ -1664,6 +1678,25 @@ async function renderFeedNotas(){
   }catch(e){
     feed.innerHTML=`<div style="color:var(--red);padding:20px;font-size:12px;">Error: ${e.message}</div>`;
   }
+}
+
+async function borrarNota(notaId){
+  if(!confirm('¿Eliminar esta nota?')) return;
+  try{
+    // Borrar archivos asociados primero
+    await apiNotas(`op_notas_archivos?nota_id=eq.${notaId}`, 'DELETE');
+    // Borrar nota
+    await apiNotas(`op_notas?id=eq.${notaId}`, 'DELETE');
+    await renderFeedNotas();
+    // Actualizar badge
+    const badge = document.getElementById('badge-notas-'+_notasOpId);
+    if(badge){
+      const actual = parseInt(badge.textContent)||0;
+      const nuevo = Math.max(0, actual-1);
+      badge.textContent = nuevo;
+      if(nuevo === 0) badge.style.display='none';
+    }
+  }catch(e){ alert('Error al eliminar: '+e.message); }
 }
 
 async function publicarNota(){
@@ -1691,8 +1724,8 @@ async function publicarNota(){
         const path = `${_notasOpId}/${nota.id}/${Date.now()}_${file.name}`;
         // Upload a Supabase Storage
         const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
-          method: 'POST',
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type': file.type },
+          method: 'PUT',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
           body: file
         });
         if(!upRes.ok){ console.warn('Error subiendo archivo:', file.name); continue; }
