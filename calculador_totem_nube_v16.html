@@ -4198,14 +4198,15 @@ function cambiarEstadoCot(id, estado){
 
   // Si vuelve a borrador o rechazada, ofrecer eliminar proyecto asociado
   if(estado === 'borrador' || estado === 'rechazada'){
-    const proyAsoc = proyectos.find(function(p){ return p.id === 'proy-'+c.id; });
+    const orden = c.numero ? c.numero.replace('COT-','') : null;
+    const proyAsoc = orden ? proyectos.find(function(p){ return p.orden === orden; }) : null;
     if(proyAsoc){
       const eliminar = confirm('La cotización vuelve a "'+( estado==='borrador'?'Borrador':'Rechazada' )+'".'
         +'\n\n¿Querés eliminar el proyecto "'+proyAsoc.cliente+'" de Detalle de Ventas también?'
         +'\n(Si lo dejás, quedará desincronizado con el estado de la cotización.)');
       if(eliminar){
-        proyectos = proyectos.filter(function(p){ return p.id !== 'proy-'+c.id; });
-        licencias = licencias.filter(function(l){ return l.id !== 'lic-'+c.id; });
+        proyectos = proyectos.filter(function(p){ return p.orden !== orden; });
+        licencias = licencias.filter(function(l){ return l.orden !== orden; });
         sincronizarTodoElHistorial();
         renderLicencias();
       }
