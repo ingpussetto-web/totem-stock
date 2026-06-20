@@ -489,6 +489,16 @@ async function abrirBOM(opId){
     currentOP = ops.find(o=>o.id===opId);
     if(!currentOP) return;
 
+    // Mostrar modal con indicador de carga mientras se buscan los datos
+    document.getElementById('modal-bom-title').textContent = 'Cargando BOM...';
+    document.getElementById('modal-bom-sub').textContent = 'Por favor esperá un momento';
+    document.getElementById('bom-editor').innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--text2);">
+        <div style="font-size:28px;margin-bottom:12px;">⏳</div>
+        <div style="font-size:14px;">Cargando BOM, por favor esperá...</div>
+      </div>`;
+    openModal('modal-bom');
+
     // Cargar items BOM con SKU y variantes
     const allBomItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
     currentPlayerItems = (allBomItems||[]).filter(i => i.notas && i.notas.startsWith('🖥'));
@@ -562,6 +572,7 @@ async function abrirBOM(opId){
     // Setup modal
     document.getElementById('modal-bom-title').textContent = 'BOM — ' + currentOP.op_numero;
     document.getElementById('modal-bom-sub').textContent = currentOP.cliente + ' · ' + currentOP.producto_nombre + ' × ' + currentOP.cantidad;
+
 
     // Color
     selectedColor = currentOP.color_gabinete || '';
@@ -1623,16 +1634,15 @@ async function guardarBOMMaestra(){
   const prod = PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto);
   if(!confirm('¿Guardar BOM maestra para “'+(prod?.nombre||bomMaestraProducto)+'”? Las OPs en curso no se modifican.')) return;
   try{
-    // Backup de la BOM actual antes de tocar nada
-    const bomActual = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=*').catch(()=>[]);
-    // POST primero - si falla, la BOM original queda intacta
-    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
-    await api('bom_maestra','POST',payload);
-    // Solo si el POST tuvo exito, borrar los registros viejos por ID
+    // Borrar primero los registros viejos para evitar conflicto de constraint único
+    const bomActual = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=id').catch(()=>[]);
     if(bomActual && bomActual.length){
       const idsViejos = bomActual.map(b=>b.id).join(',');
       await api('bom_maestra?id=in.('+idsViejos+')','DELETE');
     }
+    // POST con los nuevos ítems
+    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
+    await api('bom_maestra','POST',payload);
     document.querySelectorAll('.bm-modelo-item').forEach(el=>{
       if(el.dataset.id===bomMaestraProducto){
         const badge = el.querySelector('div:last-child');
