@@ -640,18 +640,8 @@ async function abrirBOM(opId){
     if(!allSkus.length){
       allSkus = await api('skus?select=id,codigo,nombre,categoria_id,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
     }
-    // Solo mostrar insumos opcionales que tiene sentido agregar — con stock
-    const EXTRAS_PERMITIDOS = [
-      'CAMARA-WEB-HD-LOGITECH-C505',
-      'LECTOR-QR-GARNIC',
-      'PARLANTES-GENIUS-SP-HF180-6W',
-      'MOUSE-PARA-PULSADOR',
-      'BOTON-PULSADOR-ARCADE-46-MM',
-      'HDMI'
-    ];
-    const skusExtra = allSkus.filter(s =>
-      EXTRAS_PERMITIDOS.some(cod => s.codigo?.includes(cod) || s.nombre?.toLowerCase().includes('camara') || s.nombre?.toLowerCase().includes('lector') || s.nombre?.toLowerCase().includes('parlante') || s.nombre?.toLowerCase().includes('mouse') || s.nombre?.toLowerCase().includes('boton') || s.nombre?.toLowerCase().includes('pulsador')
-    ));
+    // Mostrar todos los insumos de categoría Periféricos como extras opcionales
+    const skusExtra = allSkus.filter(s => s.categorias?.nombre === 'Periféricos');
     // Cargar stock para cada extra
     const extrasConStock = await Promise.all(skusExtra.map(async s=>{
       let stockExtra = 0;
