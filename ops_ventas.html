@@ -292,7 +292,7 @@ select.filter:focus{outline:none;border-color:var(--green);}
     <!-- Botón cargar BOM Maestra (visible cuando BOM está vacía) -->
     <div id="btn-cargar-bom-wrap" style="display:none;text-align:center;padding:16px;background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.2);border-radius:8px;margin-bottom:12px;">
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">La BOM está vacía. Cargá los insumos desde la plantilla del producto.</div>
-      <button class="btn" style="border-color:var(--amber);color:var(--amber);" onclick="cargarDesdeBOMMaestra()">🔄 Cargar BOM Maestra</button>
+      <button class="btn" style="border-color:var(--amber);color:var(--amber);" onclick="cargarDesdeBOMMaestra()">🔄 Reemplazar con BOM Maestra</button>
     </div>
 
     <!-- BOM items por categoría -->
@@ -595,9 +595,17 @@ async function abrirBOM(opId){
     // Render BOM
     renderBOMEditor();
 
-    // Mostrar botón cargar BOM maestra si está vacía
+    // Mostrar botón cargar BOM maestra si existe una para este producto
     const btnWrap = document.getElementById('btn-cargar-bom-wrap');
-    if(btnWrap) btnWrap.style.display = currentBOMItems.filter(i=>i.sku_id).length === 0 ? 'block' : 'none';
+    if(btnWrap){
+      const productoV14 = currentOP.producto_v14;
+      if(productoV14 && productoV14 !== 'custom'){
+        const bomDisp = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoV14)+'&activo=eq.true&select=id&limit=1').catch(()=>[]);
+        btnWrap.style.display = (bomDisp && bomDisp.length) ? 'block' : 'none';
+      } else {
+        btnWrap.style.display = currentBOMItems.filter(i=>i.sku_id).length === 0 ? 'block' : 'none';
+      }
+    }
 
     // Renderizar players existentes
     renderPlayersLista();
