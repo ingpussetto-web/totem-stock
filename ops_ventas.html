@@ -1133,6 +1133,12 @@ async function guardarBOM(estado){
       updated_at: new Date().toISOString()
     });
 
+    // Si todos los items son nuevos (vienen de BOM maestra), borrar los viejos primero
+    const todosNuevos = currentBOMItems.every(i=>i._isNew) && currentPlayerItems.every(i=>i._isNew);
+    if(todosNuevos && currentBOMItems.length > 0){
+      await api(`op_bom_items?op_id=eq.${currentOP.id}`, 'DELETE');
+    }
+
     // Actualizar cada item existente
     for(const item of currentBOMItems){
       if(item._isNew){
