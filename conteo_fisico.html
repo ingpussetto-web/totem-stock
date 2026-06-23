@@ -1268,17 +1268,11 @@ async function generarEtiquetasDesdeConteo(skuId, nombre, varianteId, cantidad){
     await api('unidades', 'POST', unidades);
 
     // Abrir modal de etiquetas si está disponible
-    if(typeof abrirModalEtiquetas === 'function' && typeof tnImprimirEtiquetas !== 'undefined'){
-      setTimeout(() => {
-        abrirModalEtiquetas(etiquetas, tnImprimirEtiquetas);
-        setTimeout(() => iniciarConteo(), 500);
-      }, 200);
-    } else {
-      // Fallback: mostrar los UIDs generados
-      const lista = etiquetas.map(e => e.uid).join('\n');
-      alert(`✓ ${cantidad} unidad${cantidad>1?'es':''} registrada${cantidad>1?'s':''}:\n\n${lista}\n\nGenerá las etiquetas desde el módulo Inventario.`);
+    // Abrir modal de etiquetas (viene de etiquetas_modal.js)
+    setTimeout(() => {
+      abrirModalEtiquetas(etiquetas, tnImprimirEtiquetas);
       setTimeout(() => iniciarConteo(), 500);
-    }
+    }, 200);
 
   } catch(e){
     alert('Error generando etiquetas: ' + e.message);
@@ -1286,60 +1280,6 @@ async function generarEtiquetasDesdeConteo(skuId, nombre, varianteId, cantidad){
   }
 }
 
-function tnImprimirEtiquetas(etiquetas){
-  const printArea = document.getElementById('print-area') || (() => {
-    const d = document.createElement('div');
-    d.id = 'print-area';
-    d.style.display = 'none';
-    document.body.appendChild(d);
-    return d;
-  })();
-
-  // Generar hojas de 8 etiquetas
-  printArea.innerHTML = '';
-  for(let i = 0; i < etiquetas.length; i += 8){
-    const hoja = document.createElement('div');
-    hoja.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:4mm;padding:8mm;page-break-after:always;';
-    etiquetas.slice(i, i+8).forEach(et => {
-      const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-      const label = document.createElement('div');
-      label.style.cssText = 'border:0.5pt solid #ccc;border-radius:3mm;padding:4mm;font-family:Arial,sans-serif;background:#fff;';
-      label.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div style="font-size:7pt;font-weight:700;color:#555;text-transform:uppercase;">Totem Nube</div>
-          <div style="font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:1mm 2mm;font-weight:600;">EN STOCK</div>
-        </div>
-        <div style="font-size:9pt;font-weight:700;color:#111;margin:2mm 0 1mm;">${et.nombre}</div>
-        ${et.variante ? `<div style="font-size:8pt;color:#444;margin-bottom:1mm;">${et.variante}</div>` : ''}
-        <div style="display:flex;align-items:center;gap:3mm;margin:2mm 0;">
-          <div id="qr-print-${et.uid.replace(/[^a-z0-9]/gi,'_')}"></div>
-          <div>
-            <div style="font-size:5.5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;">UID</div>
-            <div style="font-size:7pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;">${et.uid}</div>
-            <div style="font-size:6pt;color:#1976d2;font-weight:600;">Escanear al asignar</div>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1.5mm;margin-top:1mm;">
-          <div style="font-size:6pt;color:#888;">Inventariado: ${fecha}</div>
-          <div style="font-size:6pt;color:#aaa;font-family:'Courier New',monospace;">#${String(et.num).padStart(4,'0')}</div>
-        </div>`;
-      hoja.appendChild(label);
-      setTimeout(() => {
-        const qrEl = label.querySelector(`#qr-print-${et.uid.replace(/[^a-z0-9]/gi,'_')}`);
-        if(qrEl && window.QRCode){
-          new QRCode(qrEl, {
-            text: 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=' + et.uid,
-            width: 64, height: 64,
-            colorDark: '#000', colorLight: '#fff',
-            correctLevel: QRCode.CorrectLevel.M
-          });
-        }
-      }, 150);
-    });
-    printArea.appendChild(hoja);
-  }
-  setTimeout(() => window.print(), 600);
-}
 
 </script>
 
