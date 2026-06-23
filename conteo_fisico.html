@@ -427,17 +427,36 @@ async function renderUID(skuId, nombre, content){
     <div class="panel">
       <div class="panel-title">📊 ${nombre} — Resumen de unidades</div>
       <div class="metrics">
-        <div class="metric blue">
-          <div class="metric-label">Etiquetas emitidas</div>
-          <div class="metric-value" style="color:var(--blue);">${emitidas}</div>
-        </div>
-        <div class="metric green">
-          <div class="metric-label">En depósito (stock)</div>
-          <div class="metric-value">${enStock}</div>
-        </div>
         <div class="metric amber">
+          <div class="metric-label">Etiquetas emitidas</div>
+          <div class="metric-value">${emitidas}</div>
+        </div>
+        <div class="metric green" style="cursor:pointer;" onclick="toggleDesglosStock()" title="Ver desglose por variante">
+          <div class="metric-label" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>En depósito (stock)</span>
+            <span id="arrow-stock" style="font-size:10px;transition:transform 0.2s;">▼</span>
+          </div>
+          <div class="metric-value">${enStock}</div>
+          <div id="desglose-stock" style="display:none;margin-top:8px;border-top:1px solid rgba(0,200,150,0.2);padding-top:8px;">
+            ${(()=>{
+              const byVar = {};
+              (unidades||[]).filter(u=>u.estado==='stock').forEach(u=>{
+                const v = u.variantes?.valor || 'Sin variante';
+                byVar[v] = (byVar[v]||0) + 1;
+              });
+              const entries = Object.entries(byVar);
+              if(!entries.length) return '<span style="font-size:11px;color:var(--text3);">Sin detalle</span>';
+              return entries.sort((a,b)=>b[1]-a[1]).map(([v,n])=>
+                `<div style="display:flex;justify-content:space-between;font-size:11px;font-family:'DM Mono',monospace;color:var(--green);margin-top:3px;">
+                  <span style="color:var(--text2);">${v}</span><strong>${n}</strong>
+                </div>`
+              ).join('');
+            })()}
+          </div>
+        </div>
+        <div class="metric blue">
           <div class="metric-label">Asignadas a OPs</div>
-          <div class="metric-value" style="color:var(--amber);">${asignadas}</div>
+          <div class="metric-value">${asignadas}</div>
         </div>
         <div class="metric">
           <div class="metric-label">Producidas / salidas</div>
@@ -489,7 +508,7 @@ async function renderUID(skuId, nombre, content){
       </table>` : ''}
 
       <!-- Conteo físico -->
-      ${renderConteoInput(skuId, nombre, teorico, 'uid')}
+      ${renderConteoInput(skuId, nombre, teorico, 'uid', null, enStock, asignadas)}
     </div>
   `;
 
@@ -770,7 +789,7 @@ async function renderCantidad(skuId, nombre, content){
 }
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
-function renderConteoInput(skuId, nombre, teorico, tracking, stockRows){
+function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockUID, asignadasUID){
   if(READONLY){
     return `
       <div class="conteo-section" style="opacity:0.5;pointer-events:none;">
@@ -822,6 +841,9 @@ function renderConteoInput(skuId, nombre, teorico, tracking, stockRows){
         <span class="conteo-label">Saldo teórico en sistema:</span>
         <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);">${teorico}</span>
       </div>
+      ${enStockUID !== undefined ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-family:'DM Mono',monospace;">
+        Comparando contra <strong style="color:var(--green);">${enStockUID} en stock</strong> + <strong style="color:var(--amber);">${asignadasUID} asignadas a OPs</strong> = ${teorico} teórico
+      </div>` : ''}
       <div class="conteo-row">
         <span class="conteo-label">Cantidad contada físicamente:</span>
         <input type="number" id="input-conteo" class="conteo-input" min="0" placeholder="0"
@@ -881,19 +903,21 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
     icon = '⚠️';
     titulo = `Hay ${diferencia} unidad(es) sin etiqueta`;
     detalle = `El sistema registra ${teorico} unidades pero contaste ${conteo}. `
-      + `Las ${diferencia} unidad(es) de más no tienen UID asignado y no pueden rastrearse. `
-      + `<strong>Generá las etiquetas desde el módulo Inventario</strong> antes de asignarlas a una OP.`;
+      + `Las ${diferencia} unidad(es) de más no tienen UID asignado. `
+      + `Registrá el conteo e indicá la variante para que quede trazabilidad.`;
     ajusteSection.style.display = 'block';
-    // Cambiar botón para que solo registre el conteo sin ajustar stock
+    // Cambiar botón para que registre el conteo con variante
     const btnConfirmar = document.getElementById('btn-confirmar-ajuste');
     if(btnConfirmar){ 
-      btnConfirmar.textContent = '✓ Registrar conteo (sin ajuste)';
+      btnConfirmar.textContent = '✓ Registrar conteo';
       btnConfirmar.className = 'btn amber';
     }
     const motivoWrap = document.getElementById('motivo-wrap');
     const motivoLabel = document.getElementById('motivo-label');
     if(motivoWrap) motivoWrap.style.display = 'block';
     if(motivoLabel) motivoLabel.textContent = 'Observaciones (opcional):';
+    // Cargar selector de variante si el SKU las tiene
+    setTimeout(() => cargarSelectorVarianteUID(skuId, diferencia), 50);
   } else if(esUID && diferencia < 0){
     // UID con unidades de menos: UIDs registrados que no se encontraron físicamente
     tipo = 'critico';
@@ -954,11 +978,52 @@ function limpiarConclusion(){
   if(ajusteSection) ajusteSection.style.display = 'none';
 }
 
+// ─── Selector de variante para ajuste positivo UID ───────────────────────────
+async function cargarSelectorVarianteUID(skuId, diferencia){
+  const motivoWrap = document.getElementById('motivo-wrap');
+  if(!motivoWrap) return;
+
+  // Verificar si ya hay selector
+  if(document.getElementById('variante-uid-wrap')) return;
+
+  // Consultar variantes del SKU
+  let variantes = [];
+  try { variantes = await api(`variantes?sku_id=eq.${skuId}&activo=eq.true&select=id,valor&order=valor.asc`); }
+  catch(e){ return; }
+
+  if(!variantes || !variantes.length) return; // Sin variantes → no mostrar selector
+
+  const wrap = document.createElement('div');
+  wrap.id = 'variante-uid-wrap';
+  wrap.style.cssText = 'margin-top:12px;padding:12px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.3);border-radius:8px;';
+  wrap.innerHTML = `
+    <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">
+      Variante de la${diferencia > 1 ? 's ' + diferencia : ''} unidad${diferencia > 1 ? 'es' : ''} encontrada${diferencia > 1 ? 's' : ''} <span style="color:var(--amber);">*</span>
+    </label>
+    <select id="variante-uid-select" style="height:32px;font-size:13px;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);width:100%;">
+      <option value="">— Seleccioná la variante —</option>
+      ${variantes.map(v => `<option value="${v.id}">${v.valor}</option>`).join('')}
+    </select>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;">
+      Esto queda registrado en el ajuste para trazabilidad.
+    </div>
+  `;
+  motivoWrap.insertAdjacentElement('afterend', wrap);
+}
+
 // ─── Confirmar ajuste ─────────────────────────────────────────────────────
 async function confirmarAjuste(){
   const sinDif = parseInt(document.getElementById('conclusion-final')?.dataset.diferencia||'1') === 0;
   const motivo = document.getElementById('input-motivo')?.value.trim() || '';
   if(!sinDif && !motivo){ alert('Ingresá un motivo para el ajuste.'); return; }
+
+  // Si es UID con diferencia positiva y hay selector de variante, validarlo
+  const varianteSelect = document.getElementById('variante-uid-select');
+  const varianteUIDId = varianteSelect ? parseInt(varianteSelect.value) || null : null;
+  if(varianteSelect && !varianteUIDId){
+    alert('Seleccioná la variante de la unidad encontrada antes de confirmar.');
+    return;
+  }
 
   const conclusion = document.getElementById('conclusion-final');
   if(!conclusion) return;
@@ -994,7 +1059,8 @@ async function confirmarAjuste(){
         cantidad_anterior: teorico,
         diferencia: diferencia,
         motivo: `Conteo físico — ${motivo}`,
-        usuario: usuario
+        usuario: usuario,
+        ...(varianteUIDId ? { variante_id: varianteUIDId } : {})
       });
 
       // 3. Actualizar stock.cantidad si tracking=cantidad
@@ -1168,6 +1234,16 @@ function cancelarAjuste(){
     }
   });
 })();
+
+// ─── Toggle desglose stock por variante ──────────────────────────────────────
+function toggleDesglosStock(){
+  const panel = document.getElementById('desglose-stock');
+  const arrow  = document.getElementById('arrow-stock');
+  if(!panel) return;
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  if(arrow) arrow.style.transform = visible ? '' : 'rotate(180deg)';
+}
 </script>
 
 </body>
