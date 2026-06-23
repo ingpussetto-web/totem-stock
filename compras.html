@@ -362,6 +362,16 @@ textarea.form-input{resize:vertical;min-height:70px;}
         <button class="btn green" onclick="saveConfig()">Guardar y reconectar</button>
         <div id="cfg-status" style="margin-top:10px;font-size:12px;font-family:'DM Mono',monospace;"></div>
       </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">🔁 Migración retroactiva — Historial de precios</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
+          Registra en <code style="font-family:'DM Mono',monospace;color:var(--amber);">historial_precios</code> todas las OCs aprobadas/cerradas que todavía no tienen su precio registrado.
+          Solo inserta registros nuevos — no toca los existentes. Ejecutar una sola vez.
+        </div>
+        <button class="btn amber" onclick="migrarHistorialPrecios()">▶ Ejecutar migración</button>
+        <div id="migracion-log" style="margin-top:14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);white-space:pre-wrap;max-height:320px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:8px;padding:12px;display:none;"></div>
+      </div>
     </div>
 
   </main>
@@ -2428,6 +2438,114 @@ async function checkBadges(){
     const badgeAlertas = document.getElementById('badge-alertas');
     if(badgeAlertas) badgeAlertas.style.display = alertas?.length ? 'inline-block' : 'none';
   }catch(e){}
+}
+
+async function migrarHistorialPrecios(){
+  const log = document.getElementById('migracion-log');
+  log.style.display = 'block';
+  log.textContent = '';
+
+  function escribir(msg){ log.textContent += msg + '\n'; log.scrollTop = log.scrollHeight; }
+
+  try {
+    escribir('── Iniciando migración retroactiva ──\n');
+
+    // 1. Traer todas las OCs en estados válidos
+    escribir('1/5 Leyendo OCs aprobadas, recibidas y cerradas...');
+    const ocs = await api(
+      'ordenes_compra?estado=in.(aprobada,recibida_parcial,cerrada)' +
+      '&select=id,oc_numero,estado,moneda,proveedor_id,tipo_cambio,created_at' +
+      '&order=created_at.asc'
+    );
+    if(!ocs || !ocs.length){ escribir('Sin OCs en estados válidos. Nada que migrar.'); return; }
+    escribir(`   → ${ocs.length} OCs encontradas.\n`);
+
+    // 2. Traer v14_sku_map completo
+    escribir('2/5 Leyendo mapa v14_sku_map...');
+    const mapRaw = await api('v14_sku_map?select=sku_id,v14_key');
+    const mapeo = {}; // sku_id → v14_key
+    (mapRaw||[]).forEach(m => { mapeo[m.sku_id] = m.v14_key; });
+    escribir(`   → ${Object.keys(mapeo).length} insumos mapeados.\n`);
+
+    // 3. Traer historial_precios existente para no duplicar (oc_id + sku_id)
+    escribir('3/5 Leyendo historial_precios existente...');
+    const histExistente = await api('historial_precios?select=oc_id,sku_id');
+    const yaRegistrado = new Set();
+    (histExistente||[]).forEach(h => {
+      if(h.oc_id && h.sku_id) yaRegistrado.add(`${h.oc_id}_${h.sku_id}`);
+    });
+    escribir(`   → ${yaRegistrado.size} registros existentes (serán omitidos).\n`);
+
+    // 4. Procesar OC por OC
+    escribir('4/5 Procesando ítems por OC...');
+    let totalInsertados = 0;
+    let totalOmitidos = 0;
+    let totalSinMapeo = 0;
+    let totalSinPrecio = 0;
+    const errores = [];
+
+    for(const oc of ocs){
+      let items;
+      try {
+        items = await api(
+          `oc_items?oc_id=eq.${oc.id}` +
+          `&select=id,sku_id,nombre,precio_unitario_neto,iva_pct` +
+          `&precio_unitario_neto=gt.0`
+        );
+      } catch(e){ errores.push(`OC ${oc.oc_numero}: error leyendo ítems — ${e.message}`); continue; }
+
+      if(!items || !items.length) continue;
+
+      const registros = [];
+      for(const item of items){
+        if(!item.sku_id){ totalSinPrecio++; continue; }
+        if(!mapeo[item.sku_id]){ totalSinMapeo++; continue; }
+        const clave = `${oc.id}_${item.sku_id}`;
+        if(yaRegistrado.has(clave)){ totalOmitidos++; continue; }
+
+        registros.push({
+          sku_id:       item.sku_id,
+          v14_key:      mapeo[item.sku_id],
+          precio_neto:  item.precio_unitario_neto,
+          moneda:       oc.moneda || 'ARS',
+          tipo_cambio:  oc.moneda === 'USD' ? oc.tipo_cambio : (oc.tipo_cambio || null),
+          oc_id:        oc.id,
+          proveedor_id: oc.proveedor_id || null,
+          fecha:        oc.created_at ? oc.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+        });
+        yaRegistrado.add(clave); // evitar duplicados dentro del mismo run
+      }
+
+      if(registros.length){
+        try {
+          await api('historial_precios', 'POST', registros);
+          totalInsertados += registros.length;
+          escribir(`   ✓ ${oc.oc_numero} [${oc.estado}] → ${registros.length} precio(s) registrado(s)`);
+        } catch(e){
+          errores.push(`OC ${oc.oc_numero}: error al insertar — ${e.message}`);
+        }
+      }
+    }
+
+    // 5. Resumen final
+    escribir('\n── Resumen ────────────────────────────────');
+    escribir(`✅ Insertados:       ${totalInsertados}`);
+    escribir(`⏭  Ya existían:     ${totalOmitidos}`);
+    escribir(`⚠  Sin mapeo v14:   ${totalSinMapeo}`);
+    if(errores.length){
+      escribir(`\n❌ Errores (${errores.length}):`);
+      errores.forEach(e => escribir('   ' + e));
+    }
+    escribir('\n✔ Migración completada.');
+
+    if(totalSinMapeo > 0){
+      escribir(`\n💡 Hay ${totalSinMapeo} ítems sin v14_key en v14_sku_map.`);
+      escribir('   Esos insumos no afectan al cotizador (probablemente no tienen costo base allí).');
+    }
+
+  } catch(e){
+    escribir('❌ Error general: ' + e.message);
+  }
 }
 
 async function init(){
