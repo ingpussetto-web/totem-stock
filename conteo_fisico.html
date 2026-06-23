@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Conteo Físico</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="etiquetas_modal.js"></script>
 <style>
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
@@ -427,36 +429,17 @@ async function renderUID(skuId, nombre, content){
     <div class="panel">
       <div class="panel-title">📊 ${nombre} — Resumen de unidades</div>
       <div class="metrics">
-        <div class="metric amber">
-          <div class="metric-label">Etiquetas emitidas</div>
-          <div class="metric-value">${emitidas}</div>
-        </div>
-        <div class="metric green" style="cursor:pointer;" onclick="toggleDesglosStock()" title="Ver desglose por variante">
-          <div class="metric-label" style="display:flex;align-items:center;justify-content:space-between;">
-            <span>En depósito (stock)</span>
-            <span id="arrow-stock" style="font-size:10px;transition:transform 0.2s;">▼</span>
-          </div>
-          <div class="metric-value">${enStock}</div>
-          <div id="desglose-stock" style="display:none;margin-top:8px;border-top:1px solid rgba(0,200,150,0.2);padding-top:8px;">
-            ${(()=>{
-              const byVar = {};
-              (unidades||[]).filter(u=>u.estado==='stock').forEach(u=>{
-                const v = u.variantes?.valor || 'Sin variante';
-                byVar[v] = (byVar[v]||0) + 1;
-              });
-              const entries = Object.entries(byVar);
-              if(!entries.length) return '<span style="font-size:11px;color:var(--text3);">Sin detalle</span>';
-              return entries.sort((a,b)=>b[1]-a[1]).map(([v,n])=>
-                `<div style="display:flex;justify-content:space-between;font-size:11px;font-family:'DM Mono',monospace;color:var(--green);margin-top:3px;">
-                  <span style="color:var(--text2);">${v}</span><strong>${n}</strong>
-                </div>`
-              ).join('');
-            })()}
-          </div>
-        </div>
         <div class="metric blue">
+          <div class="metric-label">Etiquetas emitidas</div>
+          <div class="metric-value" style="color:var(--blue);">${emitidas}</div>
+        </div>
+        <div class="metric green">
+          <div class="metric-label">En depósito (stock)</div>
+          <div class="metric-value">${enStock}</div>
+        </div>
+        <div class="metric amber">
           <div class="metric-label">Asignadas a OPs</div>
-          <div class="metric-value">${asignadas}</div>
+          <div class="metric-value" style="color:var(--amber);">${asignadas}</div>
         </div>
         <div class="metric">
           <div class="metric-label">Producidas / salidas</div>
@@ -513,7 +496,7 @@ async function renderUID(skuId, nombre, content){
   `;
 
   // Bind input
-  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(teorico, nombre, skuId));
+  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(enStock, nombre, skuId));
 }
 
 // ─── TRACKING CANTIDAD ─────────────────────────────────────────────────────
@@ -839,7 +822,7 @@ function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockU
       <div class="conteo-title">🔢 Ingresá el conteo físico real</div>
       <div class="conteo-row">
         <span class="conteo-label">Saldo teórico en sistema:</span>
-        <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);">${teorico}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);">${enStockUID !== undefined ? enStockUID : teorico}</span>
       </div>
       ${enStockUID !== undefined ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-family:'DM Mono',monospace;">
         Comparando contra <strong style="color:var(--green);">${enStockUID} en stock</strong> + <strong style="color:var(--amber);">${asignadasUID} asignadas a OPs</strong> = ${teorico} teórico
@@ -848,7 +831,7 @@ function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockU
         <span class="conteo-label">Cantidad contada físicamente:</span>
         <input type="number" id="input-conteo" class="conteo-input" min="0" placeholder="0"
                data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}" 
-               data-teorico="${teorico}" data-tracking="${tracking}">
+               data-teorico="${enStockUID !== undefined ? enStockUID : teorico}" data-tracking="${tracking}">
       </div>
       <div id="conclusion-box"></div>
       <div id="ajuste-section" class="ajuste-section">
@@ -1096,8 +1079,13 @@ async function confirmarAjuste(){
         </div>
       </div>
     `;
-    // Recargar historial para mostrar el ajuste recién guardado
-    setTimeout(() => iniciarConteo(), 800);
+
+    // Si es UID con diferencia positiva → generar etiquetas automáticamente
+    if(tracking === 'uid' && diferencia > 0 && varianteUIDId){
+      await generarEtiquetasDesdeConteo(skuId, nombre, varianteUIDId, diferencia);
+    } else {
+      setTimeout(() => iniciarConteo(), 800);
+    }
 
   } catch(e){
     alert('Error al guardar: ' + e.message);
@@ -1235,15 +1223,124 @@ function cancelarAjuste(){
   });
 })();
 
-// ─── Toggle desglose stock por variante ──────────────────────────────────────
-function toggleDesglosStock(){
-  const panel = document.getElementById('desglose-stock');
-  const arrow  = document.getElementById('arrow-stock');
-  if(!panel) return;
-  const visible = panel.style.display !== 'none';
-  panel.style.display = visible ? 'none' : 'block';
-  if(arrow) arrow.style.transform = visible ? '' : 'rotate(180deg)';
+// ─── Generar etiquetas desde conteo físico ────────────────────────────────────
+function generarPrefijo(codigo, variante){
+  const varMap = {'Negro':'NEG','Blanco':'BLA','Gris Plomo':'GRP','Gris Claro':'GRC',
+    'Azul':'AZU','Rojo':'ROJ','Verde':'VER','A definir':'DEF',
+    'XPrinter':'XPR','3 N Star':'NST','Nitcom':'NIT','Vyse':'VYS',
+    'Garnic':'GAR','Philips':'PHI','Roku':'ROK'};
+  let pref = codigo;
+  if(variante){
+    const varCod = varMap[variante] || variante.substring(0,3).toUpperCase();
+    pref = pref + '-' + varCod;
+  }
+  return pref;
 }
+
+async function generarEtiquetasDesdeConteo(skuId, nombre, varianteId, cantidad){
+  try {
+    // Obtener codigo del SKU y nombre de variante
+    const skuData = await api(`skus?id=eq.${skuId}&select=codigo,nombre`);
+    const codigo  = skuData?.[0]?.codigo || String(skuId);
+    const varData = await api(`variantes?id=eq.${varianteId}&select=valor`);
+    const varNom  = varData?.[0]?.valor || null;
+
+    const prefijo = generarPrefijo(codigo, varNom);
+
+    // Buscar último número para este prefijo
+    let lastNum = 0;
+    const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid`).catch(()=>[]);
+    (existing||[]).forEach(u => {
+      const m = u.uid.match(/-(\d+)$/);
+      if(m){ const n = parseInt(m[1]); if(n > lastNum) lastNum = n; }
+    });
+
+    // Generar UIDs e insertarlos
+    const unidades = [];
+    const etiquetas = [];
+    for(let i = 1; i <= cantidad; i++){
+      const num = String(lastNum + i).padStart(4,'0');
+      const uid = prefijo + '-' + num;
+      unidades.push({ uid, sku_id: skuId, variante_id: varianteId, estado: 'stock' });
+      etiquetas.push({ uid, nombre, variante: varNom, num: lastNum + i });
+    }
+
+    await api('unidades', 'POST', unidades);
+
+    // Abrir modal de etiquetas si está disponible
+    if(typeof abrirModalEtiquetas === 'function' && typeof tnImprimirEtiquetas !== 'undefined'){
+      setTimeout(() => {
+        abrirModalEtiquetas(etiquetas, tnImprimirEtiquetas);
+        setTimeout(() => iniciarConteo(), 500);
+      }, 200);
+    } else {
+      // Fallback: mostrar los UIDs generados
+      const lista = etiquetas.map(e => e.uid).join('\n');
+      alert(`✓ ${cantidad} unidad${cantidad>1?'es':''} registrada${cantidad>1?'s':''}:\n\n${lista}\n\nGenerá las etiquetas desde el módulo Inventario.`);
+      setTimeout(() => iniciarConteo(), 500);
+    }
+
+  } catch(e){
+    alert('Error generando etiquetas: ' + e.message);
+    setTimeout(() => iniciarConteo(), 500);
+  }
+}
+
+function tnImprimirEtiquetas(etiquetas){
+  const printArea = document.getElementById('print-area') || (() => {
+    const d = document.createElement('div');
+    d.id = 'print-area';
+    d.style.display = 'none';
+    document.body.appendChild(d);
+    return d;
+  })();
+
+  // Generar hojas de 8 etiquetas
+  printArea.innerHTML = '';
+  for(let i = 0; i < etiquetas.length; i += 8){
+    const hoja = document.createElement('div');
+    hoja.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:4mm;padding:8mm;page-break-after:always;';
+    etiquetas.slice(i, i+8).forEach(et => {
+      const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      const label = document.createElement('div');
+      label.style.cssText = 'border:0.5pt solid #ccc;border-radius:3mm;padding:4mm;font-family:Arial,sans-serif;background:#fff;';
+      label.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="font-size:7pt;font-weight:700;color:#555;text-transform:uppercase;">Totem Nube</div>
+          <div style="font-size:6pt;background:#e8f5e9;color:#2e7d32;border:0.5pt solid #a5d6a7;border-radius:2mm;padding:1mm 2mm;font-weight:600;">EN STOCK</div>
+        </div>
+        <div style="font-size:9pt;font-weight:700;color:#111;margin:2mm 0 1mm;">${et.nombre}</div>
+        ${et.variante ? `<div style="font-size:8pt;color:#444;margin-bottom:1mm;">${et.variante}</div>` : ''}
+        <div style="display:flex;align-items:center;gap:3mm;margin:2mm 0;">
+          <div id="qr-print-${et.uid.replace(/[^a-z0-9]/gi,'_')}"></div>
+          <div>
+            <div style="font-size:5.5pt;color:#888;text-transform:uppercase;letter-spacing:0.05em;">UID</div>
+            <div style="font-size:7pt;font-family:'Courier New',monospace;color:#333;word-break:break-all;">${et.uid}</div>
+            <div style="font-size:6pt;color:#1976d2;font-weight:600;">Escanear al asignar</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;border-top:0.5pt solid #eee;padding-top:1.5mm;margin-top:1mm;">
+          <div style="font-size:6pt;color:#888;">Inventariado: ${fecha}</div>
+          <div style="font-size:6pt;color:#aaa;font-family:'Courier New',monospace;">#${String(et.num).padStart(4,'0')}</div>
+        </div>`;
+      hoja.appendChild(label);
+      setTimeout(() => {
+        const qrEl = label.querySelector(`#qr-print-${et.uid.replace(/[^a-z0-9]/gi,'_')}`);
+        if(qrEl && window.QRCode){
+          new QRCode(qrEl, {
+            text: 'https://ingpussetto-web.github.io/totem-stock/scan.html?uid=' + et.uid,
+            width: 64, height: 64,
+            colorDark: '#000', colorLight: '#fff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        }
+      }, 150);
+    });
+    printArea.appendChild(hoja);
+  }
+  setTimeout(() => window.print(), 600);
+}
+
 </script>
 
 </body>
