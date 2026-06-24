@@ -623,7 +623,7 @@ function procesarRecepcion(){
       oc_item_id: item.id,
       sku_id: item.sku_id,
       nombre: item.nombre,
-      tracking: item.skus?.tracking || item.tracking || 'cantidad',
+      tracking: (item.skus?.tracking || item.tracking || 'cantidad').trim() || 'cantidad',
       categoria_id: item.skus?.categoria_id || null,
       codigo: item.skus?.codigo||'',
       cantidad_esperada: pendiente,
@@ -773,7 +773,7 @@ async function confirmarRecepcion(){
 
     // Separar items por tracking
     const itemsUID = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking === 'uid');
-    const itemsCantidad = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking !== 'uid' && ri.tracking !== undefined && ri.tracking !== null);
+    const itemsCantidad = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking !== 'uid');
 
     // Ingresar UIDs directamente
     etiquetasGeneradas = [];
