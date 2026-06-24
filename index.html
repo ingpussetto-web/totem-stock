@@ -503,7 +503,6 @@ body::before{
     const inp  = document.getElementById('login-pass');
     const err  = document.getElementById('login-error');
     if(md5(pass) === PASS_HASH){
-      sessionStorage.setItem(SESSION_KEY, '1');
       document.getElementById('login-overlay').style.display = 'none';
       document.getElementById('login-pass').value = '';
       err.textContent = '';
@@ -516,17 +515,10 @@ body::before{
     }
   };
 
-  // Verificar al cargar
-  if(sessionStorage.getItem(SESSION_KEY) === '1'){
-    document.addEventListener('DOMContentLoaded', ()=>{
-      const ov = document.getElementById('login-overlay');
-      if(ov) ov.style.display = 'none';
-    });
-  } else {
-    document.addEventListener('DOMContentLoaded', ()=>{
-      document.getElementById('login-pass')?.focus();
-    });
-  }
+  // Pedir siempre al cargar la página
+  document.addEventListener('DOMContentLoaded', ()=>{
+    document.getElementById('login-pass')?.focus();
+  });
 })();
 
 // ─── RELOJ ───────────────────────────────────────────────────
