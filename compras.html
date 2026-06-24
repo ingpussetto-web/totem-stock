@@ -197,7 +197,15 @@ textarea.form-input{resize:vertical;min-height:70px;}
 .pago-check{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);transition:all 0.15s;font-size:11px;font-family:'DM Mono',monospace;}
 .pago-check:hover{border-color:var(--green-border);}
 .pago-check.pagada{border-color:var(--green-border);background:var(--green-dim);color:var(--green);}
-.pago-check.pendiente{color:var(--amber);border-color:var(--amber-border);background:var(--amber-dim);}
+.pago-check.pago_parcial{border-color:var(--amber-border);background:var(--amber-dim);color:var(--amber);}
+.pago-check.pendiente{color:var(--text3);border-color:var(--border);background:var(--surface2);}
+.pago-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;}
+.pago-modal{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:24px;width:420px;max-width:95vw;max-height:85vh;overflow-y:auto;}
+.pago-modal-title{font-size:15px;font-weight:600;margin-bottom:16px;color:var(--text);}
+.pago-hist-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;font-family:'DM Mono',monospace;}
+.pago-hist-toggle{font-size:11px;color:var(--text3);cursor:pointer;margin-top:6px;display:flex;align-items:center;gap:4px;}
+.pago-saldo{font-size:13px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace;}
+.pago-saldo.rojo{color:var(--red);}
 .check-box{width:14px;height:14px;border-radius:3px;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;}
 .upload-label{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;height:26px;font-size:11px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;}
 .upload-label:hover{background:rgba(255,255,255,0.05);color:var(--text);}
@@ -1090,6 +1098,21 @@ async function loadOCs(){
         o._itemsTodos = items||[];
       }catch(e){ o._itemsTodos=[]; }
     }
+    // Cargar pagos para todas las OCs
+    try{
+      const todosLosPagos = await api('pagos?select=*&order=created_at.asc');
+      ocs.forEach(o=>{
+        o._pagos = (todosLosPagos||[]).filter(p=>p.oc_id===o.id);
+        const totalPagado = o._pagos.reduce((s,p)=>s+Number(p.monto),0);
+        const totalOC = Number(o.total_bruto)||0;
+        o._totalPagado = totalPagado;
+        o._saldoPendiente = Math.max(0, totalOC - totalPagado);
+        // Recalcular pago_estado en base a pagos reales
+        if(totalPagado <= 0) o.pago_estado = 'pendiente';
+        else if(o._saldoPendiente <= 0.01) o.pago_estado = 'pagada';
+        else o.pago_estado = 'pago_parcial';
+      });
+    }catch(e){ ocs.forEach(o=>{ o._pagos=[]; o._totalPagado=0; o._saldoPendiente=Number(o.total_bruto)||0; }); }
     // Calcular pendientes para OCs parciales (sin queries extra)
     for(const o of ocs.filter(x=>x.estado==='recibida_parcial')){
       o._itemsPendientes = (o._itemsTodos||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
@@ -1121,8 +1144,14 @@ function renderOCs(){
   el.innerHTML=rows.map(o=>{
     const estadoLabel={borrador:'Borrador',aprobada:'Aprobada',recibida_parcial:'Recep. parcial',cerrada:'Cerrada',cancelada:'Cancelada'};
     const fecha=new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-    const totalFmt=o.total_neto?(o.moneda==='USD'?'USD '+Number(o.total_neto).toLocaleString('es-AR'):'$'+Number(o.total_neto).toLocaleString('es-AR')):'—';
+    const sym = o.moneda==='USD'?'USD ':'\$';
+    const fmtNum = n => Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+    const totalBruto = Number(o.total_bruto)||0;
+    const totalFmt = totalBruto ? sym+fmtNum(totalBruto) : '—';
+    const saldoPend = o._saldoPendiente ?? totalBruto;
+    const totalPag  = o._totalPagado ?? 0;
     const pagada=o.pago_estado==='pagada';
+    const parcial=o.pago_estado==='pago_parcial';
     const tieneFactura=!!o.factura_url;
     // Panel pendientes
     const itemsADefinirPendientes = o._itemsPendientes?.filter(i=>i.color==='A definir' && (i.cantidad-(i.cantidad_recibida||0))>0)||[];
@@ -1192,14 +1221,20 @@ function renderOCs(){
         </div>
         <div style="text-align:right;">
           <span class="badge ${o.estado}">${estadoLabel[o.estado]||o.estado}</span>
-          <div class="oc-total" style="margin-top:6px;">${totalFmt}</div>
+          <div class="oc-total" style="margin-top:6px;">
+            ${pagada
+              ? `<span>${totalFmt}</span>`
+              : parcial
+                ? `<span style="font-size:10px;color:var(--text3);display:block;">Total: ${totalFmt}</span><span style="color:var(--amber);">Saldo: ${sym}${fmtNum(saldoPend)}</span>`
+                : `<span>${totalFmt}</span>`
+            }
+          </div>
         </div>
       </div>
       <div class="factura-zone">
-        <!-- Check pagada/pendiente -->
-        <div class="pago-check ${pagada?'pagada':'pendiente'}" onclick="togglePago(${o.id},${pagada})" title="${pagada?'Marcar como pendiente':'Marcar como pagada'}">
-          <div class="check-box">${pagada?'✓':''}</div>
-          <span>${pagada?'Pagada':'Pendiente'}</span>
+        <!-- Estado de pago -->
+        <div class="pago-check ${pagada?'pagada':parcial?'pago_parcial':'pendiente'}" onclick="abrirModalPago(${o.id})" title="Gestionar pagos">
+          <span>${pagada?'✓ Pagada':parcial?'⬤ Pago parcial':'○ Sin pagar'}</span>
         </div>
         <!-- Subir factura -->
         <label class="upload-label" id="upload-label-${o.id}" title="Adjuntar factura (PDF o imagen)">
@@ -2010,16 +2045,167 @@ async function compartirOCId(ocId){
 
 const WA_PAGOS = '3517022388'; // Encargado de pagos fijo
 
-async function togglePago(ocId, esPagada){
-  const nuevoEstado = esPagada ? 'pendiente' : 'pagada';
-  try{
-    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{pago_estado:nuevoEstado});
-    // Actualizar en memoria y re-render
-    const oc = ocs.find(o=>o.id===ocId);
-    if(oc) oc.pago_estado = nuevoEstado;
+function abrirModalPago(ocId){
+  const oc = ocs.find(o=>o.id===ocId);
+  if(!oc) return;
+
+  const sym = oc.moneda==='USD'?'USD ':'$';
+  const fmtN = n => Number(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+  const totalBruto = Number(oc.total_bruto)||0;
+  const pagos = oc._pagos||[];
+  const totalPagado = pagos.reduce((s,p)=>s+Number(p.monto),0);
+  const saldo = Math.max(0, totalBruto - totalPagado);
+  const pctSaldo = totalBruto > 0 ? (saldo/totalBruto*100) : 0;
+
+  // Historial de pagos
+  const histHtml = pagos.length ? pagos.map(p=>`
+    <div class="pago-hist-row">
+      <span style="color:var(--text2);">${new Date(p.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span>
+      <span>${p.notas||p.metodo||'—'}</span>
+      <span style="color:var(--green);">+${sym}${fmtN(p.monto)} (${Number(p.porcentaje).toFixed(1)}%)</span>
+    </div>`).join('') : '<div style="font-size:12px;color:var(--text3);padding:8px 0;">Sin pagos registrados</div>';
+
+  const html = `
+    <div class="pago-modal-overlay" id="pago-modal-overlay" onclick="if(event.target===this)cerrarModalPago()">
+      <div class="pago-modal">
+        <div class="pago-modal-title">💳 Pagos — ${oc.oc_numero}</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px;">
+          <div><span style="color:var(--text3);">Total OC:</span> <strong style="font-family:'DM Mono',monospace;">${sym}${fmtN(totalBruto)}</strong></div>
+          <div><span style="color:var(--text3);">Pagado:</span> <strong style="color:var(--green);font-family:'DM Mono',monospace;">${sym}${fmtN(totalPagado)}</strong></div>
+          <div><span style="color:var(--text3);">Saldo:</span> <strong class="pago-saldo ${saldo<=0?'':'rojo'}" style="font-family:'DM Mono',monospace;">${sym}${fmtN(saldo)}</strong></div>
+        </div>
+
+        ${saldo > 0.01 ? `
+        <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;">Registrar pago</div>
+          <div style="display:flex;gap:10px;margin-bottom:10px;">
+            <div style="flex:1;">
+              <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">% del total</label>
+              <input type="number" id="pago-pct" min="0.1" max="${pctSaldo.toFixed(1)}" step="0.1" placeholder="ej: 50" value="${pctSaldo.toFixed(1)}"
+                style="width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:'DM Mono',monospace;"
+                oninput="sincronizarPagoPct(${ocId},${totalBruto},${saldo})">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Monto (${sym.trim()})</label>
+              <input type="number" id="pago-monto" min="0.01" max="${saldo.toFixed(2)}" step="0.01" placeholder="ej: ${fmtN(saldo)}" value="${saldo.toFixed(2)}"
+                style="width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:'DM Mono',monospace;"
+                oninput="sincronizarPagoMonto(${ocId},${totalBruto},${saldo})">
+            </div>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Notas (opcional)</label>
+            <input type="text" id="pago-notas" placeholder="ej: Seña, saldo, transferencia..." 
+              style="width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);">
+          </div>
+          <div id="pago-aviso" style="font-size:11px;color:var(--text3);margin-bottom:10px;min-height:16px;"></div>
+          <button class="btn solid" onclick="confirmarPago(${ocId})" style="width:100%;">✓ Registrar pago</button>
+        </div>` : `
+        <div style="padding:12px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:8px;margin-bottom:16px;font-size:13px;color:var(--green);text-align:center;">
+          ✓ OC totalmente pagada
+        </div>`}
+
+        <div>
+          <div class="pago-hist-toggle" onclick="toggleHistPagos()">
+            <span id="hist-arrow">▶</span> Historial de pagos (${pagos.length})
+          </div>
+          <div id="hist-pagos-body" style="display:none;margin-top:8px;">${histHtml}</div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+          <button class="btn" onclick="cerrarModalPago()">Cerrar</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function cerrarModalPago(){
+  document.getElementById('pago-modal-overlay')?.remove();
+}
+
+function toggleHistPagos(){
+  const body = document.getElementById('hist-pagos-body');
+  const arrow = document.getElementById('hist-arrow');
+  if(!body) return;
+  const visible = body.style.display !== 'none';
+  body.style.display = visible ? 'none' : 'block';
+  if(arrow) arrow.textContent = visible ? '▶' : '▼';
+}
+
+function sincronizarPagoPct(ocId, totalBruto, saldo){
+  const pct = parseFloat(document.getElementById('pago-pct')?.value)||0;
+  const monto = totalBruto * pct / 100;
+  const montoInput = document.getElementById('pago-monto');
+  if(montoInput) montoInput.value = Math.min(monto, saldo).toFixed(2);
+  actualizarAvisoPago(saldo);
+}
+
+function sincronizarPagoMonto(ocId, totalBruto, saldo){
+  const monto = parseFloat(document.getElementById('pago-monto')?.value)||0;
+  const pct = totalBruto > 0 ? monto/totalBruto*100 : 0;
+  const pctInput = document.getElementById('pago-pct');
+  if(pctInput) pctInput.value = Math.min(pct, saldo/totalBruto*100).toFixed(1);
+  actualizarAvisoPago(saldo);
+}
+
+function actualizarAvisoPago(saldo){
+  const monto = parseFloat(document.getElementById('pago-monto')?.value)||0;
+  const aviso = document.getElementById('pago-aviso');
+  if(!aviso) return;
+  if(monto > saldo + 0.01){
+    aviso.style.color = 'var(--red)';
+    aviso.textContent = `⚠ El monto supera el saldo disponible (${Number(saldo).toLocaleString('es-AR',{minimumFractionDigits:2})})`;
+    document.getElementById('pago-monto').value = saldo.toFixed(2);
+    const totalBruto = saldo / (parseFloat(document.getElementById('pago-pct')?.value)||100) * 100;
+    document.getElementById('pago-pct').value = (saldo/totalBruto*100).toFixed(1);
+  } else {
+    const nuevSaldo = saldo - monto;
+    aviso.style.color = 'var(--text3)';
+    aviso.textContent = nuevSaldo > 0.01 ? `Saldo restante tras este pago: ${Number(nuevSaldo).toLocaleString('es-AR',{minimumFractionDigits:2})}` : '✓ Este pago cancela el saldo total';
+  }
+}
+
+async function confirmarPago(ocId){
+  const monto = parseFloat(document.getElementById('pago-monto')?.value)||0;
+  const pct   = parseFloat(document.getElementById('pago-pct')?.value)||0;
+  const notas = document.getElementById('pago-notas')?.value.trim()||'';
+  const oc = ocs.find(o=>o.id===ocId);
+  if(!oc) return;
+
+  const saldo = oc._saldoPendiente ?? Number(oc.total_bruto);
+  if(monto <= 0){ toast('Ingresá un monto válido'); return; }
+  if(monto > saldo + 0.01){ toast('El monto supera el saldo disponible'); return; }
+
+  try {
+    const nuevoPago = await api('pagos','POST',{
+      oc_id: ocId,
+      monto,
+      porcentaje: pct,
+      fecha: new Date().toISOString().split('T')[0],
+      metodo: oc.condicion_pago||null,
+      notas: notas||null
+    });
+
+    // Recalcular en memoria
+    if(!oc._pagos) oc._pagos = [];
+    oc._pagos.push({oc_id:ocId, monto, porcentaje:pct, notas, created_at:new Date().toISOString()});
+    const totalPagado = oc._pagos.reduce((s,p)=>s+Number(p.monto),0);
+    const totalBruto  = Number(oc.total_bruto)||0;
+    oc._totalPagado   = totalPagado;
+    oc._saldoPendiente = Math.max(0, totalBruto - totalPagado);
+    if(oc._saldoPendiente <= 0.01){
+      oc.pago_estado = 'pagada';
+      await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{pago_estado:'pagada'});
+    } else {
+      oc.pago_estado = 'pago_parcial';
+      await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{pago_estado:'pago_parcial'});
+    }
+
+    cerrarModalPago();
     renderOCs();
-    toast(nuevoEstado==='pagada'?'Marcada como pagada ✓':'Marcada como pendiente');
-  }catch(e){toast('Error: '+e.message);}
+    toast('Pago registrado ✓');
+  } catch(e){ toast('Error: '+e.message); }
 }
 
 async function subirFactura(ocId, input){
