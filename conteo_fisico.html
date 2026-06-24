@@ -191,7 +191,7 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 <!-- Contenido dinámico -->
 <div id="conteo-content"></div>
 
-<!-- Nav -->
+<!-- Nav gerencia -->
 <nav class="gernav" id="gernav" style="display:none;">
   <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/index.html"><span class="gernav-icon">🏠</span>Inicio</a>
   <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/calculador_totem_nube_v16.html"><span class="gernav-icon">💰</span>Cotizador</a>
@@ -203,6 +203,15 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
   <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/produccion.html"><span class="gernav-icon">🔧</span>Producción</a>
   <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/inventario_inicial.html"><span class="gernav-icon">🏷</span>Inventario</a>
   <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/noticias.html"><span class="gernav-icon">📢</span>Noticias</a>
+</nav>
+
+<!-- Nav producción -->
+<nav class="gernav" id="prodnav" style="display:none;">
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/index_produccion.html"><span class="gernav-icon">🏠</span>Inicio</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/produccion.html"><span class="gernav-icon">🔧</span>Producción</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html"><span class="gernav-icon">📥</span>Recepción</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html"><span class="gernav-icon">📦</span>Stock</a>
+  <a class="gernav-btn active" href="https://ingpussetto-web.github.io/totem-stock/conteo_fisico.html"><span class="gernav-icon">🔢</span>Conteo</a>
 </nav>
 
 <script>
@@ -1193,12 +1202,30 @@ function cancelarAjuste(){
   if(area === 'gerencia'){
     if(nav) nav.style.display = 'flex';
     document.body.style.paddingBottom = '90px';
-    // Propagar area=gerencia a todos los links
-    document.querySelectorAll('.gernav-btn').forEach(a => {
+    document.querySelectorAll('#gernav .gernav-btn').forEach(a => {
       if(a.href && !a.href.includes('index.html')){
         try{
           const url = new URL(a.href);
           url.searchParams.set('area', 'gerencia');
+          a.href = url.toString();
+        }catch(e){}
+      }
+    });
+  }
+
+  if(area === 'produccion'){
+    const prodnav = document.getElementById('prodnav');
+    if(prodnav) prodnav.style.display = 'flex';
+    document.body.style.paddingBottom = '90px';
+    document.querySelectorAll('#prodnav .gernav-btn').forEach(a => {
+      if(a.href && !a.href.includes('index_produccion.html')){
+        try{
+          const url = new URL(a.href);
+          url.searchParams.set('area', 'produccion');
+          // Conteo en producción va en modo readonly
+          if(url.pathname.includes('conteo_fisico')) url.searchParams.set('mode','readonly');
+          // Stock en producción va en modo readonly
+          if(url.pathname.includes('stock_fase1')) url.searchParams.set('mode','readonly');
           a.href = url.toString();
         }catch(e){}
       }
