@@ -430,9 +430,10 @@ async function renderCaja(sku){
   const stockRows = await api(`stock?sku_id=eq.${sku.id}&select=id,cantidad,cantidad_reservada`).catch(()=>[]);
   cajaStockRow = stockRows?.[0];
   const total = cajaStockRow?.cantidad || 0;
-  // Calcular reservado real desde op_bom_items (solo escaneados y asignados)
-  const asignadosReales = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id`).catch(()=>[]);
-  const reservado = (asignadosReales||[]).length;
+  // Calcular reservado real desde op_bom_items (solo OPs activas)
+  const asignadosRealesRaw = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id,ordenes_produccion(estado)`).catch(()=>[]);
+  const _estadosActivosCaja = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+  const reservado = (asignadosRealesRaw||[]).filter(a => _estadosActivosCaja.includes(a.ordenes_produccion?.estado)).length;
   // Sincronizar cantidad_reservada si difiere
   if(cajaStockRow && reservado !== (cajaStockRow.cantidad_reservada||0)){
     await api(`stock?id=eq.${cajaStockRow.id}`,'PATCH',{cantidad_reservada: reservado}).catch(()=>{});

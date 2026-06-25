@@ -703,10 +703,13 @@ async function loadStock(){
   try {
     // Calcular disponible dinámicamente desde op_bom_items (solo escaneados)
     const stockRaw = await api('stock?select=id,sku_id,variante_id,cantidad&order=sku_id.asc');
-    const asignadosRaw = await api('op_bom_items?uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id').catch(()=>[]);
+    const asignadosRaw = await api('op_bom_items?uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id,ordenes_produccion(estado)').catch(()=>[]);
+    // Solo contar asignados en OPs activas (excluir completadas y canceladas)
+    const _estadosActivosStock = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+    const asignadosFiltrados = (asignadosRaw||[]).filter(a => _estadosActivosStock.includes(a.ordenes_produccion?.estado));
     // Contar escaneados por sku_id + variante_id
     const asigMap = {};
-    (asignadosRaw||[]).forEach(a=>{
+    asignadosFiltrados.forEach(a=>{
       const key = a.sku_id + '_' + (a.variante_id||'null');
       asigMap[key] = (asigMap[key]||0) + 1;
     });

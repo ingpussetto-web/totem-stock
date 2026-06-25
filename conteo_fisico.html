@@ -529,9 +529,13 @@ async function renderCantidad(skuId, nombre, content){
   const ajustes = await api(`stock_ajustes?sku_id=eq.${skuId}&select=*&order=created_at.asc`).catch(()=>[]);
 
   // Salidas reales: solo items escaneados (uid_asignado IS NOT NULL), con variante_id
-  const bomItems = await api(
+  const bomItemsTodos = await api(
     `op_bom_items?sku_id=eq.${skuId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=op_id,variante_id,ordenes_produccion(op_numero,cliente,estado,updated_at)`
   ).catch(()=>[]);
+  // Para el cálculo del saldo teórico, solo contar OPs activas
+  // (stock.cantidad ya descuenta las completadas tras el fix de ejecutarCierreOP)
+  const _estadosActivosCF = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+  const bomItems = (bomItemsTodos||[]).filter(b => _estadosActivosCF.includes(b.ordenes_produccion?.estado));
 
   // Stock actual desde tabla stock (fuente de verdad)
   const stockRows = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
@@ -559,7 +563,7 @@ async function renderCantidad(skuId, nombre, content){
       // Ajustes de esta variante
       const ajVar = (ajustes||[]).filter(a=> a.variante_id === varId || (!a.variante_id && stockRows.length === 1));
 
-      // Salidas de esta variante
+      // Salidas de esta variante (solo OPs activas)
       const bomVar = (bomItems||[]).filter(b=> b.variante_id === varId || (!b.variante_id && stockRows.length === 1));
 
       // Agrupar salidas por OP

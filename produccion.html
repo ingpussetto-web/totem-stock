@@ -543,9 +543,12 @@ async function abrirOP(opId){
       if(cantSkuIds.length){
         const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,variante_id,cantidad').catch(()=>[]);
         // Calcular reservado real desde op_bom_items (solo escaneados)
-        const asignadosReales = cantSkuIds.length
-          ? await api('op_bom_items?sku_id=in.('+cantSkuIds.join(',')+')'+'&uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id').catch(()=>[])
+        const asignadosRealesRaw = cantSkuIds.length
+          ? await api('op_bom_items?sku_id=in.('+cantSkuIds.join(',')+')'+'&uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id,ordenes_produccion(estado)').catch(()=>[])
           : [];
+        // Solo contar OPs activas para determinar disponible
+        const _estadosActivosProd = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+        const asignadosReales = (asignadosRealesRaw||[]).filter(a => _estadosActivosProd.includes(a.ordenes_produccion?.estado));
         // Verificar cada item con su variante específica
         cantItems.forEach(item=>{
           const fila = stockCant.find(s=>{
@@ -1073,9 +1076,41 @@ async function confirmarCierreConFaltantes(){
 
 async function ejecutarCierreOP(notas){
   try{
-    // Marcar unidades asignadas como "producido"
+    // ─── DESCONTAR STOCK: insumos de cantidad asignados desde caja ───────────
+    // Cada item con uid que termina en '-CAJA' fue asignado via asignarDesdeCaja,
+    // que incrementó cantidad_reservada pero nunca decrementó cantidad.
+    // Al cerrar la OP hay que hacer ambas cosas.
+    const itemsCaja = bomItems.filter(i =>
+      i.incluido !== false &&
+      i.uid_asignado &&
+      i.uid_asignado.endsWith('-CAJA') &&
+      i.skus?.tracking === 'cantidad'
+    );
+    // Agrupar por sku_id + variante_id (count de items = unidades consumidas)
+    const stockUpdates = {};
+    for(const item of itemsCaja){
+      const key = `${item.sku_id}_${item.variante_id||'null'}`;
+      if(!stockUpdates[key]) stockUpdates[key] = {sku_id:item.sku_id, variante_id:item.variante_id||null, count:0};
+      stockUpdates[key].count++;
+    }
+    for(const upd of Object.values(stockUpdates)){
+      const q = upd.variante_id
+        ? `stock?sku_id=eq.${upd.sku_id}&variante_id=eq.${upd.variante_id}&select=id,cantidad,cantidad_reservada`
+        : `stock?sku_id=eq.${upd.sku_id}&variante_id=is.null&select=id,cantidad,cantidad_reservada`;
+      const rows = await api(q).catch(()=>[]);
+      if(rows?.length){
+        const s = rows[0];
+        await api(`stock?id=eq.${s.id}`, 'PATCH', {
+          cantidad: Math.max(0, (s.cantidad||0) - upd.count),
+          cantidad_reservada: Math.max(0, (s.cantidad_reservada||0) - upd.count)
+        });
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Marcar unidades asignadas como "producido" (solo UIDs reales, no CAJA ni CANTIDAD-DESCONTADA)
     const uidsAsignados = bomItems
-      .filter(i=>i.uid_asignado && i.uid_asignado!=='CANTIDAD-DESCONTADA')
+      .filter(i=>i.uid_asignado && i.uid_asignado!=='CANTIDAD-DESCONTADA' && !i.uid_asignado.endsWith('-CAJA'))
       .map(i=>i.uid_asignado);
 
     for(const uid of uidsAsignados){
