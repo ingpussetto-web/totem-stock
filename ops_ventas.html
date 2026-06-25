@@ -1643,12 +1643,8 @@ async function guardarBOMMaestra(){
   const prod = PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto);
   if(!confirm('¿Guardar BOM maestra para “'+(prod?.nombre||bomMaestraProducto)+'”? Las OPs en curso no se modifican.')) return;
   try{
-    // Borrar primero los registros viejos para evitar conflicto de constraint único
-    const bomActual = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto)+'&activo=eq.true&select=id').catch(()=>[]);
-    if(bomActual && bomActual.length){
-      const idsViejos = bomActual.map(b=>b.id).join(',');
-      await api('bom_maestra?id=in.('+idsViejos+')','DELETE');
-    }
+    // Borrar primero TODOS los registros viejos del producto (sin filtrar activo)
+    await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE').catch(()=>{});
     // POST con los nuevos ítems
     const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
     await api('bom_maestra','POST',payload);
