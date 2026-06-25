@@ -6217,6 +6217,7 @@ async function saveToSheets(){
 
     setSyncStatus('Guardado ✓', '#00c896', true);
     saveData();
+    renderVentas(); // re-render para que los botones usen los IDs actualizados de Supabase
   } catch(err){
     setSyncStatus('Error al guardar', '#ff5e5e');
     console.error('Supabase save error:', err);
