@@ -606,7 +606,8 @@ async function abrirBOM(opId){
       }
       if(productoV14 && productoV14 !== 'custom'){
         const bomDisp = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoV14)+'&activo=eq.true&select=id&limit=1').catch(()=>[]);
-        btnWrap.style.display = (bomDisp && bomDisp.length) ? 'block' : 'none';
+        const sinItemsCargados = currentBOMItems.filter(i=>i.sku_id).length === 0;
+        btnWrap.style.display = (bomDisp && bomDisp.length && sinItemsCargados) ? 'block' : 'none';
       } else {
         btnWrap.style.display = currentBOMItems.filter(i=>i.sku_id).length === 0 ? 'block' : 'none';
       }
