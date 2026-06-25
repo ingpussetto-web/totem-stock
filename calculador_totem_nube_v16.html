@@ -3173,6 +3173,49 @@ function recalcPE(){
 let cotizaciones = [];
 let cotItemsTemp = [];
 
+// ─── COTIZACIONES SUPABASE SYNC ──────────────────────────────────────────────
+async function cotSupaSave(c){
+  try{
+    const row = {
+      id: c.id,
+      numero: c.numero,
+      estado: c.estado,
+      empresa: c.empresa,
+      fecha: c.fecha || new Date().toISOString(),
+      data: c,
+      updated_at: new Date().toISOString()
+    };
+    await stockAPI('cotizaciones_crm?id=eq.'+encodeURIComponent(c.id), 'DELETE');
+    await stockAPI('cotizaciones_crm', 'POST', [row]);
+  } catch(e){ console.warn('[CotSupa] No se pudo guardar en Supabase:', e.message); }
+}
+
+async function cotSupaDelete(id){
+  try{
+    await stockAPI('cotizaciones_crm?id=eq.'+encodeURIComponent(id), 'DELETE');
+  } catch(e){ console.warn('[CotSupa] No se pudo eliminar en Supabase:', e.message); }
+}
+
+async function cotSupaLoad(){
+  try{
+    const rows = await stockAPI('cotizaciones_crm?select=data&order=updated_at.desc');
+    if(!rows || !rows.length) return [];
+    return rows.map(function(r){ return r.data; }).filter(Boolean);
+  } catch(e){ console.warn('[CotSupa] No se pudo cargar desde Supabase:', e.message); return []; }
+}
+
+async function cotSupaMigrateLocal(){
+  // Migra cotizaciones del localStorage a Supabase (primera vez)
+  if(!cotizaciones.length) return;
+  try{
+    const existentes = await stockAPI('cotizaciones_crm?select=id');
+    const idsEnSupa = new Set((existentes||[]).map(function(r){ return r.id; }));
+    const faltantes = cotizaciones.filter(function(c){ return !idsEnSupa.has(c.id); });
+    for(const c of faltantes){ await cotSupaSave(c); }
+    if(faltantes.length) console.log('[CotSupa] Migradas '+faltantes.length+' cotizaciones al servidor.');
+  } catch(e){ console.warn('[CotSupa] Error en migración:', e.message); }
+}
+
 const EMPRESA = {
   nombre: 'Totem Nube S.A.S.',
   cuit: '30-71693010-2',
@@ -3872,6 +3915,7 @@ function guardarCotizacion(estado){
   cerrarModalCotizacion();
   renderCotizaciones();
   autoSave();
+  cotSupaSave(c);
 }
 
 function previsualizarCotizacion(){
@@ -4143,6 +4187,7 @@ function aprobarCotizacion(){
   renderLicencias();
   sincronizarTodoElHistorial();
   autoSave();
+  cotSupaSave(c);
   // Navegar a Detalle de Ventas para ver el proyecto recién creado
   showPage('ventas', document.querySelector('[onclick*="ventas"]'));
   alert('✓ Cotización aprobada.\nProyecto y licencia (si aplica) creados en Detalle de Ventas y Licencias.');
@@ -4218,6 +4263,7 @@ function cambiarEstadoCot(id, estado){
   renderCotizaciones();
   renderVentas();
   autoSave();
+  cotSupaSave(c);
 }
 
 function abrirVentanaImpresion(cotObj){
@@ -4368,6 +4414,7 @@ function eliminarCotizacion(id){
     cotizaciones = cotizaciones.filter(function(c){ return c.id!==id; });
     renderCotizaciones();
     autoSave();
+    cotSupaDelete(id);
   });
 }
 
@@ -6654,6 +6701,28 @@ iniciarUsuario();
 buildProductoUI();
 const loaded = loadData(); // Load from localStorage first (fast)
 precargarMarzo(); // Preload Marzo 2026 data if no data exists
+
+// Cargar cotizaciones desde Supabase (async, no bloquea el resto)
+(async function iniciarCotizacionesSupabase(){
+  try{
+    const remotas = await cotSupaLoad();
+    if(remotas.length > 0){
+      // Merge: Supabase gana sobre localStorage (tiene las más actualizadas de todas las PCs)
+      const mapaLocal = {};
+      cotizaciones.forEach(function(c){ mapaLocal[c.id] = c; });
+      remotas.forEach(function(c){ mapaLocal[c.id] = c; }); // remota sobreescribe
+      cotizaciones = Object.values(mapaLocal).sort(function(a,b){
+        return new Date(b.fecha) - new Date(a.fecha);
+      });
+      saveData(); // actualiza localStorage con la versión merged
+      if(document.getElementById('page-cotizaciones')?.classList.contains('active')){
+        renderCotizaciones();
+      }
+    }
+    // Migrar las que solo están en local
+    await cotSupaMigrateLocal();
+  } catch(e){ console.warn('[CotSupa] Error en init:', e.message); }
+})();
 renderFijos();
 recalcFijos();
 recalcHistorial();
