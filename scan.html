@@ -9,7 +9,7 @@
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
-  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --text:#f0f0f0;--text2:#888;--text3:#666;
   --green:#00c896;--green-dim:rgba(0,200,150,0.12);--green-border:rgba(0,200,150,0.3);
   --amber:#f5a623;--amber-dim:rgba(245,166,35,0.12);--amber-border:rgba(245,166,35,0.3);
   --red:#ff5e5e;--red-dim:rgba(255,94,94,0.1);--red-border:rgba(255,94,94,0.3);
@@ -689,15 +689,4 @@ async function ejecutarAsignacion(nombre){
 // ─── TOAST ────────────────────────────────────────────────────
 function toast(msg){
   const el=document.getElementById('toast');
-  clearTimeout(el._t);
-  el.style.opacity='0';
-  void el.offsetWidth;
-  el.textContent=msg;
-  el.style.opacity='1';
-  el._t=setTimeout(()=>{el.style.opacity='0';},2500);
-}
-
-init();
-</script>
-</body>
-</html>
+  clearTimeout(el._t

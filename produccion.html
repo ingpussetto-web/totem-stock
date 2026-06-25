@@ -9,7 +9,7 @@
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
-  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --text:#f0f0f0;--text2:#888;--text3:#666;
   --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
   --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
   --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
@@ -1784,59 +1784,4 @@ async function publicarNota(){
 
   localStorage.setItem('tn_nota_autor', autor);
 
-  const btn = document.getElementById('btn-publicar-nota');
-  btn.textContent = 'Publicando...'; btn.disabled = true;
-
-  try{
-    // Crear nota
-    const [nota] = await apiNotas('op_notas', 'POST', { op_id: _notasOpId, autor, texto: texto||null, etiqueta: etiqueta||null });
-    
-    // Subir archivos si hay
-    if(files.length){
-      for(const file of Array.from(files)){
-        const ext = file.name.split('.').pop();
-        const path = `${_notasOpId}/${nota.id}/${Date.now()}_${file.name}`;
-        // Upload a Supabase Storage
-        const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
-          method: 'PUT',
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
-          body: file
-        });
-        if(!upRes.ok){
-          const errBody = await upRes.text().catch(()=>'');
-          console.error('Error subiendo archivo:', file.name, upRes.status, errBody);
-          alert(`Error ${upRes.status} subiendo "${file.name}": ${errBody}`);
-          continue;
-        }
-        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
-        await apiNotas('op_notas_archivos', 'POST', { nota_id: nota.id, nombre_archivo: file.name, url: publicUrl });
-      }
-    }
-
-    // Limpiar form y recargar feed
-    document.getElementById('nota-texto').value = '';
-    document.getElementById('nota-etiqueta').value = '';
-    document.getElementById('nota-archivos').value = '';
-    document.getElementById('archivos-seleccionados').textContent = '';
-    await renderFeedNotas();
-
-    // Actualizar badge
-    const badge = document.getElementById('badge-notas-'+_notasOpId);
-    const btnNotas = document.getElementById('btn-notas-'+_notasOpId);
-    if(badge){
-      const actual = parseInt(badge.textContent)||0;
-      badge.textContent = actual+1;
-      badge.style.display='inline';
-      if(btnNotas) btnNotas.style.color='var(--green)';
-    }
-
-  }catch(e){
-    alert('Error al publicar: '+e.message);
-  } finally {
-    btn.textContent='Publicar nota'; btn.disabled=false;
-  }
-}
-</script>
-
-</body>
-</html>
+  const btn = document.getElementById('btn-publicar-nota

@@ -9,7 +9,7 @@
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
-  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --text:#f0f0f0;--text2:#888;--text3:#666;
   --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
   --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
   --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
@@ -927,11 +927,11 @@ async function loadPendientesIngreso(){
           <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,160,0,0.15);font-size:12px;">
             <div>
               <span style="color:var(--text);font-weight:500;">${r.ordenes_compra?.proveedores?.razon_social||'—'}</span>
-              <span style="color:var(--text3);font-family:'DM Mono',monospace;margin-left:8px;">${r.recepcion_numero}</span>
+              <span style="color:var(--text2);font-family:'DM Mono',monospace;margin-left:8px;">${r.recepcion_numero}</span>
             </div>
             <span style="font-size:10px;background:rgba(255,160,0,0.1);border:1px solid rgba(255,160,0,0.3);color:var(--amber);border-radius:4px;padding:2px 8px;">Stock no disponible</span>
           </div>`).join('')}
-        <div style="font-size:11px;color:var(--text3);margin-top:8px;">Andá a Recepción para completar el conteo y liberar el stock.</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:8px;">Andá a Recepción para completar el conteo y liberar el stock.</div>
       </div>`;
       // Badge rojo
       const badge = document.getElementById('badge-pendientes');
@@ -971,7 +971,7 @@ async function loadPendientesIngreso(){
           <span style="flex:1;color:var(--text);">${i.nombre}</span>
           ${i.color&&i.color!=='A definir'?`<span style="font-size:10px;color:#ffb340;font-family:'DM Mono',monospace;">● ${i.color}</span>`:''}
           ${esADefinir?`<span style="font-size:10px;color:var(--red);font-family:'DM Mono',monospace;">⚠ Color a definir</span>`:''}
-          <span style="font-size:11px;color:var(--text3);">×${saldo} pendiente${saldo!==1?'s':''}</span>
+          <span style="font-size:11px;color:var(--text2);">×${saldo} pendiente${saldo!==1?'s':''}</span>
         </div>`;
       }).join('');
 
@@ -979,7 +979,7 @@ async function loadPendientesIngreso(){
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text);">${oc?.proveedores?.razon_social||'—'}</div>
-            <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${oc?.oc_numero||'—'} · ${oc?.estado==='aprobada'?'Aprobada':'Recepción parcial'}</div>
+            <div style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">${oc?.oc_numero||'—'} · ${oc?.estado==='aprobada'?'Aprobada':'Recepción parcial'}</div>
           </div>
           ${tieneADefinir?`<span style="font-size:10px;background:rgba(255,69,58,0.1);border:1px solid rgba(255,69,58,0.3);color:var(--red);border-radius:4px;padding:2px 8px;font-family:'DM Mono',monospace;">⚠ Color pendiente</span>`:''}
         </div>
@@ -1915,18 +1915,4 @@ async function confirmarConteoFisico(){
     if(nav) nav.style.display = 'none';
     return;
   }
-  document.body.style.paddingBottom = '70px';
-  document.querySelectorAll('.gernav-btn').forEach(a => {
-    if(a.href && !a.href.includes('index.html')){
-      try{
-        const url = new URL(a.href);
-        url.searchParams.set('area', 'gerencia');
-        a.href = url.toString();
-      }catch(e){}
-    }
-  });
-})();
-</script>
-
-</body>
-</html>
+  document.body.style
