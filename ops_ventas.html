@@ -1635,7 +1635,7 @@ async function copiarBOMMaestra(){
   if(!confirm('Esto reemplaza los insumos actuales con los del modelo seleccionado. ¿Continuar?')) return;
   const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
   if(!rows||!rows.length){ alert('El modelo seleccionado no tiene BOM maestra cargada.'); return; }
-  bomMaestraItems = rows.map(r=>({ id:null, v14_key:'manual_'+Date.now(), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+  bomMaestraItems = rows.map((r,idx)=>({ id:null, v14_key: r.v14_key||('manual_'+idx+'_'+Date.now()), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
