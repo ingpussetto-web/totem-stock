@@ -1205,8 +1205,8 @@ function cancelarAjuste(){
 
   const isReadonly = params.get('mode') === 'readonly';
 
-  // Nunca mostrar gernav en modo readonly
-  if(area === 'gerencia' && !isReadonly){
+  // Mostrar gernav para gerencia o cuando no hay area definida (acceso directo desde index general)
+  if((area === 'gerencia' || area === '') && !isReadonly){
     if(nav) nav.style.display = 'flex';
     document.body.style.paddingBottom = '90px';
     document.querySelectorAll('#gernav .gernav-btn').forEach(a => {
