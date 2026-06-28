@@ -1287,19 +1287,26 @@ async function generarEtiquetasDesdeConteo(skuId, nombre, varianteId, cantidad){
     const existing = await api(`unidades?uid=like.${encodeURIComponent(prefijo+'%')}&select=uid`).catch(()=>[]);
     (existing||[]).forEach(u => {
       const m = u.uid.match(/-(\d+)$/);
-      if(m){ const n = parseInt(m[1]); if(n > lastNum) lastNum = n; }
+      if(m){ const n = parseInt(m[1], 10); if(n > lastNum) lastNum = n; }
     });
 
-    // Generar UIDs e insertarlos
-    const unidades = [];
-    const etiquetas = [];
+    const unidades = [], etiquetas = [];
     for(let i = 1; i <= cantidad; i++){
-      const num = String(lastNum + i).padStart(4,'0');
-      const uid = prefijo + '-' + num;
-      unidades.push({ uid, sku_id: skuId, variante_id: varianteId, estado: 'stock' });
+      const uid = `${prefijo}-${String(lastNum+i).padStart(4,'0')}`;
+      unidades.push({ uid, sku_id: skuId, variante_id: varianteId||null, estado: 'stock' });
       etiquetas.push({ uid, nombre, variante: varNom, num: lastNum + i });
     }
 
     await api('unidades', 'POST', unidades);
 
-    // Abrir modal de etiquet
+    // Abrir modal de etiquetas
+    if(typeof abrirModalEtiquetas === 'function'){
+      abrirModalEtiquetas(etiquetas, null);
+    }
+  } catch(e){
+    alert('Error generando etiquetas: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
