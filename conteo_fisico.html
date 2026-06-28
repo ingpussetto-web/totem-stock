@@ -215,8 +215,8 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 </nav>
 
 <script>
-const SUPA_URL = localStorage.getItem('supa_url') || '';
-const SUPA_KEY = localStorage.getItem('supa_key') || '';
+const SUPA_URL = localStorage.getItem('supa_url') || 'https://nkkwukcgxyhudprlhjjw.supabase.co';
+const SUPA_KEY = localStorage.getItem('supa_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
 const READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
 
 async function api(path, method='GET', body=null){
