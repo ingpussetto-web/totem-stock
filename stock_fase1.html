@@ -1849,8 +1849,10 @@ async function confirmarConteoFisico(){
 (function(){
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  const isReadonly = params.get('mode') === 'readonly';
   const nav = document.querySelector('.prodnav');
-  if(area !== 'produccion'){
+  // Mostrar prodnav si area=produccion O si mode=readonly (vendrá siempre de index_produccion)
+  if(area !== 'produccion' && !isReadonly){
     if(nav) nav.style.display = 'none';
     return;
   }
@@ -1910,8 +1912,10 @@ async function confirmarConteoFisico(){
 (function(){
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  const isReadonly = params.get('mode') === 'readonly';
   const nav = document.querySelector('.gernav');
-  if(area !== 'gerencia'){
+  // Nunca mostrar gernav en modo readonly (área producción)
+  if(area !== 'gerencia' || isReadonly){
     if(nav) nav.style.display = 'none';
     return;
   }

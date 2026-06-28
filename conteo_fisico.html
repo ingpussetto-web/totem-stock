@@ -1203,7 +1203,10 @@ function cancelarAjuste(){
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
   const nav = document.getElementById('gernav');
 
-  if(area === 'gerencia'){
+  const isReadonly = params.get('mode') === 'readonly';
+
+  // Nunca mostrar gernav en modo readonly
+  if(area === 'gerencia' && !isReadonly){
     if(nav) nav.style.display = 'flex';
     document.body.style.paddingBottom = '90px';
     document.querySelectorAll('#gernav .gernav-btn').forEach(a => {
@@ -1217,7 +1220,8 @@ function cancelarAjuste(){
     });
   }
 
-  if(area === 'produccion'){
+  // Mostrar prodnav si area=produccion O mode=readonly
+  if(area === 'produccion' || isReadonly){
     const prodnav = document.getElementById('prodnav');
     if(prodnav) prodnav.style.display = 'flex';
     document.body.style.paddingBottom = '90px';
