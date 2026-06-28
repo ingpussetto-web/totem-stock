@@ -843,7 +843,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
       <td>${badgeAlerta(d.alerta)}</td>
       <td class="td-actions" style="text-align:center;">
         <button class="btn sm" onclick="event.stopPropagation();showPage('unidades')">Ver UIDs</button>
-        <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')" style="margin-left:4px;">📋 Historial</button>
+        <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||(_esAreaProduccion?'produccion':'gerencia'))" style="margin-left:4px;">📋 Historial</button>
       </td>
     </tr>
     <tr id="${rowId}" style="display:none;"><td colspan="9" style="padding:0 16px 12px;background:var(--surface2);"><div id="${rowId}-content" style="font-size:12px;color:var(--text2);padding:8px 0;">Cargando variantes...</div></td></tr>`);
@@ -872,7 +872,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         <td class="td-num">${totalCant}</td>
         <td>${badgeAlerta(alertaGlobal)}</td>
         <td class="td-actions" style="text-align:center;">
-          <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${skuId}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')">📋 Historial</button>
+          <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${skuId}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||(_esAreaProduccion?'produccion':'gerencia'))">📋 Historial</button>
 
         </td>
       </tr>
@@ -901,7 +901,7 @@ function renderStock(qtyData=stockData, uidData=uidRowsData){
         <td class="td-num">${d.cantidad||0}</td>
         <td>${badgeAlerta(d.alerta)}</td>
         <td class="td-actions" style="text-align:center;">
-          <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||'gerencia')">📋 Historial</button>
+          <button class="btn sm" onclick="event.stopPropagation();window.location.href='conteo_fisico.html?sku_id=${d.sku_id}&mode=readonly&area='+(sessionStorage.getItem('tn_area')||(_esAreaProduccion?'produccion':'gerencia'))">📋 Historial</button>
 
         </td>
       </tr>`);
