@@ -1879,7 +1879,7 @@ async function confirmarConteoFisico(){
 .gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
 .gernav-icon{font-size:16px;line-height:1;}
 </style>
-<nav class="gernav">
+<nav class="gernav" style="display:none">
   <a class="gernav-btn" id="gnav-inicio" href="https://ingpussetto-web.github.io/totem-stock/index.html">
     <span class="gernav-icon">🏠</span>Inicio
   </a>
@@ -1914,9 +1914,10 @@ async function confirmarConteoFisico(){
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
   const isReadonly = params.get('mode') === 'readonly';
   const nav = document.querySelector('.gernav');
-  // Nunca mostrar gernav en modo readonly (área producción)
-  if(area !== 'gerencia' || isReadonly){
-    if(nav) nav.style.display = 'none';
-    return;
+  // Mostrar gernav solo en área gerencia y sin modo readonly
+  if(area === 'gerencia' && !isReadonly){
+    if(nav) nav.style.display = 'flex';
   }
+  // Si no es gerencia, ya está oculta por el style="display:none" del HTML
+  if(area !== 'gerencia' && !isReadonly) return;
   document.body.style
