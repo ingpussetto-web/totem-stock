@@ -5725,6 +5725,10 @@ function renderVentas(){
       +'</div>';
     })() : '';
 
+    const _equipoItem = (p.items||[]).find(function(i){ return i.cat==='equipo'; });
+    const _descProyecto = _equipoItem ? _equipoItem.desc : (p.notas||'');
+    const _undsProyecto = (p.items||[]).filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+(parseInt(i.cant)||1); },0);
+
     return separador
       +'<div class="card" style="margin-bottom:10px;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'
@@ -5735,7 +5739,7 @@ function renderVentas(){
               +(filtroMes && (p.anio*12+p.mes) < (parseInt(filtroMes.split('-')[0])*12+parseInt(filtroMes.split('-')[1])) ? '<span style="font-size:9px;color:var(--text3);margin-left:6px;font-style:italic;">↩ desde '+MESES_NOMBRES[p.mes]+' '+p.anio+'</span>' : '')
             +'</div>'
             +'<div class="proyecto-cliente">'+p.cliente+'</div>'
-            +'<div style="font-size:11px;color:var(--text3);">'+MESES_NOMBRES[p.mes]+' '+p.anio+(p.notas?' · '+p.notas:'')+'</div>'
+            +'<div style="font-size:11px;color:var(--text3);">'+MESES_NOMBRES[p.mes]+' '+p.anio+(_descProyecto?' · '+_descProyecto:'')+ (_undsProyecto>0?' <span style="color:var(--green);font-weight:600;">×'+_undsProyecto+'</span>':'')+'</div>'
             +(p.fechaRelevamiento?'<div style="font-size:11px;color:#4285f4;margin-top:2px;">📅 Relevamiento: '+p.fechaRelevamiento+'</div>':'')
             +(function(){
               if(!p.fechaCompromiso) return '';
