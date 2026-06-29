@@ -5141,6 +5141,9 @@ function renderCotizaciones(){
     const totalNeto = c.items.reduce(function(s,i){ return s+i.precio*i.cant; },0);
     const totalConIva = Math.round(totalNeto*1.105);
     const fecha = new Date(c.fecha||Date.now()).toLocaleDateString('es-AR');
+    const equipos = (c.items||[]).filter(function(i){ return i.cat==='equipo'; });
+    const totalUnidades = equipos.reduce(function(s,i){ return s+(parseInt(i.cant)||1); },0);
+    const unidadesStr = totalUnidades > 0 ? 'x'+totalUnidades+' und. · ' : '';
     return '<div class="card" style="margin-bottom:10px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
         +'<div>'
@@ -5149,7 +5152,7 @@ function renderCotizaciones(){
             +'<span class="status-badge '+estadoClasses[c.estado]+'">'+estadoLabels[c.estado]+'</span>'
           +'</div>'
           +'<div style="font-size:15px;font-weight:500;color:var(--text);">'+c.empresa+'</div>'
-          +'<div style="font-size:11px;color:var(--text3);">'+(c.sistema||'')+(c.contacto?' · '+c.contacto:'')+'&nbsp;· '+fecha+'</div>'
+          +'<div style="font-size:11px;color:var(--text3);">'+(equipos.length>0 ? equipos[0].desc : (c.sistema||''))+(c.contacto?' · '+c.contacto:'')+'&nbsp;· '+fecha+'</div>'
         +(c.observacion?'<div style="font-size:11px;color:var(--amber);margin-top:3px;">'+c.observacion+'</div>':'')
         +(c.observacionVersiones?'<div style="font-size:11px;margin-top:3px;"><a href="#" style="color:var(--blue);text-decoration:none;" onclick="event.preventDefault();verHistorialVersiones(\''+c.proyId+'\')">📋 '+c.observacionVersiones+'</a></div>':'')
         +(function(){
@@ -5167,7 +5170,7 @@ function renderCotizaciones(){
         +'</div>'
         +'<div style="text-align:right;">'
           +'<div style="font-size:18px;font-weight:600;font-family:monospace;color:var(--green);">'+fmt(totalConIva)+'</div>'
-          +'<div style="font-size:10px;color:var(--text3);">c/IVA · '+c.items.length+' ítems</div>'
+          +'<div style="font-size:10px;color:var(--text3);">'+unidadesStr+'c/IVA · '+c.items.length+' ítems</div>'
         +'</div>'
       +'</div>'
       +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">'
