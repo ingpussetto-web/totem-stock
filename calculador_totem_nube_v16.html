@@ -925,6 +925,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <option value="instalado">Instalado</option>
           <option value="cancelado">Cancelado</option>
         </select>
+        <input id="ventas-filtro-cliente" type="text" placeholder="Buscar empresa..." oninput="renderVentas()" style="height:32px;padding:0 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);min-width:160px;" />
       </div>
     </div>
 
@@ -5275,6 +5276,7 @@ function enviarWhatsApp(){
 // ─── MÓDULO VENTAS ────────────────────────────────────────────────────────────
 let proyectos = []; // [{id, orden, cliente, mes, anio, estado, notas, items:[{desc,cat,cant,precio}]}]
 let itemsTemp = []; // items being added in modal
+let opsPorOrden = {}; // {v14_orden: {op_numero, estado}} — lookup rápido para saber si un proyecto ya tiene OP
 
 function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
@@ -5517,6 +5519,7 @@ function renderVentas(){
   });
   const filtroMes = document.getElementById('ventas-filtro-mes')?.value||'';
   const filtroEstado = document.getElementById('ventas-filtro-estado')?.value||'';
+  const filtroCliente = (document.getElementById('ventas-filtro-cliente')?.value||'').toLowerCase().trim();
 
   // Update mes filter options
   const mesSelect = document.getElementById('ventas-filtro-mes');
@@ -5538,6 +5541,7 @@ function renderVentas(){
     lista = lista.filter(function(p){ return p.anio===parseInt(parts[0]) && p.mes===parseInt(parts[1]); });
   }
   if(filtroEstado) lista = lista.filter(function(p){ return p.estado===filtroEstado; });
+  if(filtroCliente) lista = lista.filter(function(p){ return (p.cliente||'').toLowerCase().includes(filtroCliente); });
 
   // KPIs
   const totalEquipos = lista.reduce(function(s,p){ return s+p.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(ss,i){ return ss+i.precio*i.cant; },0); },0);
@@ -5746,7 +5750,11 @@ function renderVentas(){
             +(p.estado!=='cancelado'
               ? '<button class="btn" onclick="cancelarProyecto(\''+p.id+'\')" style="height:28px;font-size:11px;padding:0 8px;background:rgba(220,50,50,0.1);color:#e05555;" title="Cancelar proyecto">✕ Cancelar</button>'
               : '<span style="font-size:11px;color:var(--text3);font-style:italic;">Cancelado</span>')
-            +(p.estado!=='cancelado' ? '<button class="btn" onclick="crearOP(\''+p.id+'\')" style="height:28px;font-size:11px;padding:0 10px;border-color:#00c896;color:#00c896;" title="Crear OP en Stock">⚙ Crear OP</button>' : '')
+            +(p.estado!=='cancelado'
+              ? (opsPorOrden[p.orden]
+                ? '<button class="btn" onclick="verOP(\''+p.orden+'\')" style="height:28px;font-size:11px;padding:0 10px;border-color:#4d9fff;color:#4d9fff;" title="OP ya generada — solo lectura">📋 Ver OP ('+opsPorOrden[p.orden].op_numero+')</button>'
+                : '<button class="btn" onclick="crearOP(\''+p.id+'\')" style="height:28px;font-size:11px;padding:0 10px;border-color:#00c896;color:#00c896;" title="Crear OP en Stock">⚙ Crear OP</button>')
+              : '')
             +'<button class="btn red" onclick="borrarProyectoDirecto(\''+p.id+'\')" style="height:28px;font-size:11px;padding:0 6px;" title="Eliminar registro permanentemente">🗑</button>'
           +'</div>'
         +'</div>'
@@ -6102,6 +6110,13 @@ async function loadFromSheets(){
         return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', mes:parseInt(r.mes)||0, anio:parseInt(r.anio)||0, estado:r.estado||'', notas:r.notas||'', items: r.items ? JSON.parse(r.items) : [] };
       });
     }
+
+    // ── OPs existentes (para saber qué proyectos ya tienen OP generada) ────
+    try {
+      const opsRows = await stockAPI('ordenes_produccion?select=op_numero,v14_orden,estado&order=created_at.desc');
+      opsPorOrden = {};
+      (opsRows||[]).forEach(function(o){ if(o.v14_orden && !opsPorOrden[o.v14_orden]) opsPorOrden[o.v14_orden] = o; });
+    } catch(e){}
 
     // ── Licencias ──────────────────────────────────────────────────────────
     const licRows = await stockAPI('licencias_cotizador?select=*&order=id.asc');
@@ -7101,13 +7116,17 @@ async function crearOP(proyId){
   }
   if(!p){ alert('Proyecto no encontrado.'); return; }
 
-  // Verificar si ya tiene OP creada
+  // Verificar si ya tiene OP creada (no se permite duplicar)
+  if(opsPorOrden[p.orden]){
+    verOP(p.orden);
+    return;
+  }
   try {
-    const existing = await stockAPI('ordenes_produccion?v14_orden=eq.' + encodeURIComponent(p.orden) + '&select=op_numero');
+    const existing = await stockAPI('ordenes_produccion?v14_orden=eq.' + encodeURIComponent(p.orden) + '&select=op_numero,estado');
     if(existing && existing.length > 0){
-      if(confirm('Este proyecto ya tiene una OP creada (' + existing[0].op_numero + ').\n¿Ir a Órdenes de Producción?')){
-        window.open('https://ingpussetto-web.github.io/totem-stock/ops_ventas.html', '_blank');
-      }
+      opsPorOrden[p.orden] = existing[0];
+      renderVentas();
+      verOP(p.orden);
       return;
     }
   } catch(e){
@@ -7245,9 +7264,20 @@ async function crearOP(proyId){
     // Mostrar notificación con link a ops_ventas (sin popup bloqueado)
     mostrarNotifOP(opNumero, p.cliente, itemNombre, color);
 
+    // Registrar en lookup para que el botón cambie a "Ver OP"
+    opsPorOrden[p.orden] = { op_numero: opNumero, estado: 'bom_pendiente' };
+    renderVentas();
+
   } catch(e){
     alert('Error creando la OP: ' + e.message);
   }
+}
+
+// Abrir OP existente en ops_ventas (solo lectura desde el cotizador)
+function verOP(orden){
+  const area = new URLSearchParams(window.location.search).get('area') || sessionStorage.getItem('tn_area') || '';
+  const areaParam = area ? '?area=' + area : '';
+  window.open('https://ingpussetto-web.github.io/totem-stock/ops_ventas.html' + areaParam, '_blank');
 }
 
 </script>
