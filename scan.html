@@ -689,4 +689,13 @@ async function ejecutarAsignacion(nombre){
 // ─── TOAST ────────────────────────────────────────────────────
 function toast(msg){
   const el=document.getElementById('toast');
-  clearTimeout(el._t
+  clearTimeout(el._timer);
+  el.textContent = msg;
+  el.style.opacity = '1';
+  el._timer = setTimeout(()=>{ el.style.opacity='0'; }, 2500);
+}
+
+init();
+</script>
+</body>
+</html>
