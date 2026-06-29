@@ -664,6 +664,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <option value="aprobada">Aprobada</option>
         <option value="rechazada">Rechazada</option>
       </select>
+      <input id="cot-filtro-empresa" type="text" placeholder="Buscar empresa..." oninput="renderCotizaciones()" style="height:36px;padding:0 10px;font-size:12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);min-width:180px;" />
     </div>
 
     <div class="metrics" id="cot-kpis" style="margin-bottom:16px;"></div>
@@ -5111,8 +5112,10 @@ function compartirOPTelegram(){
 
 function renderCotizaciones(){
   const filtro = document.getElementById('cot-filtro-estado')?.value||'';
+  const filtroEmpresa = (document.getElementById('cot-filtro-empresa')?.value||'').toLowerCase().trim();
   let lista = cotizaciones;
   if(filtro) lista = lista.filter(function(c){ return c.estado===filtro; });
+  if(filtroEmpresa) lista = lista.filter(function(c){ return (c.empresa||'').toLowerCase().includes(filtroEmpresa); });
 
   const estadoLabels = {borrador:'Borrador',enviada:'Enviada',aprobada:'Aprobada',rechazada:'Rechazada'};
   const estadoClasses = {borrador:'status-pausada',enviada:'status-comprometida',aprobada:'status-activa',rechazada:'status-baja'};
