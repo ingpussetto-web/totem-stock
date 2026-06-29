@@ -7277,7 +7277,7 @@ async function crearOP(proyId){
 function verOP(orden){
   const area = new URLSearchParams(window.location.search).get('area') || sessionStorage.getItem('tn_area') || '';
   const areaParam = area ? '?area=' + area : '';
-  window.open('https://ingpussetto-web.github.io/totem-stock/ops_ventas.html' + areaParam, '_blank');
+  window.location.href = 'https://ingpussetto-web.github.io/totem-stock/ops_ventas.html' + areaParam;
 }
 
 </script>

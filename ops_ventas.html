@@ -468,7 +468,7 @@ function renderOPCard(o){
           ? `<button class="btn solid-green sm" onclick="liberarAProduccion(${o.id})">→ Liberar a Producción</button>`
           : ''}
         ${o.estado==='en_produccion'
-          ? `<a href="https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia" target="_blank" class="btn green sm">→ Ir a Producción</a>`
+          ? `<a href="https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia" class="btn green sm">→ Ir a Producción</a>`
           : ''}
         ${o.estado==='en_produccion'
           ? `<button class="btn green sm" onclick="cambiarEstado(${o.id},'completada')">✓ Marcar completada</button>`
@@ -1363,7 +1363,7 @@ async function liberarAProduccion(opId){
     // Preguntar si ir a producción
     setTimeout(()=>{
       if(confirm('OP liberada. ¿Ir al módulo de Producción ahora?')){
-        window.open('https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia','_blank');
+        window.location.href = 'https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia';
       }
     }, 500);
   }catch(e){toast('Error: '+e.message);}
