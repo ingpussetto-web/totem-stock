@@ -1235,6 +1235,7 @@ let INSUMOS_BASE = {
   gab_43_chapa:{name:"Gabinete 43\" Frente Chapa",costoBase:821300,iva:0.21},
   gab_43_vert_metal:{name:"Gabinete 43\" Vertical Metal",costoBase:975938,iva:0.21},
   gab_43_mdf:{name:"Gabinete 43\" MDF",costoBase:343640,iva:0.21},
+  gab_43_horiz_acc:{name:"Gabinete Horizontal 43\" Accesibilidad",costoBase:0,iva:0.21},
   gab_50_mdf:{name:"Gabinete 50\" MDF",costoBase:360822,iva:0.21},
   gab_mdf_incl_22:{name:"Gabinete MDF Incl. 22\"",costoBase:326458,iva:0.21},
   gab_mdf_incl_32:{name:"Gabinete MDF Incl. 32\"",costoBase:360822,iva:0.21},
@@ -1402,6 +1403,9 @@ const PRODUCTOS = [
   {id:"auto_43_vert",name:"Autogestión — Vertical 43\"",categoria:"Terminal Autogestión",
    precioLista:Math.round(2320.59*dolar),_usd:2320.59, precioListaConMiniPC:Math.round((2320.59+430)*dolar),_usdConMini:2750.59, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cable_hdmi",qty:1},{key:"cooler_doble",qty:1},{key:"embalaje_grande",qty:1},{key:"fuente",qty:1},{key:"gab_43_chapa",qty:1},{key:"insumos_varios",qty:1},{key:"marco_43",qty:1},{key:"vidrio_43_tactil",qty:1},{key:"led_43",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1},{key:"mano_obra",qty:1}]},
+  {id:"auto_43_horiz_acc",name:"Autogestión — Horizontal 43\" Accesibilidad",categoria:"Terminal Autogestión",
+   precioLista:0,_usd:0, precioListaConMiniPC:Math.round(430*dolar),_usdConMini:430, keyMiniPC:"minipc_beelink_n95",
+   insumos:[{key:"cable_hdmi",qty:1},{key:"cooler_doble",qty:1},{key:"embalaje_grande",qty:1},{key:"fuente",qty:1},{key:"gab_43_horiz_acc",qty:1},{key:"insumos_varios",qty:1},{key:"marco_43",qty:1},{key:"vidrio_43_tactil",qty:1},{key:"led_43",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1},{key:"mano_obra",qty:1}],warning:"⚠️ Revisar precio lista y costo del gabinete de accesibilidad."},
 
   // ══════════════════════════════════════════════════════════════
   // TOTEM ENCUESTA DE SATISFACCIÓN
