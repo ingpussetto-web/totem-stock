@@ -4346,14 +4346,14 @@ function imprimirYEliminar(cotObj, onConfirm){
 
 function borrarProyectoDirecto(proyId){
   if(!confirm('¿Eliminar este proyecto permanentemente? Se borrarán también las licencias y se actualizará el historial.')) return;
-  const p = proyectos.find(function(p){ return p.id===proyId; });
+  const p = proyectos.find(function(p){ return p.id == proyId; }); // == para tolerar int vs string
   if(!p) return;
   // Eliminar licencias asociadas
   licencias = licencias.filter(function(l){
     return !(l.orden && l.orden.trim() === (p.orden||'').trim());
   });
   // Eliminar proyecto
-  proyectos = proyectos.filter(function(pr){ return pr.id !== proyId; });
+  proyectos = proyectos.filter(function(pr){ return pr.id != proyId; }); // != para tolerar int vs string
   renderVentas();
   renderLicencias();
   sincronizarHistorialMes(p.mes, p.anio);
