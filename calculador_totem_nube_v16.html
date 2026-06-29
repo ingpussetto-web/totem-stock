@@ -7456,8 +7456,10 @@ function actualizarPerifericoExtra(idx, key, campo, val){
 <script>
 (function(){
   const params = new URLSearchParams(window.location.search);
+  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  if(area) sessionStorage.setItem('tn_area', area);
   const nav = document.querySelector('.gernav');
-  if(params.get('area') !== 'gerencia'){
+  if(area !== 'gerencia'){
     if(nav) nav.style.display = 'none';
     return;
   }

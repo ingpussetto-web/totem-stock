@@ -1555,7 +1555,7 @@ async function abrirBOMMaestra(){
     +'<button onclick="cerrarBOMMaestra()" style="background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 14px;cursor:pointer;font-size:13px;">Cerrar</button></div>'
     +'<div style="display:grid;grid-template-columns:280px 1fr;min-height:500px;">'
     +'<div style="border-right:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;">'
-    +'<select id="bm-filtro-cat" onchange="(function(){document.getElementById(\'bm-lista-modelos\').innerHTML=window._buildModelosHTML(this.value);})()" style="width:100%;height:32px;font-size:11px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:0 8px;">'+catOptions+'</select>'
+    +'<select id="bm-filtro-cat" onchange="document.getElementById(\'bm-lista-modelos\').innerHTML=window._buildModelosHTML(this.value)" style="width:100%;height:32px;font-size:11px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:0 8px;">'+catOptions+'</select>'
     +'<div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Modelos</div>'
     +'<div id="bm-lista-modelos">'+buildModelosHTML('')+'</div></div>'
     +'<div style="padding:20px;" id="bm-editor-panel">'
@@ -1833,6 +1833,7 @@ function resolverModalPlayers(confirmar){
 (function(){
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  if(area) sessionStorage.setItem('tn_area', area);
   const nav = document.querySelector('.gernav');
   if(area !== 'gerencia'){
     if(nav) nav.style.display = 'none';
