@@ -516,7 +516,7 @@ async function renderCantidad(skuId, nombre, content){
   const ocIds = [...new Set((ocItems||[]).map(i=>i.oc_id).filter(Boolean))];
 
   const recItems = ocItemIds.length
-    ? await api(`recepcion_items?oc_item_id=in.(${ocItemIds.join(',')})&select=cantidad_recibida,color_recibido,oc_item_id,recepcion_id,recepciones(recepcion_numero,created_at,oc_id)`).catch(()=>[])
+    ? await api(`recepcion_items?oc_item_id=in.(${ocItemIds.join(',')})&ingresado_a_stock=eq.true&select=cantidad_recibida,color_recibido,oc_item_id,recepcion_id,recepciones(recepcion_numero,created_at,oc_id)`).catch(()=>[])
     : [];
 
   const ocs = ocIds.length
