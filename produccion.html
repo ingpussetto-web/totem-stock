@@ -422,6 +422,16 @@ function aplicarFiltros(){
     });
   }
 
+  // Ordenar por código OP interno (numérico), los sin código al final
+  lista = lista.slice().sort(function(a, b){
+    const getCod = function(o){
+      const cod = docOpCodigos[o.v14_orden] || '';
+      const m = cod.match(/OP(\d+)\//);
+      return m ? parseInt(m[1]) : Infinity;
+    };
+    return getCod(a) - getCod(b);
+  });
+
   renderOPs(lista, vista);
 }
 
