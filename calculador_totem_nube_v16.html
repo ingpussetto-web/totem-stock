@@ -4768,7 +4768,7 @@ async function abrirModalOP(cotId){
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cliente / Empresa</label>
         <input id="op-cliente" type="text" value="${c.empresa||''}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Fecha Aprobación</label>
-        <input id="op-fecha" type="date" value="" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
+        <input id="op-fecha-apro" type="date" value="" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Nombre Ref. / Tel</label>
         <input id="op-contacto" type="text" value="${contactoStr}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Producto</label>
@@ -4776,7 +4776,7 @@ async function abrirModalOP(cotId){
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">Cantidad</label>
         <input id="op-cant" type="number" value="${cant}" min="1" style="width:80px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">📅 Fecha compromiso cliente</label>
-        <input id="op-fecha-compromiso" type="date" value="${proyAsoc?.fechaCompromiso||''}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
+        <input id="op-fecha-comp" type="date" value="${proyAsoc?.fechaCompromiso||''}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       ${c.transporte ? `<div style="grid-column:1/-1;padding:8px 10px;background:#e8f5e9;border-radius:6px;border:1px solid #a5d6a7;font-size:12px;color:#2e7d32;">✅ <strong>Transporte incluido</strong></div>` : ''}
       ${c.licencia && c.licDesc ? `<div style="grid-column:1/-1;padding:8px 10px;background:#e3f2fd;border-radius:6px;border:1px solid #90caf9;font-size:12px;color:#1565c0;">🔑 <strong>Licencia de software:</strong> ${c.licDesc}</div>` : ''}
     </div>
@@ -4885,7 +4885,7 @@ function opCampo(label, id, tipo, opciones, valorDefault){
 
 function cerrarModalOP(){
   // Guardar fecha de compromiso en el proyecto asociado
-  const fechaComp = document.getElementById('op-fecha-compromiso')?.value || '';
+  const fechaComp = document.getElementById('op-fecha-comp')?.value || '';
   const numeroOP = document.getElementById('op-numero')?.value || '';
   const clienteOP = document.getElementById('op-cliente')?.value || '';
 
@@ -5119,12 +5119,33 @@ async function guardarDocOP(){
   }
 }
 
+async function _autoGenerarCodigoOP(){
+  try {
+    const todos = await stockAPI('doc_op_config?select=datos');
+    let maxNum = 529;
+    (todos||[]).forEach(function(row){
+      const cod = ((row.datos||{}).codigo_op_interno||'');
+      const m = cod.match(/^OP(\d+)\/\d+$/);
+      if(m){ const n = parseInt(m[1]); if(n > maxNum) maxNum = n; }
+    });
+    const anio = new Date().getFullYear().toString().slice(-2);
+    return 'OP' + (maxNum + 1) + '/' + anio;
+  } catch(e){ return ''; }
+}
+
 async function cargarDocOP(cotNumero){
   try {
     const rows = await stockAPI('doc_op_config?cot_numero=eq.' + encodeURIComponent(cotNumero) + '&select=*');
+    const d = (rows && rows.length > 0) ? (rows[0].datos || {}) : {};
+    if(d.codigo_op_interno) {
+      const el = document.getElementById('op-codigo-interno');
+      if(el) el.value = d.codigo_op_interno;
+    } else {
+      // Doc nuevo — auto-generar el siguiente correlativo
+      const el = document.getElementById('op-codigo-interno');
+      if(el && !el.value) el.value = await _autoGenerarCodigoOP();
+    }
     if(!rows || rows.length === 0) return;
-    const d = rows[0].datos || {};
-    if(d.codigo_op_interno) { const el = document.getElementById('op-codigo-interno'); if(el) el.value = d.codigo_op_interno; }
     const campos = ['op-cliente','op-contacto','op-fecha-apro','op-fecha-comp','op-producto','op-cantidad',
       'op-material','op-forma','op-pantalla','op-tactil','op-color','op-plano','op-obs-estructura',
       'op-minipc','op-so','op-windows','op-impresora','op-camara','op-qr','op-player','op-qty-player',

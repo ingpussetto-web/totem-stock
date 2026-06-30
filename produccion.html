@@ -360,11 +360,22 @@ async function checkConnection(){
 // ─── LOAD OPs ───────────────────────────────────────────────
 let todasLasOPs = [];
 
+let docOpCodigos = {}; // { v14_orden: codigo_op_interno }
+
 async function loadOPs(){
   try{
     // Cargar todas las OPs (vigentes y terminadas)
     todasLasOPs = await api('op_progreso?select=*&order=created_at.desc');
     ops = todasLasOPs.filter(o => o.estado === 'en_produccion' || o.estado === 'iniciada' || o.estado === 'bom_confirmada');
+    // Cargar códigos internos desde doc_op_config
+    try {
+      const docs = await api('doc_op_config?select=cot_numero,datos');
+      docOpCodigos = {};
+      (docs||[]).forEach(function(r){
+        const cod = (r.datos||{}).codigo_op_interno||'';
+        if(cod) docOpCodigos[r.cot_numero.replace(/^COT-/, '')] = cod;
+      });
+    } catch(e){ /* no bloquear si falla */ }
     poblarFiltroMes();
     aplicarFiltros();
   }catch(e){
@@ -455,7 +466,9 @@ function renderOPs(lista, vista){
     return `<div class="op-card" ${clickable} style="border-left-color:${borderColor};cursor:${cursor};opacity:${esTerminada?'0.75':'1'};">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
-          <div class="op-numero">${o.op_numero}</div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <div class="op-numero">${o.op_numero}${docOpCodigos[o.v14_orden]?' / '+docOpCodigos[o.v14_orden]:''}</div>
+          </div>
           <div class="op-cliente">${o.cliente}</div>
           <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
           <div class="op-meta">${fecha}${o.color_gabinete?' · '+o.color_gabinete:''}</div>
