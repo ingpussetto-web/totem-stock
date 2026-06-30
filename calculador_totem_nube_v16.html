@@ -7252,44 +7252,50 @@ async function crearOP(proyId){
 
   let bomItems = [];
   try {
-    const mapeo = await stockAPI('v14_sku_map?select=v14_key,sku_id,qty_factor,skus(codigo,nombre)');
-    const mapeoDict = {};
-    (mapeo || []).forEach(function(m){ mapeoDict[m.v14_key] = m; });
-
-    for(const itEquipo of itemsParaBOM){
-      const pDef = PRODUCTOS.find(function(pr){ return pr.name === itEquipo.desc; });
-      if(!pDef || !pDef.insumos) continue;
-      const cantItem = itEquipo.cant || 1;
-
-      pDef.insumos.forEach(function(ins){
-        const m = mapeoDict[ins.key];
-        const qty = (ins.qty || 1) * (m ? (m.qty_factor || 1) : 1) * cantItem;
-        // Para Accesorios, evitar duplicados sumando cantidades
-        if(esAccesorios){
+    // Intentar usar BOM Maestra si existe para este producto
+    const productoId = prodDef ? prodDef.id : null;
+    if(productoId && productoId !== 'custom'){
+      const bomMaestra = await stockAPI('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking)').catch(()=>[]);
+      if(bomMaestra && bomMaestra.length){
+        // BOM Maestra encontrada — usarla como fuente única de verdad
+        bomMaestra.forEach(function(r){
+          bomItems.push({
+            sku_id: r.sku_id,
+            v14_key: r.v14_key || null,
+            nombre: r.skus ? r.skus.nombre : r.nombre,
+            qty: r.qty || 1,
+            incluido: true,
+            notas: null
+          });
+        });
+      }
+      // Si no hay BOM Maestra: bomItems queda vacío — la OP se crea sin insumos
+      // y el usuario los carga desde ops_ventas una vez que la BOM esté definida
+    }
+    // Para Accesorios sin BOM Maestra, usar el mapping estático como fallback
+    if(bomItems.length === 0 && esAccesorios){
+      const mapeo = await stockAPI('v14_sku_map?select=v14_key,sku_id,qty_factor,skus(codigo,nombre)');
+      const mapeoDict = {};
+      (mapeo || []).forEach(function(m){ mapeoDict[m.v14_key] = m; });
+      for(const itEquipo of itemsParaBOM){
+        const pDef2 = PRODUCTOS.find(function(pr){ return pr.name === itEquipo.desc; });
+        if(!pDef2 || !pDef2.insumos) continue;
+        const cantItem = itEquipo.cant || 1;
+        pDef2.insumos.forEach(function(ins){
+          const m = mapeoDict[ins.key];
+          const qty = (ins.qty || 1) * (m ? (m.qty_factor || 1) : 1) * cantItem;
           const existing = bomItems.find(function(b){ return b.v14_key === ins.key; });
           if(existing){ existing.qty += qty; return; }
-        }
-        bomItems.push({
-          sku_id: m && m.sku_id ? m.sku_id : null,
-          v14_key: ins.key,
-          nombre: m && m.skus ? m.skus.nombre : ins.key,
-          qty: qty,
-          incluido: true,
-          notas: ins.key.startsWith('gab_') ? 'Color: ' + color : null
-        });
-        // Si hay cooler, agregar automáticamente la fuente del cooller (id 21)
-        if(ins.key === 'cooler' || ins.key === 'cooler_doble'){
-          const cantFuente = (ins.key === 'cooler_doble' ? 2 : 1) * cantItem;
           bomItems.push({
-            sku_id: 21,
-            v14_key: 'fuente_cooller',
-            nombre: 'Fuente 12v 2a (para cooller)',
-            qty: cantFuente,
+            sku_id: m && m.sku_id ? m.sku_id : null,
+            v14_key: ins.key,
+            nombre: m && m.skus ? m.skus.nombre : ins.key,
+            qty: qty,
             incluido: true,
-            notas: 'Agregado automáticamente con cooller'
+            notas: null
           });
-        }
-      });
+        });
+      }
     }
   } catch(e){
     alert('Error obteniendo BOM del sistema de stock.\n' + e.message);
