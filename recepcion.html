@@ -781,10 +781,16 @@ async function confirmarRecepcion(){
       await ingresarUIDs(ri, recId);
     }
 
-    // Si hay items de cantidad, mostrar modal de verificación de caja
+    // Ingresar cantidad al stock de inmediato — robusto, no depende del modal de verificación
+    for(const ri of itemsCantidad){
+      ri._recId = recId;
+      await ingresarCantidad(ri);
+    }
+
+    // Si hay items de cantidad, mostrar modal de verificación de caja (solo para conteo físico)
     if(itemsCantidad.length > 0){
       await mostrarVerificacionCaja(itemsCantidad, recId);
-      return; // El flujo continúa desde confirmarVerificacionCaja
+      return; // El flujo continúa desde confirmarVerificacionCaja (solo alertas de diferencia)
     }
 
     // Si no hay items de cantidad, mostrar resultado directamente
@@ -1434,27 +1440,23 @@ async function confirmarVerificacionCaja(){
     } catch(e){ console.warn('Error alertas:', e); }
   }
 
-  // Verificar que no se ingresó ya (evitar doble suma)
-  const recEstado = await api(`recepciones?id=eq.${_vcajaRecId}&select=estado`).catch(()=>[]);
-  if(recEstado?.[0]?.estado === 'confirmada'){
-    toast('Este conteo ya fue confirmado');
-    document.getElementById('modal-verificacion-caja').style.display = 'none';
-    showPage('pendientes'); loadPendientes();
-    return;
-  }
-
-  // Ingresar al stock
-  const errores = [];
-  for(const ri of _vcajaItems){
-    try{
-      await ingresarCantidad(ri);
-    }catch(e){
-      console.error('Error ingresando', ri.nombre, e);
-      errores.push(ri.nombre + ': ' + e.message);
+  // Verificar si el stock ya fue ingresado en confirmarRecepcion
+  // Si no hay items pendientes, solo procesar alertas de diferencia (sin re-ingresar stock)
+  const riPendientes = await api(`recepcion_items?recepcion_id=eq.${_vcajaRecId}&ingresado_a_stock=eq.false&select=id`).catch(()=>[]);
+  if(riPendientes?.length){
+    // Flujo legacy o pendiente_conteo: ingresar stock ahora como fallback
+    const errores = [];
+    for(const ri of _vcajaItems){
+      try{
+        await ingresarCantidad(ri);
+      }catch(e){
+        console.error('Error ingresando', ri.nombre, e);
+        errores.push(ri.nombre + ': ' + e.message);
+      }
     }
-  }
-  if(errores.length){
-    toast('⚠ Algunos ítems no se ingresaron al stock: ' + errores.join(', '));
+    if(errores.length){
+      toast('⚠ Algunos ítems no se ingresaron al stock: ' + errores.join(', '));
+    }
   }
 
   // Marcar recepción como confirmada
@@ -1507,9 +1509,9 @@ async function posponerConteo(){
       div.innerHTML = `
         <div style="font-size:40px;margin-bottom:16px;">⏳</div>
         <div style="font-size:18px;font-weight:600;margin-bottom:8px;">Recepción registrada</div>
-        <div style="font-size:13px;color:var(--text3);margin-bottom:24px;">El conteo de caja quedó pendiente. El stock se actualizará cuando realices el conteo.</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:24px;">El stock fue actualizado. El conteo físico de caja quedó pendiente para verificación.</div>
         <div style="padding:12px 16px;background:rgba(255,160,0,0.08);border:1px solid rgba(255,160,0,0.3);border-radius:8px;font-size:12px;color:var(--amber);margin-bottom:24px;">
-          ⚠️ Los insumos NO estarán disponibles en producción hasta completar el conteo
+          ⚠️ Recordá completar el conteo físico para detectar diferencias con el sistema
         </div>
         <button class="btn solid-green" onclick="document.getElementById('page-resultado-posponer').classList.remove('active');showPage('pendientes');loadPendientes();">Volver a pendientes</button>
       `;
