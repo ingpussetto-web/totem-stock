@@ -461,7 +461,7 @@ function renderOPCard(o){
         <div class="op-meta">${o.v14_orden||'—'} · Creada ${fecha}</div>
       </div>
       <div class="op-actions">
-        ${o.estado==='bom_pendiente'||o.estado==='bom_confirmada'
+        ${o.estado==='bom_pendiente'||o.estado==='bom_confirmada'||o.estado==='en_produccion'
           ? `<button class="btn amber sm" onclick="abrirBOM(${o.id})">✏ Revisar BOM</button>`
           : ''}
         ${o.estado==='bom_confirmada'
