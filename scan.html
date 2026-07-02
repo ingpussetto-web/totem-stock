@@ -251,6 +251,8 @@ async function renderEnStock(){
       const colorOP = b.ordenes_produccion?.color_gabinete || '';
       return colorOP === variante || colorOP === 'A definir' || colorOP === '';
     }
+    // Si la unidad tiene variante_id, solo mostrar items BOM que matcheen esa variante (o sin variante especificada)
+    if(u.variante_id != null) return b.variante_id == null || b.variante_id === u.variante_id;
     return true;
   });
 
@@ -442,9 +444,9 @@ async function renderCaja(sku){
   }
   const disponible = total - cajaReservado;
 
-  // Traer OPs con este insumo pendiente de asignar
+  // Traer OPs con este insumo pendiente de asignar (incluyendo variante)
   const bomItems = await api(
-    `op_bom_items?sku_id=eq.${sku.id}&estado=eq.pendiente&incluido=eq.true&select=id,qty,ordenes_produccion(id,op_numero,cliente,estado)`
+    `op_bom_items?sku_id=eq.${sku.id}&estado=eq.pendiente&incluido=eq.true&select=id,qty,variante_id,variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)`
   ).catch(()=>[]);
   const opsActivas = (bomItems||[]).filter(i =>
     i.ordenes_produccion &&
@@ -456,9 +458,13 @@ async function renderCaja(sku){
   const opsHTML = opsActivas.length
     ? opsActivas.map(item => {
         const op = item.ordenes_produccion;
+        const variante = item.variantes?.valor || null;
+        const varianteBadge = variante
+          ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.08);color:var(--amber);margin-left:6px;">● ${variante}</span>`
+          : '';
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border);">
           <div>
-            <div style="font-size:13px;font-weight:600;font-family:monospace;color:var(--green);">${op.op_numero}</div>
+            <div style="font-size:13px;font-weight:600;font-family:monospace;color:var(--green);">${op.op_numero}${varianteBadge}</div>
             <div style="font-size:11px;color:var(--text3);">${op.cliente}</div>
           </div>
           <button data-bomid="${item.id}" data-opnum="${op.op_numero}"

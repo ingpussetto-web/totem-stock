@@ -642,14 +642,14 @@ async function procesarCaja(sku){
     }
     return;
   }
-  // Verificar stock disponible
-  const stockRows = await api(`stock?sku_id=eq.${sku.id}&variante_id=is.null&select=id,cantidad`).catch(()=>[]);
-  const stockRow = stockRows?.[0];
+  // Verificar stock disponible — buscar todas las filas (incluyendo variantes)
+  const stockRows = await api(`stock?sku_id=eq.${sku.id}&select=id,cantidad,variante_id`).catch(()=>[]);
+  const totalStock = (stockRows||[]).reduce((acc,r)=>acc+(r.cantidad||0),0);
   // Calcular reservado real desde op_bom_items — solo OPs activas (excluir completadas/canceladas)
   const _estadosActivos = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
-  const asignadosRealesProd = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id,ordenes_produccion(estado)`).catch(()=>[]);
+  const asignadosRealesProd = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id,variante_id,ordenes_produccion(estado)`).catch(()=>[]);
   const reservadoReal = (asignadosRealesProd||[]).filter(i => _estadosActivos.includes(i.ordenes_produccion?.estado)).length;
-  const disponible = stockRow ? (stockRow.cantidad - reservadoReal) : 0;
+  const disponible = totalStock - reservadoReal;
 
   if(disponible <= 0){
     scanArea.className='scan-area error';
@@ -658,11 +658,43 @@ async function procesarCaja(sku){
     return;
   }
 
-  const item = itemsCompatibles[0];
+  // Si hay múltiples variantes pendientes, pedir al usuario que elija cuál asignar
+  let item;
+  const variantesEnItems = [...new Set(itemsCompatibles.map(i=>i.variante_id).filter(v=>v!=null))];
+  if(variantesEnItems.length > 1){
+    const variantesData = await api(`variantes?id=in.(${variantesEnItems.join(',')})&select=id,valor`).catch(()=>[]);
+    const opciones = (variantesData||[]).map(v=>v.valor).join(' / ');
+    const eleccion = prompt(`¿Qué color de "${sku.nombre}" vas a asignar?\nEscribí el color exacto:\n${opciones}`);
+    if(!eleccion) return;
+    const varianteElegida = (variantesData||[]).find(v=>v.valor.toLowerCase()===eleccion.trim().toLowerCase());
+    if(!varianteElegida){
+      setFeedback(`✕ Color "${eleccion}" no reconocido. Opciones: ${opciones}`, 'err');
+      return;
+    }
+    item = itemsCompatibles.find(i=>i.variante_id===varianteElegida.id);
+    if(!item){
+      setFeedback(`✕ No hay item pendiente de variante "${varianteElegida.valor}"`, 'err');
+      return;
+    }
+  } else {
+    item = itemsCompatibles[0];
+  }
+
+  // Buscar la fila de stock específica para esta variante
+  const stockRowEspecifico = item.variante_id
+    ? (stockRows||[]).find(r=>r.variante_id===item.variante_id) || stockRows?.[0]
+    : (stockRows||[]).find(r=>r.variante_id==null) || stockRows?.[0];
+
   // Asignar item en BOM
   await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'});
-  // Descontar del stock
-  await api(`stock?id=eq.${stockRow.id}`, 'PATCH', {cantidad_reservada: reservadoReal + 1});
+  // Incrementar cantidad_reservada en la fila de stock correspondiente
+  if(stockRowEspecifico){
+    const reservadoVariante = (asignadosRealesProd||[]).filter(i =>
+      _estadosActivos.includes(i.ordenes_produccion?.estado) &&
+      (item.variante_id == null ? i.variante_id == null : i.variante_id === item.variante_id)
+    ).length;
+    await api(`stock?id=eq.${stockRowEspecifico.id}`, 'PATCH', {cantidad_reservada: reservadoVariante + 1});
+  }
 
   item.estado = 'asignado';
   item.uid_asignado = sku.codigo+'-CAJA';
@@ -977,10 +1009,12 @@ async function procesarScan(){
     }
 
     // Buscar items en la BOM que correspondan a este SKU y estén pendientes
+    // Si la unidad tiene variante_id, matchear solo items con esa variante (o sin variante especificada)
     const itemsCompatibles = bomItems.filter(i=>
       i.sku_id === unidad.sku_id &&
       i.estado === 'pendiente' &&
-      i.incluido !== false
+      i.incluido !== false &&
+      (unidad.variante_id == null || i.variante_id == null || i.variante_id === unidad.variante_id)
     );
 
     if(!itemsCompatibles.length){
