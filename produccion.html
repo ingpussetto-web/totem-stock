@@ -645,9 +645,10 @@ async function procesarCaja(sku){
   // Verificar stock disponible
   const stockRows = await api(`stock?sku_id=eq.${sku.id}&variante_id=is.null&select=id,cantidad`).catch(()=>[]);
   const stockRow = stockRows?.[0];
-  // Calcular reservado real desde op_bom_items
-  const asignadosRealesProd = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id`).catch(()=>[]);
-  const reservadoReal = (asignadosRealesProd||[]).length;
+  // Calcular reservado real desde op_bom_items — solo OPs activas (excluir completadas/canceladas)
+  const _estadosActivos = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+  const asignadosRealesProd = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id,ordenes_produccion(estado)`).catch(()=>[]);
+  const reservadoReal = (asignadosRealesProd||[]).filter(i => _estadosActivos.includes(i.ordenes_produccion?.estado)).length;
   const disponible = stockRow ? (stockRow.cantidad - reservadoReal) : 0;
 
   if(disponible <= 0){
