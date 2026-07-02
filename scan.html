@@ -422,6 +422,7 @@ function renderBaja(){
 
 let cajaSkuActual = null;
 let cajaStockRow = null;
+let cajaReservado = 0;
 
 async function renderCaja(sku){
   cajaSkuActual = sku;
@@ -433,13 +434,13 @@ async function renderCaja(sku){
   // Calcular reservado real desde op_bom_items (solo OPs activas)
   const asignadosRealesRaw = await api(`op_bom_items?sku_id=eq.${sku.id}&uid_asignado=not.is.null&estado=eq.asignado&select=id,ordenes_produccion(estado)`).catch(()=>[]);
   const _estadosActivosCaja = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
-  const reservado = (asignadosRealesRaw||[]).filter(a => _estadosActivosCaja.includes(a.ordenes_produccion?.estado)).length;
+  cajaReservado = (asignadosRealesRaw||[]).filter(a => _estadosActivosCaja.includes(a.ordenes_produccion?.estado)).length;
   // Sincronizar cantidad_reservada si difiere
-  if(cajaStockRow && reservado !== (cajaStockRow.cantidad_reservada||0)){
-    await api(`stock?id=eq.${cajaStockRow.id}`,'PATCH',{cantidad_reservada: reservado}).catch(()=>{});
-    cajaStockRow.cantidad_reservada = reservado;
+  if(cajaStockRow && cajaReservado !== (cajaStockRow.cantidad_reservada||0)){
+    await api(`stock?id=eq.${cajaStockRow.id}`,'PATCH',{cantidad_reservada: cajaReservado}).catch(()=>{});
+    cajaStockRow.cantidad_reservada = cajaReservado;
   }
-  const disponible = total - reservado;
+  const disponible = total - cajaReservado;
 
   // Traer OPs con este insumo pendiente de asignar
   const bomItems = await api(
@@ -498,20 +499,21 @@ async function asignarDesdeCaja(btn){
   const bomId = btn.dataset.bomid;
   const opNum = btn.dataset.opnum;
   if(!cajaStockRow){ alert('Error: sin stock registrado'); return; }
-  const disponible = (cajaStockRow.cantidad||0) - reservado;
+  const disponible = (cajaStockRow.cantidad||0) - cajaReservado;
   if(disponible <= 0){ alert('Sin stock disponible en caja'); return; }
   if(!confirm('¿Asignar 1 unidad de ' + cajaSkuActual.nombre + ' a ' + opNum + '?')) return;
   try{
     // Marcar BOM item como asignado
     await api('op_bom_items?id=eq.'+bomId, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
     // Descontar del stock
-    await api('stock?id=eq.'+cajaStockRow.id, 'PATCH', {cantidad_reservada: reservado + 1});
-    cajaStockRow.cantidad_reservada = reservado + 1;
+    await api('stock?id=eq.'+cajaStockRow.id, 'PATCH', {cantidad_reservada: cajaReservado + 1});
+    cajaReservado += 1;
+    cajaStockRow.cantidad_reservada = cajaReservado;
     // Reemplazar fila de la OP con confirmación visual
     const filaOp = btn.closest('div');
     if(filaOp) filaOp.innerHTML = '<div style="color:var(--green);font-size:12px;padding:10px 0;border-top:1px solid var(--border);">✓ Asignado a ' + opNum + '</div>';
     // Actualizar contador disponible
-    const nuevoDisp = (cajaStockRow.cantidad||0) - cajaStockRow.cantidad_reservada;
+    const nuevoDisp = (cajaStockRow.cantidad||0) - cajaReservado;
     const colorDisp = nuevoDisp <= 0 ? 'var(--red)' : 'var(--green)';
     const contadores = document.querySelectorAll('#container [style*="font-size:32px"]');
     if(contadores[0]){ contadores[0].textContent = nuevoDisp; contadores[0].style.color = colorDisp; }
