@@ -370,7 +370,7 @@ async function init(){
 
 async function cargarOps(){
   _ops = await api(
-    'ordenes_produccion?select=id,op_numero,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
+    'ordenes_produccion?select=id,op_numero,v14_orden,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
   );
   renderBoard();
 }
@@ -440,7 +440,7 @@ function cardHTML(op, colKey){
   </div>` : '';
 
   return `<div class="${clases}" draggable="true" data-opid="${op.id}" onclick="cardClick(event,${op.id})" ondragstart="dragStart(event,${op.id})" ondragend="dragEnd(event)">
-    <div class="card-op">${esc(op.op_numero)} ${tipo}</div>
+    <div class="card-op">${esc(op.v14_orden||op.op_numero)} ${tipo}</div>
     <div class="card-cliente">${esc(op.cliente)}${badgeOk}</div>
     <div class="card-producto">${esc(op.producto_nombre||'')}${op.cantidad>1?' × '+op.cantidad:''}</div>
     ${desc}
@@ -458,7 +458,7 @@ async function abrirDetalle(opId){
   _opActual = _ops.find(o=>o.id===opId);
   if(!_opActual) return;
 
-  document.getElementById('det-op').textContent = 'OP ' + (_opActual.op_numero||'');
+  document.getElementById('det-op').textContent = _opActual.v14_orden || _opActual.op_numero || '';
   document.getElementById('det-cliente').textContent = _opActual.cliente||'';
   document.getElementById('det-producto').textContent = (_opActual.producto_nombre||'') + (_opActual.tipos_proyecto?.nombre ? ' · '+_opActual.tipos_proyecto.nombre : '');
   document.getElementById('overlay').classList.add('open');
