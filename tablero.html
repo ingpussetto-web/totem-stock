@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero de Proyectos — Totem Nube</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0f;--panel:#0d1117;--panel2:#111620;--panel3:#161c28;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);--border3:rgba(255,255,255,0.18);
+  --text:#e8eaf0;--text2:#7a8099;--text3:#3a4055;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.1);--green-border:rgba(0,229,160,0.25);
+  --amber:#ffb340;--amber-dim:rgba(255,179,64,0.1);--amber-border:rgba(255,179,64,0.25);
+  --red:#ff4d6a;--red-dim:rgba(255,77,106,0.1);--red-border:rgba(255,77,106,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.1);
+  --radius:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+
+/* ── HEADER ── */
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:100}
+.top-bar-left{display:flex;align-items:center;gap:16px}
+.back-btn{color:var(--text2);text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);transition:.15s}
+.back-btn:hover{border-color:var(--border2);color:var(--text)}
+.top-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.top-sub{font-size:11px;color:var(--text2);margin-top:1px}
+.top-bar-right{display:flex;align-items:center;gap:10px}
+.modo-dis-btn{font-size:11px;padding:5px 12px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);cursor:pointer;transition:.15s}
+.modo-dis-btn.activo{border-color:var(--purple);color:var(--purple);background:var(--purple-dim)}
+select,input[type=text]{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 10px;font-size:12px;font-family:inherit}
+select:focus,input:focus{outline:none;border-color:var(--border2)}
+
+/* ── BOARD ── */
+.board-wrap{overflow-x:auto;padding:20px 24px 40px;display:flex;gap:14px;min-height:calc(100vh - 70px)}
+.col{min-width:230px;flex:0 0 230px;display:flex;flex-direction:column;gap:8px}
+.col-head{display:flex;align-items:center;justify-content:space-between;padding:6px 4px;margin-bottom:4px}
+.col-name{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text2)}
+.col-count{background:var(--panel2);border:1px solid var(--border);border-radius:10px;font-size:10px;padding:1px 7px;color:var(--text3);font-family:'DM Mono',monospace}
+.col-sep{width:1px;background:var(--border);min-height:300px;flex:0 0 1px;margin:0 2px}
+
+/* ── CARD ── */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:border-color .15s,transform .1s;position:relative}
+.card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.card.insumos-ok{border-left:3px solid var(--green);padding-left:10px}
+.card.urgente{border-left:3px solid var(--red);padding-left:10px}
+.card.terminada{opacity:.6}
+.card.standby{opacity:.5}
+.card-op{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:3px}
+.card-cliente{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-producto{font-size:11px;color:var(--text2);margin-bottom:4px}
+.card-desc{font-size:10px;color:var(--text3);font-style:italic;margin-bottom:6px;border-left:2px solid var(--border2);padding-left:6px;line-height:1.4}
+.card-etiquetas{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+.etiq-chip{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600}
+.etiq-chip.dis{background:rgba(167,139,250,0.15);color:var(--purple)}
+.etiq-chip.sw{background:var(--green-dim);color:var(--green)}
+.etiq-chip.co{background:var(--amber-dim);color:var(--amber)}
+.etiq-chip.pr{background:var(--blue-dim);color:var(--blue)}
+.etiq-chip.log{background:rgba(34,211,238,0.1);color:#22d3ee}
+.etiq-chip.ad{background:rgba(255,77,106,0.1);color:var(--red)}
+.card-progress{margin-bottom:8px}
+.prog-label{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:3px}
+.prog-bar{height:3px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;transition:width .3s}
+.prog-fill.completo{background:var(--green)}
+.prog-fill.parcial{background:var(--amber)}
+.prog-fill.vacio{background:var(--text3)}
+.card-footer{display:flex;justify-content:space-between;align-items:center}
+.card-fecha{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:3px}
+.card-fecha.vencida{color:var(--red)}
+.card-areas{display:flex;gap:3px;flex-wrap:wrap}
+.area-badge{font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;letter-spacing:.03em}
+.area-badge.DIS{background:rgba(167,139,250,0.15);color:var(--purple)}
+.area-badge.SW{background:var(--green-dim);color:var(--green)}
+.area-badge.CO{background:var(--amber-dim);color:var(--amber)}
+.area-badge.PR{background:var(--blue-dim);color:var(--blue)}
+.area-badge.LOG{background:rgba(34,211,238,0.1);color:#22d3ee}
+.area-badge.AD{background:var(--red-dim);color:var(--red)}
+.badge-ok{font-size:9px;background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);border-radius:4px;padding:1px 5px;font-weight:600;margin-left:4px}
+
+/* ── OVERLAY / DETAIL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:flex-start;justify-content:flex-end}
+.overlay.open{display:flex}
+.panel-det{background:var(--panel);border-left:1px solid var(--border2);width:440px;max-width:100vw;height:100vh;overflow-y:auto;display:flex;flex-direction:column}
+.det-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;position:sticky;top:0;background:var(--panel);z-index:10}
+.det-op{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:3px}
+.det-cliente{font-size:16px;font-weight:600}
+.det-producto{font-size:12px;color:var(--text2);margin-top:2px}
+.close-btn{background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);cursor:pointer;padding:5px 10px;font-size:18px;line-height:1;flex:0 0 auto}
+.close-btn:hover{border-color:var(--border2);color:var(--text)}
+.det-body{padding:20px;display:flex;flex-direction:column;gap:20px}
+.det-section{display:flex;flex-direction:column;gap:8px}
+.det-section-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
+.det-desc-input{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;width:100%}
+.det-desc-input:focus{outline:none;border-color:var(--border2)}
+
+/* Mover columna */
+.mover-grid{display:flex;flex-wrap:wrap;gap:6px}
+.mover-btn{font-size:11px;padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);cursor:pointer;transition:.15s}
+.mover-btn:hover{border-color:var(--green);color:var(--green)}
+.mover-btn.activo{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+
+/* Áreas */
+.areas-grid{display:flex;flex-wrap:wrap;gap:6px}
+.area-toggle{font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid transparent;transition:.15s;letter-spacing:.03em}
+.area-toggle.off{background:var(--panel2);border-color:var(--border);color:var(--text3)}
+.area-toggle.on.DIS{background:rgba(167,139,250,0.15);border-color:rgba(167,139,250,0.4);color:var(--purple)}
+.area-toggle.on.SW{background:var(--green-dim);border-color:var(--green-border);color:var(--green)}
+.area-toggle.on.CO{background:var(--amber-dim);border-color:var(--amber-border);color:var(--amber)}
+.area-toggle.on.PR{background:var(--blue-dim);border-color:rgba(77,159,255,0.3);color:var(--blue)}
+.area-toggle.on.LOG{background:rgba(34,211,238,0.1);border-color:rgba(34,211,238,0.3);color:#22d3ee}
+.area-toggle.on.AD{background:var(--red-dim);border-color:var(--red-border);color:var(--red)}
+
+/* Etiquetas */
+.etiq-row{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.etiq-row.activa{border-color:var(--green-border);background:var(--green-dim)}
+.etiq-info{flex:1}
+.etiq-titulo{font-size:12px;font-weight:500}
+.etiq-area{font-size:10px;color:var(--text3);margin-top:2px}
+.etiq-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.btn-etiq-toggle{font-size:11px;padding:4px 10px;border-radius:var(--radius);border:1px solid;cursor:pointer;font-weight:600;transition:.15s}
+.btn-etiq-toggle.off{border-color:var(--border2);background:transparent;color:var(--text2)}
+.btn-etiq-toggle.on{border-color:var(--green);background:var(--green-dim);color:var(--green)}
+.btn-wa{font-size:11px;padding:4px 10px;border-radius:var(--radius);border:1px solid #25d366;background:rgba(37,211,102,0.1);color:#25d366;cursor:pointer;text-decoration:none;font-weight:600;white-space:nowrap}
+.modo-dis-note{font-size:11px;color:var(--text3);font-style:italic;padding:8px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)}
+
+/* Comentarios */
+.comentario{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
+.com-autor{font-size:11px;font-weight:600;color:var(--text2)}
+.com-fecha{font-size:10px;color:var(--text3);margin-left:6px}
+.com-texto{font-size:12px;margin-top:5px;line-height:1.5;color:var(--text)}
+.add-com-wrap{display:flex;flex-direction:column;gap:6px}
+.add-com-wrap textarea{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:64px;width:100%}
+.add-com-wrap textarea:focus{outline:none;border-color:var(--border2)}
+.add-com-row{display:flex;gap:6px}
+.add-com-row input{flex:1}
+.btn{padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
+.btn:hover{border-color:var(--green);color:var(--green)}
+.btn.solid{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+.btn.solid:hover{opacity:.85}
+.btn.danger{border-color:var(--red-border);color:var(--red)}
+
+/* Archivos */
+.archivo-row{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.archivo-info{flex:1;overflow:hidden}
+.archivo-nombre{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.archivo-meta{font-size:10px;color:var(--text3);margin-top:2px}
+.archivo-link{font-size:11px;color:var(--blue);text-decoration:none}
+.archivo-link:hover{text-decoration:underline}
+.upload-area{border:1px dashed var(--border2);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;transition:.15s}
+.upload-area:hover{border-color:var(--green);background:var(--green-dim)}
+.upload-area input{display:none}
+.upload-label{font-size:12px;color:var(--text2);cursor:pointer}
+.upload-hint{font-size:10px;color:var(--text3);margin-top:4px}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 18px;font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* Empty col */
+.col-empty{font-size:11px;color:var(--text3);text-align:center;padding:20px 10px;border:1px dashed var(--border);border-radius:10px}
+
+/* Loader */
+.loader{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <div class="top-bar-left">
+    <a href="index.html" class="back-btn">← Sistema</a>
+    <div>
+      <div class="top-title">Tablero de Proyectos</div>
+      <div class="top-sub">Totem Nube — gestión interna</div>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <select id="filtro-tipo" onchange="renderBoard()">
+      <option value="">Todos los tipos</option>
+    </select>
+    <button class="modo-dis-btn" id="btn-modo-dis" onclick="toggleMódoDis()">✏ Modo diseñador</button>
+  </div>
+</div>
+
+<!-- BOARD -->
+<div class="board-wrap" id="board">
+  <div class="loader">Cargando proyectos...</div>
+</div>
+
+<!-- DETAIL OVERLAY -->
+<div class="overlay" id="overlay" onclick="cerrarDetalle(event)">
+  <div class="panel-det" id="panel-det">
+    <div class="det-head">
+      <div>
+        <div class="det-op" id="det-op"></div>
+        <div class="det-cliente" id="det-cliente"></div>
+        <div class="det-producto" id="det-producto"></div>
+      </div>
+      <button class="close-btn" onclick="cerrarDetalleBtn()">✕</button>
+    </div>
+    <div class="det-body" id="det-body">
+      <div class="loader">Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
+const STORAGE_BUCKET = 'op-notas-archivos';
+const PASS_DISENADOR = 'totem2026dis';
+
+const COLUMNAS = [
+  { key:'en_proceso',         label:'En proceso' },
+  { key:'urgente_licencias',  label:'Urgente licencias' },
+  { key:'cola_despacho',      label:'Cola de despacho' },
+  { key:'entregadas_ajustes', label:'Entregadas c/ajustes' },
+  { key:'terminadas',         label:'Terminadas' },
+  { key:'standby',            label:'Standby' },
+];
+
+let _ops = [];
+let _areas = [];
+let _tiposProyecto = [];
+let _modoDisenador = false;
+let _opActual = null;
+let _areasOp = [];
+let _etiquetasDisponibles = [];
+let _etiquetasActivas = [];
+
+async function api(path, method='GET', body=null){
+  const opts = { method, headers: {
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer '+SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  }};
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(SUPABASE_URL+'/rest/v1/'+path, opts);
+  if(!r.ok){ const e=await r.text(); throw new Error(e); }
+  return r.status===204 ? null : r.json();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+function toast(msg, dur=2500){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), dur);
+}
+
+function fmtFecha(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+
+function estaVencida(iso){
+  if(!iso) return false;
+  return new Date(iso) < new Date();
+}
+
+// ─── MODO DISEÑADOR ───────────────────────────────────────────
+function toggleMódoDis(){
+  if(_modoDisenador){
+    _modoDisenador = false;
+    document.getElementById('btn-modo-dis').classList.remove('activo');
+    toast('Modo diseñador desactivado');
+    if(_opActual) renderDetBody();
+    return;
+  }
+  const pass = prompt('Contraseña de diseñador:');
+  if(!pass) return;
+  if(pass !== PASS_DISENADOR){ toast('Contraseña incorrecta'); return; }
+  _modoDisenador = true;
+  document.getElementById('btn-modo-dis').classList.add('activo');
+  toast('Modo diseñador activado ✓');
+  if(_opActual) renderDetBody();
+}
+
+// ─── CARGA INICIAL ────────────────────────────────────────────
+async function init(){
+  try{
+    [_areas, _tiposProyecto] = await Promise.all([
+      api('areas?select=*&order=codigo.asc'),
+      api('tipos_proyecto?select=*&order=nombre.asc'),
+    ]);
+    const sel = document.getElementById('filtro-tipo');
+    _tiposProyecto.forEach(t=>{
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.nombre;
+      sel.appendChild(o);
+    });
+    await cargarOps();
+  } catch(e){ document.getElementById('board').innerHTML='<div class="loader" style="color:var(--red)">Error al cargar: '+esc(e.message)+'</div>'; }
+}
+
+async function cargarOps(){
+  _ops = await api(
+    'ordenes_produccion?select=id,op_numero,cliente,producto_nombre,descripcion_extra,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
+  );
+  renderBoard();
+}
+
+// ─── RENDER BOARD ─────────────────────────────────────────────
+function renderBoard(){
+  const filtroTipo = document.getElementById('filtro-tipo').value;
+  const ops = filtroTipo
+    ? _ops.filter(o=> String(o.tipo_proyecto_id)===String(filtroTipo))
+    : _ops;
+
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+
+  COLUMNAS.forEach((col, ci)=>{
+    const colOps = ops.filter(o=>(o.etapa_tablero||'en_proceso')===col.key);
+
+    const colEl = document.createElement('div');
+    colEl.className = 'col';
+    colEl.innerHTML = `<div class="col-head">
+      <span class="col-name">${esc(col.label)}</span>
+      <span class="col-count">${colOps.length}</span>
+    </div>` + (colOps.length===0
+      ? '<div class="col-empty">Sin proyectos</div>'
+      : colOps.map(o=>cardHTML(o, col.key)).join(''));
+
+    board.appendChild(colEl);
+    if(ci < COLUMNAS.length-1){
+      const sep = document.createElement('div');
+      sep.className='col-sep';
+      board.appendChild(sep);
+    }
+  });
+}
+
+function cardHTML(op, colKey){
+  const bomItems = (op.op_bom_items||[]).filter(i=>i.incluido!==false);
+  const totalBOM = bomItems.length;
+  const asignados = bomItems.filter(i=>i.estado==='asignado').length;
+  const pct = totalBOM>0 ? Math.round(asignados/totalBOM*100) : 0;
+  const insumosOk = totalBOM>0 && asignados===totalBOM;
+  const progClass = pct===100?'completo':pct>0?'parcial':'vacio';
+
+  const areas = (op.op_areas||[]).map(a=>a.areas).filter(Boolean);
+  const etiquetas = (op.op_etiquetas||[]).map(e=>e.etiquetas_accion).filter(Boolean);
+  const vencida = estaVencida(op.fecha_entrega) && colKey!=='terminadas';
+
+  const clases = ['card',
+    insumosOk?'insumos-ok':'',
+    colKey==='urgente_licencias'?'urgente':'',
+    colKey==='terminadas'?'terminada':'',
+    colKey==='standby'?'standby':'',
+  ].filter(Boolean).join(' ');
+
+  const areasHTML = areas.map(a=>`<span class="area-badge ${esc(a.codigo)}">${esc(a.codigo)}</span>`).join('');
+  const etiqHTML = etiquetas.map(e=>`<span class="etiq-chip ${(e.areas?.codigo||'').toLowerCase()}">${esc(e.titulo)}</span>`).join('');
+  const desc = op.descripcion_extra ? `<div class="card-desc">${esc(op.descripcion_extra)}</div>` : '';
+  const tipo = op.tipos_proyecto?.nombre ? `<span style="font-size:9px;color:var(--text3);"> · ${esc(op.tipos_proyecto.nombre)}</span>` : '';
+  const badgeOk = insumosOk ? '<span class="badge-ok">Insumos OK</span>' : '';
+  const progRow = totalBOM>0 ? `<div class="card-progress">
+    <div class="prog-label"><span>Insumos</span><span>${asignados}/${totalBOM}</span></div>
+    <div class="prog-bar"><div class="prog-fill ${progClass}" style="width:${pct}%"></div></div>
+  </div>` : '';
+
+  return `<div class="${clases}" onclick="abrirDetalle(${op.id})">
+    <div class="card-op">OP ${esc(op.op_numero)} ${tipo}</div>
+    <div class="card-cliente">${esc(op.cliente)}${badgeOk}</div>
+    <div class="card-producto">${esc(op.producto_nombre||'')}</div>
+    ${desc}
+    ${etiqHTML?`<div class="card-etiquetas">${etiqHTML}</div>`:''}
+    ${progRow}
+    <div class="card-footer">
+      <div class="card-fecha ${vencida?'vencida':''}">${vencida?'⚠ ':''}${fmtFecha(op.fecha_entrega)}</div>
+      <div class="card-areas">${areasHTML}</div>
+    </div>
+  </div>`;
+}
+
+// ─── DETALLE ──────────────────────────────────────────────────
+async function abrirDetalle(opId){
+  _opActual = _ops.find(o=>o.id===opId);
+  if(!_opActual) return;
+
+  document.getElementById('det-op').textContent = 'OP ' + (_opActual.op_numero||'');
+  document.getElementById('det-cliente').textContent = _opActual.cliente||'';
+  document.getElementById('det-producto').textContent = (_opActual.producto_nombre||'') + (_opActual.tipos_proyecto?.nombre ? ' · '+_opActual.tipos_proyecto.nombre : '');
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('det-body').innerHTML = '<div class="loader">Cargando...</div>';
+
+  try{
+    const [areasOp, etActivas, comentarios, archivos, todasEtiquetas] = await Promise.all([
+      api(`op_areas?op_id=eq.${opId}&select=area_id`),
+      api(`op_etiquetas?op_id=eq.${opId}&select=*,etiquetas_accion(*,areas(codigo,nombre))`),
+      api(`op_comentarios?op_id=eq.${opId}&select=*&order=created_at.asc`),
+      api(`op_archivos?op_id=eq.${opId}&select=*&order=created_at.asc`),
+      api(`etiquetas_accion?activa=eq.true&select=*,areas(codigo,nombre)`),
+    ]);
+    _areasOp = (areasOp||[]).map(a=>a.area_id);
+    _etiquetasActivas = etActivas||[];
+    _etiquetasDisponibles = todasEtiquetas||[];
+    renderDetBody(comentarios, archivos);
+  } catch(e){
+    document.getElementById('det-body').innerHTML=`<div style="color:var(--red);padding:16px">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderDetBody(comentarios=[], archivos=[]){
+  const op = _opActual;
+  const etapa = op.etapa_tablero||'en_proceso';
+
+  // Descripción extra
+  const descSection = `<div class="det-section">
+    <div class="det-section-title">Descripción / notas del proyecto</div>
+    <textarea class="det-desc-input" id="det-desc-input" placeholder="Ej: Software a medida para control de turnos...">${esc(op.descripcion_extra||'')}</textarea>
+    <div><button class="btn solid" onclick="guardarDesc()" style="font-size:11px;padding:5px 12px">Guardar</button></div>
+  </div>`;
+
+  // Mover columna
+  const moverBtns = COLUMNAS.map(c=>`<button class="mover-btn ${etapa===c.key?'activo':''}" onclick="moverColumna('${c.key}')">${esc(c.label)}</button>`).join('');
+  const moverSection = `<div class="det-section">
+    <div class="det-section-title">Mover a columna</div>
+    <div class="mover-grid">${moverBtns}</div>
+  </div>`;
+
+  // Áreas
+  const areasToggle = _areas.map(a=>{
+    const on = _areasOp.includes(a.id);
+    return `<button class="area-toggle ${on?'on':'off'} ${esc(a.codigo)}" onclick="toggleArea(${a.id})">${esc(a.codigo)} — ${esc(a.nombre)}</button>`;
+  }).join('');
+  const areasSection = `<div class="det-section">
+    <div class="det-section-title">Áreas involucradas</div>
+    <div class="areas-grid" id="areas-grid">${areasToggle}</div>
+  </div>`;
+
+  // Etiquetas
+  let etiquetasContent;
+  if(_modoDisenador){
+    const filas = _etiquetasDisponibles.map(et=>{
+      const activa = _etiquetasActivas.find(a=>a.etiqueta_id===et.id);
+      const areaCode = et.areas?.codigo||'';
+      const waUrl = activa ? generarUrlWA(et, op) : null;
+      return `<div class="etiq-row ${activa?'activa':''}" id="etiq-row-${et.id}">
+        <div class="etiq-info">
+          <div class="etiq-titulo">${esc(et.titulo)}</div>
+          <div class="etiq-area">${esc(areaCode)} — ${esc(et.areas?.nombre||'')}</div>
+        </div>
+        <div class="etiq-actions">
+          <button class="btn-etiq-toggle ${activa?'on':'off'}" onclick="toggleEtiqueta(${et.id})">${activa?'✓ Activa':'Activar'}</button>
+          ${activa&&waUrl?`<a class="btn-wa" href="${waUrl}" target="_blank">WhatsApp</a>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    etiquetasContent = filas || '<div style="font-size:12px;color:var(--text3)">Sin etiquetas disponibles</div>';
+  } else {
+    const activas = _etiquetasActivas;
+    if(activas.length===0){
+      etiquetasContent = '<div class="modo-dis-note">Sin etiquetas activas en este proyecto. (Activar en modo diseñador)</div>';
+    } else {
+      etiquetasContent = activas.map(a=>{
+        const et = a.etiquetas_accion;
+        const waUrl = et ? generarUrlWA(et, op) : null;
+        return `<div class="etiq-row activa">
+          <div class="etiq-info">
+            <div class="etiq-titulo">${esc(et?.titulo||'')}</div>
+            <div class="etiq-area">${esc(et?.areas?.codigo||'')} — ${esc(et?.areas?.nombre||'')}</div>
+          </div>
+          ${waUrl?`<a class="btn-wa" href="${waUrl}" target="_blank">WhatsApp</a>`:''}
+        </div>`;
+      }).join('');
+    }
+  }
+  const etiquetasSection = `<div class="det-section">
+    <div class="det-section-title">Etiquetas de acción ${_modoDisenador?'<span style="font-size:9px;color:var(--purple);margin-left:4px;">MODO DISEÑADOR</span>':''}</div>
+    ${etiquetasContent}
+  </div>`;
+
+  // Comentarios
+  const comsHTML = comentarios.length
+    ? comentarios.map(c=>`<div class="comentario">
+        <span class="com-autor">${esc(c.autor)}</span>
+        <span class="com-fecha">${fmtFecha(c.created_at)}</span>
+        <div class="com-texto">${esc(c.texto)}</div>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--text3)">Sin comentarios aún</div>';
+  const comsSection = `<div class="det-section">
+    <div class="det-section-title">Comentarios</div>
+    <div id="coms-list" style="display:flex;flex-direction:column;gap:6px">${comsHTML}</div>
+    <div class="add-com-wrap" style="margin-top:4px">
+      <textarea id="com-texto" placeholder="Agregar comentario..."></textarea>
+      <div class="add-com-row">
+        <input type="text" id="com-autor" placeholder="Tu nombre">
+        <button class="btn solid" onclick="agregarComentario()">Enviar</button>
+      </div>
+    </div>
+  </div>`;
+
+  // Archivos
+  const archivosHTML = archivos.length
+    ? archivos.map(a=>`<div class="archivo-row">
+        <div class="archivo-info">
+          <div class="archivo-nombre">${esc(a.nombre)}</div>
+          <div class="archivo-meta">Por ${esc(a.subido_por)} · ${fmtFecha(a.created_at)} · ${a.size_bytes?Math.round(a.size_bytes/1024)+' KB':''}</div>
+        </div>
+        <a class="archivo-link" href="${esc(a.url)}" target="_blank">Abrir</a>
+      </div>`).join('')
+    : '';
+  const puedeSubir = archivos.length < 4;
+  const uploadSection = puedeSubir
+    ? `<div class="upload-area" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" onchange="subirArchivo(this)" accept="*/*">
+        <div class="upload-label">Subir archivo</div>
+        <div class="upload-hint">Máx. 20 MB por archivo · ${4-archivos.length} lugar${4-archivos.length!==1?'es':''} disponible${4-archivos.length!==1?'s':''}</div>
+      </div>`
+    : `<div style="font-size:11px;color:var(--text3)">Límite de 4 archivos alcanzado. Pegá un link de Drive en los comentarios si necesitás adjuntar más.</div>`;
+  const archivosSection = `<div class="det-section">
+    <div class="det-section-title">Archivos adjuntos (${archivos.length}/4)</div>
+    <div id="archivos-list" style="display:flex;flex-direction:column;gap:6px">${archivosHTML}</div>
+    ${uploadSection}
+  </div>`;
+
+  document.getElementById('det-body').innerHTML =
+    descSection + moverSection + areasSection + etiquetasSection + comsSection + archivosSection;
+
+  // Restaurar scroll al top del panel
+  document.getElementById('panel-det').scrollTop = 0;
+}
+
+function generarUrlWA(etiqueta, op){
+  if(!etiqueta.areas?.codigo) return null;
+  const area = _areas.find(a=>a.codigo===etiqueta.areas.codigo);
+  if(!area?.whatsapp_numero) return null;
+  const num = area.whatsapp_numero.replace(/\D/g,'');
+  let msg = etiqueta.template_mensaje||'';
+  msg = msg.replace(/{empresa}/g, op.cliente||'');
+  msg = msg.replace(/{referente}/g, op.cliente||'');
+  msg = msg.replace(/{telefono}/g, 'ver cotización');
+  msg = msg.replace(/{tipo_proyecto}/g, op.tipos_proyecto?.nombre||'');
+  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+}
+
+// ─── ACCIONES DETALLE ─────────────────────────────────────────
+async function guardarDesc(){
+  const val = document.getElementById('det-desc-input')?.value||'';
+  try{
+    await api(`ordenes_produccion?id=eq.${_opActual.id}`, 'PATCH', {descripcion_extra: val});
+    _opActual.descripcion_extra = val;
+    const op = _ops.find(o=>o.id===_opActual.id);
+    if(op) op.descripcion_extra = val;
+    toast('Descripción guardada ✓');
+    renderBoard();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function moverColumna(colKey){
+  if(_opActual.etapa_tablero===colKey) return;
+  try{
+    await api(`ordenes_produccion?id=eq.${_opActual.id}`, 'PATCH', {etapa_tablero: colKey});
+    _opActual.etapa_tablero = colKey;
+    const op = _ops.find(o=>o.id===_opActual.id);
+    if(op) op.etapa_tablero = colKey;
+    toast('Movido a "'+COLUMNAS.find(c=>c.key===colKey)?.label+'" ✓');
+    renderBoard();
+    renderDetBody([], []);
+    await recargarDetComentariosArchivos();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function recargarDetComentariosArchivos(){
+  try{
+    const [comentarios, archivos] = await Promise.all([
+      api(`op_comentarios?op_id=eq.${_opActual.id}&select=*&order=created_at.asc`),
+      api(`op_archivos?op_id=eq.${_opActual.id}&select=*&order=created_at.asc`),
+    ]);
+    renderDetBody(comentarios, archivos);
+  } catch(e){}
+}
+
+async function toggleArea(areaId){
+  const on = _areasOp.includes(areaId);
+  try{
+    if(on){
+      await api(`op_areas?op_id=eq.${_opActual.id}&area_id=eq.${areaId}`, 'DELETE');
+      _areasOp = _areasOp.filter(a=>a!==areaId);
+    } else {
+      await api('op_areas', 'POST', {op_id: _opActual.id, area_id: areaId});
+      _areasOp.push(areaId);
+    }
+    // Actualizar en _ops
+    const op = _ops.find(o=>o.id===_opActual.id);
+    if(op){
+      if(on) op.op_areas = (op.op_areas||[]).filter(a=>a.area_id!==areaId);
+      else op.op_areas = [...(op.op_areas||[]), {area_id: areaId, areas: _areas.find(a=>a.id===areaId)}];
+    }
+    // Redibujar solo el grid de áreas
+    const areasToggle = _areas.map(a=>{
+      const isOn = _areasOp.includes(a.id);
+      return `<button class="area-toggle ${isOn?'on':'off'} ${esc(a.codigo)}" onclick="toggleArea(${a.id})">${esc(a.codigo)} — ${esc(a.nombre)}</button>`;
+    }).join('');
+    document.getElementById('areas-grid').innerHTML = areasToggle;
+    renderBoard();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function toggleEtiqueta(etiqId){
+  const activa = _etiquetasActivas.find(a=>a.etiqueta_id===etiqId);
+  try{
+    if(activa){
+      await api(`op_etiquetas?id=eq.${activa.id}`, 'DELETE');
+      _etiquetasActivas = _etiquetasActivas.filter(a=>a.etiqueta_id!==etiqId);
+    } else {
+      const nueva = await api('op_etiquetas', 'POST', {op_id: _opActual.id, etiqueta_id: etiqId, activada_por: 'Diseñador'});
+      const etDef = _etiquetasDisponibles.find(e=>e.id===etiqId);
+      _etiquetasActivas.push({...nueva[0], etiquetas_accion: etDef});
+    }
+    // Actualizar en _ops
+    const op = _ops.find(o=>o.id===_opActual.id);
+    if(op){
+      if(activa) op.op_etiquetas = (op.op_etiquetas||[]).filter(a=>a.etiqueta_id!==etiqId);
+      else {
+        const etDef = _etiquetasDisponibles.find(e=>e.id===etiqId);
+        op.op_etiquetas = [...(op.op_etiquetas||[]), {etiqueta_id: etiqId, etiquetas_accion: etDef}];
+      }
+    }
+    await recargarDetComentariosArchivos();
+    renderBoard();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function agregarComentario(){
+  const texto = (document.getElementById('com-texto')?.value||'').trim();
+  const autor = (document.getElementById('com-autor')?.value||'').trim();
+  if(!texto){ toast('Escribí un comentario'); return; }
+  if(!autor){ toast('Ingresá tu nombre'); return; }
+  try{
+    await api('op_comentarios', 'POST', {op_id: _opActual.id, texto, autor});
+    document.getElementById('com-texto').value = '';
+    await recargarDetComentariosArchivos();
+    toast('Comentario agregado ✓');
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function subirArchivo(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 20*1024*1024){
+    toast('El archivo supera 20 MB. Pegá un link de Drive en los comentarios.');
+    input.value = '';
+    return;
+  }
+  const archivosActuales = await api(`op_archivos?op_id=eq.${_opActual.id}&select=id`).catch(()=>[]);
+  if((archivosActuales||[]).length >= 4){
+    toast('Ya hay 4 archivos adjuntos. Límite alcanzado.');
+    input.value = '';
+    return;
+  }
+  toast('Subiendo archivo...');
+  try{
+    const ext = file.name.split('.').pop();
+    const path = `op-${_opActual.id}/${Date.now()}.${ext}`;
+    const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
+      method: 'POST',
+      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type': file.type},
+      body: file
+    });
+    if(!upRes.ok){ const e=await upRes.text(); throw new Error(e); }
+    const url = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
+    const subido_por = (document.getElementById('com-autor')?.value||'').trim() || 'Equipo';
+    await api('op_archivos', 'POST', {op_id: _opActual.id, nombre: file.name, url, size_bytes: file.size, subido_por});
+    input.value = '';
+    await recargarDetComentariosArchivos();
+    toast('Archivo subido ✓');
+  } catch(e){ toast('Error al subir: '+e.message); input.value=''; }
+}
+
+function cerrarDetalle(e){
+  if(e.target===document.getElementById('overlay')) cerrarDetalleBtn();
+}
+function cerrarDetalleBtn(){
+  document.getElementById('overlay').classList.remove('open');
+  _opActual = null;
+}
+
+// ─── INIT ─────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
