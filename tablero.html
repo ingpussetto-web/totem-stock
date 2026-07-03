@@ -165,6 +165,11 @@ select:focus,input:focus{outline:none;border-color:var(--border2)}
 
 /* Loader */
 .loader{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px}
+
+/* Drag & Drop */
+.card.dragging{opacity:.35;transform:scale(.97);cursor:grabbing}
+.col.drag-over{background:rgba(0,229,160,0.04);border-radius:10px;outline:1px dashed var(--green-border)}
+.col.drag-over .col-empty{border-color:var(--green-border);color:var(--green)}
 </style>
 </head>
 <body>
@@ -324,6 +329,10 @@ function renderBoard(){
 
     const colEl = document.createElement('div');
     colEl.className = 'col';
+    colEl.dataset.colkey = col.key;
+    colEl.addEventListener('dragover', e=>{ e.preventDefault(); colEl.classList.add('drag-over'); });
+    colEl.addEventListener('dragleave', e=>{ if(!colEl.contains(e.relatedTarget)) colEl.classList.remove('drag-over'); });
+    colEl.addEventListener('drop', e=>{ e.preventDefault(); colEl.classList.remove('drag-over'); dropOnCol(col.key); });
     colEl.innerHTML = `<div class="col-head">
       <span class="col-name">${esc(col.label)}</span>
       <span class="col-count">${colOps.length}</span>
@@ -369,7 +378,7 @@ function cardHTML(op, colKey){
     <div class="prog-bar"><div class="prog-fill ${progClass}" style="width:${pct}%"></div></div>
   </div>` : '';
 
-  return `<div class="${clases}" onclick="abrirDetalle(${op.id})">
+  return `<div class="${clases}" draggable="true" data-opid="${op.id}" onclick="cardClick(event,${op.id})" ondragstart="dragStart(event,${op.id})" ondragend="dragEnd(event)">
     <div class="card-op">OP ${esc(op.op_numero)} ${tipo}</div>
     <div class="card-cliente">${esc(op.cliente)}${badgeOk}</div>
     <div class="card-producto">${esc(op.producto_nombre||'')}</div>
@@ -685,6 +694,44 @@ function cerrarDetalle(e){
 function cerrarDetalleBtn(){
   document.getElementById('overlay').classList.remove('open');
   _opActual = null;
+}
+
+// ─── DRAG & DROP ─────────────────────────────────────────────
+let _draggingId = null;
+let _dragMoved = false;
+
+function dragStart(e, opId){
+  _draggingId = opId;
+  _dragMoved = false;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(()=>{ const el=document.querySelector(`[data-opid="${opId}"]`); if(el) el.classList.add('dragging'); },0);
+}
+
+function dragEnd(e){
+  _dragMoved = true;
+  document.querySelectorAll('.card.dragging').forEach(el=>el.classList.remove('dragging'));
+  document.querySelectorAll('.col.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  setTimeout(()=>{ _dragMoved = false; }, 200);
+}
+
+async function dropOnCol(colKey){
+  if(!_draggingId) return;
+  const op = _ops.find(o=>o.id===_draggingId);
+  if(!op || op.etapa_tablero===colKey){ _draggingId=null; return; }
+  const colLabel = COLUMNAS.find(c=>c.key===colKey)?.label||colKey;
+  try{
+    await api(`ordenes_produccion?id=eq.${_draggingId}`, 'PATCH', {etapa_tablero: colKey});
+    op.etapa_tablero = colKey;
+    toast(`Movido a "${colLabel}" ✓`);
+    renderBoard();
+  } catch(err){ toast('Error al mover: '+err.message); }
+  _draggingId = null;
+}
+
+function cardClick(e, opId){
+  // No abrir detalle si termina de hacer drag
+  if(_dragMoved) return;
+  abrirDetalle(opId);
 }
 
 // ─── INIT ─────────────────────────────────────────────────────
