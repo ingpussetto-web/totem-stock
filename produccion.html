@@ -658,24 +658,15 @@ async function procesarCaja(sku){
     return;
   }
 
-  // Si hay múltiples variantes pendientes, pedir al usuario que elija cuál asignar
+  // Si hay múltiples variantes pendientes, mostrar modal de selección
   let item;
   const variantesEnItems = [...new Set(itemsCompatibles.map(i=>i.variante_id).filter(v=>v!=null))];
   if(variantesEnItems.length > 1){
     const variantesData = await api(`variantes?id=in.(${variantesEnItems.join(',')})&select=id,valor`).catch(()=>[]);
-    const opciones = (variantesData||[]).map(v=>v.valor).join(' / ');
-    const eleccion = prompt(`¿Qué color de "${sku.nombre}" vas a asignar?\nEscribí el color exacto:\n${opciones}`);
-    if(!eleccion) return;
-    const varianteElegida = (variantesData||[]).find(v=>v.valor.toLowerCase()===eleccion.trim().toLowerCase());
-    if(!varianteElegida){
-      setFeedback(`✕ Color "${eleccion}" no reconocido. Opciones: ${opciones}`, 'err');
-      return;
-    }
-    item = itemsCompatibles.find(i=>i.variante_id===varianteElegida.id);
-    if(!item){
-      setFeedback(`✕ No hay item pendiente de variante "${varianteElegida.valor}"`, 'err');
-      return;
-    }
+    // Guardar contexto y mostrar modal — flujo continúa desde elegirVarianteCaja()
+    window._pendingCaja = { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal };
+    mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles);
+    return;
   } else {
     item = itemsCompatibles[0];
   }
@@ -1512,6 +1503,75 @@ async function elegirDestino(itemId){
   if(!item) return;
   await asignarItemUID(item, unidad, uid);
   window._pendingUID = null;
+}
+
+// ─── MODAL VARIANTE CAJA ─────────────────────────────────────
+function mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles){
+  let existing = document.getElementById('modal-variante-caja');
+  if(existing) existing.remove();
+
+  const botones = (variantesData||[]).map(v => {
+    const hayItem = itemsCompatibles.some(i=>i.variante_id===v.id);
+    if(!hayItem) return '';
+    return `<button onclick="elegirVarianteCaja(${v.id})" style="
+      display:block;width:100%;text-align:left;padding:12px 16px;margin-bottom:8px;
+      background:var(--panel2);border:1px solid var(--border);border-radius:6px;
+      color:var(--text1);font-size:14px;font-weight:600;cursor:pointer;
+    " onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="color:var(--amber);margin-right:8px;">●</span>${v.valor}
+    </button>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-variante-caja';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;width:320px;max-width:90vw;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">¿Qué color vas a asignar?</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px;">${sku.nombre}</div>
+      ${botones}
+      <button onclick="cancelarVarianteCaja()" style="
+        width:100%;padding:8px;margin-top:4px;background:transparent;
+        border:1px solid var(--border);border-radius:6px;color:var(--text3);
+        font-size:12px;cursor:pointer;
+      ">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function elegirVarianteCaja(varianteId){
+  const modal = document.getElementById('modal-variante-caja');
+  if(modal) modal.remove();
+  const ctx = window._pendingCaja;
+  if(!ctx) return;
+  window._pendingCaja = null;
+
+  const { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal } = ctx;
+  const item = itemsCompatibles.find(i=>i.variante_id===varianteId);
+  if(!item){ setFeedback('✕ Variante no encontrada en BOM', 'err'); return; }
+
+  const stockRowEspecifico = (stockRows||[]).find(r=>r.variante_id===varianteId) || stockRows?.[0];
+  await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'});
+  if(stockRowEspecifico){
+    const reservadoVariante = (asignadosRealesProd||[]).filter(i =>
+      _estadosActivos.includes(i.ordenes_produccion?.estado) && i.variante_id === varianteId
+    ).length;
+    await api(`stock?id=eq.${stockRowEspecifico.id}`, 'PATCH', {cantidad_reservada: reservadoVariante + 1});
+  }
+  item.estado = 'asignado';
+  item.uid_asignado = sku.codigo+'-CAJA';
+  document.getElementById('scan-area').className='scan-area success';
+  setFeedback(`✓ "${sku.nombre}" asignado desde caja`, 'ok');
+  setTimeout(()=>{ document.getElementById('scan-area').className='scan-area'; renderChecklist(); }, 1800);
+  document.getElementById('scan-input').value = '';
+  actualizarProgreso();
+}
+
+function cancelarVarianteCaja(){
+  const modal = document.getElementById('modal-variante-caja');
+  if(modal) modal.remove();
+  window._pendingCaja = null;
 }
 
 function cancelarDestino(){
