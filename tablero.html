@@ -370,7 +370,7 @@ async function init(){
 
 async function cargarOps(){
   _ops = await api(
-    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
+    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,contacto,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
   );
   renderBoard();
 }
@@ -475,6 +475,17 @@ async function abrirDetalle(opId){
     _areasOp = (areasOp||[]).map(a=>a.area_id);
     _etiquetasActivas = etActivas||[];
     _etiquetasDisponibles = todasEtiquetas||[];
+    // Si no hay contacto en la OP, buscarlo en doc_op_config
+    if(!_opActual.contacto && _opActual.v14_orden){
+      try{
+        const docRows = await api(`doc_op_config?cot_numero=eq.COT-${_opActual.v14_orden}&select=datos&limit=1`);
+        if(docRows?.[0]?.datos?.contacto){
+          _opActual.contacto = docRows[0].datos.contacto;
+          const op = _ops.find(o=>o.id===_opActual.id);
+          if(op) op.contacto = _opActual.contacto;
+        }
+      } catch(e){}
+    }
     renderDetBody(comentarios, archivos);
   } catch(e){
     document.getElementById('det-body').innerHTML=`<div style="color:var(--red);padding:16px">Error: ${esc(e.message)}</div>`;
@@ -516,36 +527,18 @@ function renderDetBody(comentarios=[], archivos=[]){
     <div class="areas-grid" id="areas-grid">${areasToggle}</div>
   </div>`;
 
-  // Mensajes WhatsApp
+  // Mensajes WhatsApp — solo en gerencia
+  const _areaActual = new URLSearchParams(window.location.search).get('area') || sessionStorage.getItem('tn_area') || '';
   const areasConWA = _areas.filter(a=>a.whatsapp_numero);
-  let waContent;
-  if(!areasConWA.length){
-    waContent = '<div style="font-size:12px;color:var(--text3)">Sin áreas con WhatsApp configurado.</div>';
-  } else {
-    waContent = areasConWA.map((area,idx)=>{
-      const plantillas = _etiquetasDisponibles.filter(e=>e.area_id===area.id);
-      const opts = [
-        '<option value="">— Seleccionar plantilla —</option>',
-        ...plantillas.map(t=>`<option value="${t.id}">${esc(t.titulo)}</option>`),
-        '<option value="libre">✏ Mensaje personalizado</option>'
-      ].join('');
-      return `<div style="${idx>0?'margin-top:14px;padding-top:14px;border-top:1px solid var(--border)':''}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <span class="area-badge ${esc(area.codigo)}">${esc(area.codigo)}</span>
-          <span style="font-size:12px;color:var(--text2)">${esc(area.nombre)}</span>
-        </div>
-        <select style="width:100%;margin-bottom:6px" onchange="selPlantilla(this,${area.id})">
-          ${opts}
-        </select>
-        <textarea id="wa-msg-${area.id}" class="det-desc-input" placeholder="Escribí el mensaje o elegí una plantilla..." style="min-height:72px"></textarea>
-        <button class="btn-wa" style="margin-top:6px;border:none;cursor:pointer;display:inline-block" onclick="abrirWA(${area.id})">📱 Enviar por WhatsApp</button>
-      </div>`;
-    }).join('');
+  let waSection = '';
+  if(_areaActual !== 'produccion' && areasConWA.length){
+    const areaBtns = areasConWA.map(a=>`<button class="area-toggle off ${esc(a.codigo)}" id="wa-tab-${a.id}" onclick="selAreaWA(${a.id})">${esc(a.codigo)} — ${esc(a.nombre)}</button>`).join('');
+    waSection = `<div class="det-section">
+      <div class="det-section-title">Mensajes WhatsApp</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="wa-tabs">${areaBtns}</div>
+      <div id="wa-panel" style="display:none"></div>
+    </div>`;
   }
-  const waSection = `<div class="det-section">
-    <div class="det-section-title">Mensajes WhatsApp</div>
-    ${waContent}
-  </div>`;
 
   // Comentarios
   const comsHTML = comentarios.length
@@ -599,12 +592,47 @@ function renderDetBody(comentarios=[], archivos=[]){
 }
 
 function rellenarPlantilla(template, op){
+  // contacto = "Nelson Ontivero · Tel: 3413100870"
+  const contacto = op.contacto||'';
+  const partes = contacto.split(/·\s*Tel[:\s]*/i);
+  const referente = (partes[0]||'').trim();
+  const telefono = (partes[1]||'').trim() || 'ver cotización';
   return (template||'')
     .replace(/{empresa}/g, op.cliente||'')
-    .replace(/{referente}/g, op.cliente||'')
-    .replace(/{op}/g, op.v14_orden||op.op_numero||'')
-    .replace(/{telefono}/g, 'ver cotización')
+    .replace(/{referente}/g, referente || op.cliente||'')
+    .replace(/{op}/g, op.codigo_op_interno||op.v14_orden||op.op_numero||'')
+    .replace(/{telefono}/g, telefono)
+    .replace(/{producto}/g, op.producto_nombre||'')
     .replace(/{tipo_proyecto}/g, op.tipos_proyecto?.nombre||'');
+}
+
+function selAreaWA(areaId){
+  const area = _areas.find(a=>a.id===areaId);
+  if(!area) return;
+  // Toggle: si ya está activa, la cierra
+  const tabEl = document.getElementById('wa-tab-'+areaId);
+  const panel = document.getElementById('wa-panel');
+  const isActive = tabEl?.classList.contains('on');
+  // Resetear todos los tabs
+  document.querySelectorAll('#wa-tabs button').forEach(b=>{
+    const code = b.id.replace('wa-tab-','');
+    const a = _areas.find(x=>String(x.id)===String(code));
+    b.className = `area-toggle off ${a?.codigo||''}`;
+  });
+  if(isActive){ panel.style.display='none'; panel.innerHTML=''; return; }
+  // Activar tab seleccionado
+  if(tabEl) tabEl.className = `area-toggle on ${area.codigo}`;
+  const plantillas = _etiquetasDisponibles.filter(e=>e.area_id===areaId);
+  const opts = [
+    '<option value="">— Seleccionar plantilla —</option>',
+    ...plantillas.map(t=>`<option value="${t.id}">${esc(t.titulo)}</option>`),
+    '<option value="libre">✏ Mensaje personalizado</option>'
+  ].join('');
+  panel.style.display='block';
+  panel.innerHTML = `
+    <select style="width:100%;margin-bottom:6px" onchange="selPlantilla(this,${areaId})">${opts}</select>
+    <textarea id="wa-msg-${areaId}" class="det-desc-input" placeholder="Escribí el mensaje o elegí una plantilla..." style="min-height:80px"></textarea>
+    <button class="btn-wa" style="margin-top:6px;border:none;cursor:pointer;display:inline-block" onclick="abrirWA(${areaId})">📱 Enviar por WhatsApp</button>`;
 }
 
 function selPlantilla(select, areaId){
