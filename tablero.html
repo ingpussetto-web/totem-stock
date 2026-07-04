@@ -366,6 +366,7 @@ function computarFaltantes(){
   // Calcula desde los bom_items ya cargados en _ops (nunca usa alertas obsoletas)
   _opsConFaltantes = new Set(
     _ops.filter(o => {
+      if((o.etapa_tablero||'en_proceso') === 'terminadas') return false;
       const items = (o.op_bom_items||[]).filter(i => i.incluido !== false);
       if(items.length === 0) return false;
       const asignados = items.filter(i => i.estado === 'asignado').length;
@@ -719,8 +720,20 @@ async function guardarDesc(){
   } catch(e){ toast('Error: '+e.message); }
 }
 
+function _insumosCompletos(op){
+  const items = (op.op_bom_items||[]).filter(i=>i.incluido!==false);
+  if(items.length===0) return true;
+  return items.filter(i=>i.estado==='asignado').length === items.length;
+}
+function _areaActual(){
+  return new URLSearchParams(window.location.search).get('area')||sessionStorage.getItem('tn_area')||'';
+}
+
 async function moverColumna(colKey){
   if(_opActual.etapa_tablero===colKey) return;
+  if(colKey==='terminadas' && !_insumosCompletos(_opActual) && _areaActual()!=='gerencia'){
+    toast('⚠ No se puede terminar: hay insumos sin asignar'); return;
+  }
   try{
     await api(`ordenes_produccion?id=eq.${_opActual.id}`, 'PATCH', {etapa_tablero: colKey});
     _opActual.etapa_tablero = colKey;
@@ -870,6 +883,9 @@ async function dropOnCol(colKey){
   if(!_draggingId) return;
   const op = _ops.find(o=>o.id===_draggingId);
   if(!op || op.etapa_tablero===colKey){ _draggingId=null; return; }
+  if(colKey==='terminadas' && !_insumosCompletos(op) && _areaActual()!=='gerencia'){
+    toast('⚠ No se puede terminar: hay insumos sin asignar'); _draggingId=null; return;
+  }
   const colLabel = COLUMNAS.find(c=>c.key===colKey)?.label||colKey;
   try{
     await api(`ordenes_produccion?id=eq.${_draggingId}`, 'PATCH', {etapa_tablero: colKey});
