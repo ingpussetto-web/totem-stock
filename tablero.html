@@ -29,8 +29,9 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .top-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .top-sub{font-size:11px;color:var(--text2);margin-top:1px}
 .top-bar-right{display:flex;align-items:center;gap:10px}
-.modo-dis-btn{font-size:11px;padding:5px 12px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);cursor:pointer;transition:.15s}
-.modo-dis-btn.activo{border-color:var(--purple);color:var(--purple);background:var(--purple-dim)}
+.filtro-chip{font-size:11px;padding:5px 12px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);cursor:pointer;transition:.15s;white-space:nowrap}
+.filtro-chip:hover{border-color:var(--border3);color:var(--text)}
+.filtro-chip.activo{border-color:var(--green);color:var(--green);background:var(--green-dim)}
 select,input[type=text]{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 10px;font-size:12px;font-family:inherit}
 select:focus,input:focus{outline:none;border-color:var(--border2)}
 
@@ -183,11 +184,10 @@ select:focus,input:focus{outline:none;border-color:var(--border2)}
       <div class="top-sub">Totem Nube — gestión interna</div>
     </div>
   </div>
-  <div class="top-bar-right">
-    <select id="filtro-tipo" onchange="renderBoard()">
-      <option value="">Todos los tipos</option>
-    </select>
-    <button class="modo-dis-btn" id="btn-modo-dis" onclick="toggleMódoDis()">✏ Modo diseñador</button>
+  <div class="top-bar-right" style="gap:6px">
+    <button class="filtro-chip activo" id="chip-todos" onclick="setFiltro('todos')">Todos</button>
+    <button class="filtro-chip" id="chip-faltantes" onclick="setFiltro('faltantes')">⚠ Insumos faltantes</button>
+    <button class="filtro-chip" id="chip-vencidos" onclick="setFiltro('vencidos')">🔴 Vencidos</button>
   </div>
 </div>
 
@@ -294,8 +294,9 @@ const COLUMNAS = [
 let _ops = [];
 let _areas = [];
 let _tiposProyecto = [];
-let _modoDisenador = false;
 let _opActual = null;
+let _opsConFaltantes = new Set();
+let _filtroActivo = 'todos';
 let _areasOp = [];
 let _etiquetasDisponibles = [];
 let _etiquetasActivas = [];
@@ -354,18 +355,29 @@ function toggleMódoDis(){
 // ─── CARGA INICIAL ────────────────────────────────────────────
 async function init(){
   try{
-    [_areas, _tiposProyecto] = await Promise.all([
+    [_areas] = await Promise.all([
       api('areas?select=*&order=codigo.asc'),
-      api('tipos_proyecto?select=*&order=nombre.asc'),
     ]);
-    const sel = document.getElementById('filtro-tipo');
-    _tiposProyecto.forEach(t=>{
-      const o = document.createElement('option');
-      o.value = t.id; o.textContent = t.nombre;
-      sel.appendChild(o);
-    });
+    await cargarFaltantes();
     await cargarOps();
   } catch(e){ document.getElementById('board').innerHTML='<div class="loader" style="color:var(--red)">Error al cargar: '+esc(e.message)+'</div>'; }
+}
+
+async function cargarFaltantes(){
+  try{
+    const rows = await api('alertas_gerencia?tipo=eq.faltante_generacion_op&leida=eq.false&select=op_id');
+    _opsConFaltantes = new Set((rows||[]).map(r=>r.op_id));
+    // Actualizar badge del chip
+    const chip = document.getElementById('chip-faltantes');
+    if(chip && _opsConFaltantes.size > 0) chip.textContent = `⚠ Insumos faltantes (${_opsConFaltantes.size})`;
+  } catch(e){ _opsConFaltantes = new Set(); }
+}
+
+function setFiltro(filtro){
+  _filtroActivo = filtro;
+  document.querySelectorAll('.filtro-chip').forEach(c=>c.classList.remove('activo'));
+  document.getElementById('chip-'+filtro)?.classList.add('activo');
+  renderBoard();
 }
 
 async function cargarOps(){
@@ -377,10 +389,12 @@ async function cargarOps(){
 
 // ─── RENDER BOARD ─────────────────────────────────────────────
 function renderBoard(){
-  const filtroTipo = document.getElementById('filtro-tipo').value;
-  const ops = filtroTipo
-    ? _ops.filter(o=> String(o.tipo_proyecto_id)===String(filtroTipo))
-    : _ops;
+  let ops = _ops;
+  if(_filtroActivo === 'faltantes'){
+    ops = _ops.filter(o => _opsConFaltantes.has(o.id));
+  } else if(_filtroActivo === 'vencidos'){
+    ops = _ops.filter(o => estaVencida(o.fecha_entrega) && (o.etapa_tablero||'en_proceso') !== 'terminadas');
+  }
 
   const board = document.getElementById('board');
   board.innerHTML = '';
