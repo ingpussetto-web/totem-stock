@@ -1656,6 +1656,7 @@ function cancelarDestino(){
   <a class="gernav-btn" id="gnav-produccion" href="https://ingpussetto-web.github.io/totem-stock/produccion.html"><span class="gernav-icon">🔧</span>Producción</a>
   <a class="gernav-btn" id="gnav-inventario" href="https://ingpussetto-web.github.io/totem-stock/inventario_inicial.html"><span class="gernav-icon">🏷</span>Inventario</a>
   <a class="gernav-btn" id="gnav-noticias" href="https://ingpussetto-web.github.io/totem-stock/noticias.html"><span class="gernav-icon">📢</span>Noticias</a>
+  <a class="gernav-btn" id="gnav-tablero" href="https://ingpussetto-web.github.io/totem-stock/tablero.html"><span class="gernav-icon">🗂</span>Tablero</a>
 </nav>
 <script>
 (function(){
@@ -1664,7 +1665,7 @@ function cancelarDestino(){
   const nav = document.querySelector('.gernav');
   if(area !== 'gerencia'){ if(nav) nav.style.display='none'; return; }
   const page = window.location.pathname.split('/').pop().replace('.html','');
-  const map = {'calculador_totem_nube_v16':'gnav-cotizador','ops_ventas':'gnav-ops','compras':'gnav-compras','recepcion':'gnav-recepcion','stock_fase1':'gnav-stock','produccion':'gnav-produccion','inventario_inicial':'gnav-inventario','noticias':'gnav-noticias'};
+  const map = {'calculador_totem_nube_v16':'gnav-cotizador','ops_ventas':'gnav-ops','compras':'gnav-compras','recepcion':'gnav-recepcion','stock_fase1':'gnav-stock','produccion':'gnav-produccion','inventario_inicial':'gnav-inventario','noticias':'gnav-noticias','tablero':'gnav-tablero'};
   const activeId = map[page];
   if(activeId){ const el=document.getElementById(activeId); if(el) el.classList.add('active'); }
   document.body.style.paddingBottom = '70px';
@@ -1841,144 +1842,4 @@ async function renderFeedNotas(){
     // Scroll al final
     feed.scrollTop = feed.scrollHeight;
   }catch(e){
-    feed.innerHTML=`<div style="color:var(--red);padding:20px;font-size:12px;">Error: ${e.message}</div>`;
-  }
-}
-
-function editarNota(notaId){
-  const textoEl = document.getElementById('nota-texto-'+notaId);
-  const textoActual = textoEl ? textoEl.textContent : '';
-  textoEl.style.display = 'none';
-  document.getElementById('nota-edit-'+notaId).style.display = 'block';
-  const inp = document.getElementById('nota-edit-input-'+notaId);
-  if(inp){ inp.value = textoActual; inp.focus(); }
-}
-
-function cancelarEdicionNota(notaId){
-  document.getElementById('nota-texto-'+notaId).style.display = 'block';
-  document.getElementById('nota-edit-'+notaId).style.display = 'none';
-}
-
-async function guardarEdicionNota(notaId){
-  const inp = document.getElementById('nota-edit-input-'+notaId);
-  if(!inp) return;
-  const nuevoTexto = inp.value.trim();
-  if(!nuevoTexto){ alert('El texto no puede estar vacío.'); return; }
-  try{
-    await apiNotas(`op_notas?id=eq.${notaId}`, 'PATCH', { texto: nuevoTexto });
-    // Actualizar inline sin recargar todo el feed
-    document.getElementById('nota-texto-'+notaId).textContent = nuevoTexto;
-    cancelarEdicionNota(notaId);
-  }catch(e){ alert('Error al guardar: '+e.message); }
-}
-
-async function borrarNota(notaId){
-  if(!confirm('¿Eliminar esta nota?')) return;
-  try{
-    // Borrar archivos asociados primero
-    await apiNotas(`op_notas_archivos?nota_id=eq.${notaId}`, 'DELETE');
-    // Borrar nota
-    await apiNotas(`op_notas?id=eq.${notaId}`, 'DELETE');
-    await renderFeedNotas();
-    // Actualizar badge
-    const badge = document.getElementById('badge-notas-'+_notasOpId);
-    if(badge){
-      const actual = parseInt(badge.textContent)||0;
-      const nuevo = Math.max(0, actual-1);
-      badge.textContent = nuevo;
-      if(nuevo === 0) badge.style.display='none';
-    }
-  }catch(e){ alert('Error al eliminar: '+e.message); }
-}
-
-async function publicarNota(){
-  const autor = document.getElementById('nota-autor').value.trim();
-  const texto = document.getElementById('nota-texto').value.trim();
-  const etiqueta = document.getElementById('nota-etiqueta').value;
-  const files = document.getElementById('nota-archivos').files;
-
-  if(!autor){ alert('Ingresá tu nombre antes de publicar.'); return; }
-  if(!texto && !files.length){ alert('Escribí algo o adjuntá un archivo.'); return; }
-
-  localStorage.setItem('tn_nota_autor', autor);
-
-  const btn = document.getElementById('btn-publicar-nota');
-  btn.disabled = true;
-  btn.textContent = 'Publicando...';
-  try{
-    const nuevaNota = await apiNotas('op_notas', 'POST', [{
-      op_id: _notasOpId,
-      autor,
-      texto,
-      etiqueta: etiqueta || null
-    }]);
-    const notaId = nuevaNota?.[0]?.id;
-
-    // Subir archivos si los hay
-    if(files.length && notaId){
-      for(const file of files){
-        const path2 = `${_notasOpId}/${notaId}/${file.name}`;
-        const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path2}`, {
-          method: 'POST',
-          headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY},
-          body: file
-        });
-        if(uploadRes.ok){
-          const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path2}`;
-          await apiNotas('op_notas_archivos', 'POST', [{
-            nota_id: notaId,
-            nombre_archivo: file.name,
-            url: publicUrl
-          }]);
-        }
-      }
-    }
-
-    // Limpiar form
-    document.getElementById('nota-texto').value = '';
-    document.getElementById('nota-archivos').value = '';
-    document.getElementById('archivos-seleccionados').textContent = '';
-
-    await renderFeedNotas();
-
-    // Actualizar badge
-    const badge = document.getElementById('badge-notas-'+_notasOpId);
-    const btnNotas = document.getElementById('btn-notas-'+_notasOpId);
-    if(badge){
-      const actual = parseInt(badge.textContent)||0;
-      badge.textContent = actual+1;
-      badge.style.display='inline';
-      if(btnNotas) btnNotas.style.color='var(--green)';
-    }
-  }catch(e){
-    alert('Error al publicar: '+e.message);
-  }finally{
-    btn.disabled = false;
-    btn.textContent = 'Publicar nota';
-  }
-}
-
-function cerrarNotas(){
-  document.getElementById('modal-notas').style.display = 'none';
-  _notasOpId = null;
-  _notasOpNumero = '';
-}
-
-function mostrarArchivosSeleccionados(){
-  const files = document.getElementById('nota-archivos').files;
-  const el = document.getElementById('archivos-seleccionados');
-  if(!files.length){ el.textContent = ''; return; }
-  el.textContent = Array.from(files).map(f=>f.name).join(', ');
-}
-
-async function guardarEdicionNota(notaId){
-  const inp = document.getElementById('nota-edit-input-'+notaId);
-  if(!inp) return;
-  const nuevoTexto = inp.value.trim();
-  try{
-    await apiNotas(`op_notas?id=eq.${notaId}`, 'PATCH', {texto: nuevoTexto});
-    document.getElementById('nota-texto-'+notaId).textContent = nuevoTexto;
-    cancelarEdicionNota(notaId);
-  }catch(e){ alert('Error al guardar: '+e.message); }
-}
-</script>
+    feed.innerHTML=`<div style="color:var(--red);padding:20px

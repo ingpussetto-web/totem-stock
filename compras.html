@@ -2884,6 +2884,8 @@ init();
   <a class="gernav-btn" id="gnav-noticias" href="https://ingpussetto-web.github.io/totem-stock/noticias.html">
     <span class="gernav-icon">📢</span>Noticias
   </a>
+
+  <a class="gernav-btn" id="gnav-tablero" href="https://ingpussetto-web.github.io/totem-stock/tablero.html"><span class="gernav-icon">🗂</span>Tablero</a>
 </nav>
 <script>
 (function(){
@@ -2903,7 +2905,7 @@ init();
     'stock_fase1':'gnav-stock',
     'produccion':'gnav-produccion',
     'inventario_inicial':'gnav-inventario',
-    'noticias':'gnav-noticias'
+    'noticias':'gnav-noticias','tablero':'gnav-tablero'
   };
   const activeId = map[page];
   if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
