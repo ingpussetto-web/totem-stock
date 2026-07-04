@@ -529,7 +529,7 @@ function renderDetBody(comentarios=[], archivos=[]){
 
   // Mensajes WhatsApp — solo en gerencia
   const _areaActual = new URLSearchParams(window.location.search).get('area') || sessionStorage.getItem('tn_area') || '';
-  const areasConWA = _areas.filter(a=>a.whatsapp_numero);
+  const areasConWA = _areas.filter(a=>a.whatsapp_numero || a.codigo==='CLI');
   let waSection = '';
   if(_areaActual !== 'produccion' && areasConWA.length){
     const areaBtns = areasConWA.map(a=>`<button class="area-toggle off ${esc(a.codigo)}" id="wa-tab-${a.id}" onclick="selAreaWA(${a.id})">${esc(a.codigo)} — ${esc(a.nombre)}</button>`).join('');
@@ -628,8 +628,17 @@ function selAreaWA(areaId){
     ...plantillas.map(t=>`<option value="${t.id}">${esc(t.titulo)}</option>`),
     '<option value="libre">✏ Mensaje personalizado</option>'
   ].join('');
+  // Info de destinatario
+  let destInfo = '';
+  if(area.codigo==='CLI'){
+    const contacto = _opActual?.contacto||'';
+    destInfo = contacto
+      ? `<div style="font-size:11px;color:var(--text2);margin-bottom:8px;padding:6px 8px;background:var(--panel2);border-radius:var(--radius)">📋 ${esc(contacto)}</div>`
+      : `<div style="font-size:11px;color:var(--amber);margin-bottom:8px">⚠ Sin teléfono de cliente en esta OP</div>`;
+  }
   panel.style.display='block';
   panel.innerHTML = `
+    ${destInfo}
     <select style="width:100%;margin-bottom:6px" onchange="selPlantilla(this,${areaId})">${opts}</select>
     <textarea id="wa-msg-${areaId}" class="det-desc-input" placeholder="Escribí el mensaje o elegí una plantilla..." style="min-height:80px"></textarea>
     <button class="btn-wa" style="margin-top:6px;border:none;cursor:pointer;display:inline-block" onclick="abrirWA(${areaId})">📱 Enviar por WhatsApp</button>`;
@@ -645,11 +654,22 @@ function selPlantilla(select, areaId){
 
 function abrirWA(areaId){
   const area = _areas.find(a=>a.id===areaId);
-  if(!area?.whatsapp_numero){ toast('Sin número de WhatsApp para esta área'); return; }
+  let num;
+  if(area?.codigo==='CLI'){
+    // Extraer teléfono del contacto de la OP
+    const contacto = _opActual?.contacto||'';
+    const partes = contacto.split(/·\s*Tel[:\s]*/i);
+    num = (partes[1]||'').trim().replace(/\D/g,'');
+    if(!num){ toast('Sin teléfono de cliente en esta OP'); return; }
+  } else {
+    if(!area?.whatsapp_numero){ toast('Sin número de WhatsApp para esta área'); return; }
+    num = area.whatsapp_numero.replace(/\D/g,'');
+  }
   const ta = document.getElementById('wa-msg-'+areaId);
   const msg = (ta?.value||'').trim();
   if(!msg){ toast('Escribí un mensaje primero'); return; }
-  const num = area.whatsapp_numero.replace(/\D/g,'');
+  // Agregar código de país Argentina si no tiene
+  if(num.length <= 10) num = '549' + num;
   window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
