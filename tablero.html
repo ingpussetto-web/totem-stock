@@ -370,7 +370,7 @@ async function init(){
 
 async function cargarOps(){
   _ops = await api(
-    'ordenes_produccion?select=id,op_numero,v14_orden,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
+    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
   );
   renderBoard();
 }
@@ -440,7 +440,7 @@ function cardHTML(op, colKey){
   </div>` : '';
 
   return `<div class="${clases}" draggable="true" data-opid="${op.id}" onclick="cardClick(event,${op.id})" ondragstart="dragStart(event,${op.id})" ondragend="dragEnd(event)">
-    <div class="card-op">${esc(op.v14_orden||op.op_numero)} ${tipo}</div>
+    <div class="card-op">${esc(op.codigo_op_interno||op.v14_orden||op.op_numero)} ${tipo}</div>
     <div class="card-cliente">${esc(op.cliente)}${badgeOk}</div>
     <div class="card-producto">${esc(op.producto_nombre||'')}${op.cantidad>1?' × '+op.cantidad:''}</div>
     ${desc}
@@ -458,7 +458,7 @@ async function abrirDetalle(opId){
   _opActual = _ops.find(o=>o.id===opId);
   if(!_opActual) return;
 
-  document.getElementById('det-op').textContent = _opActual.v14_orden || _opActual.op_numero || '';
+  document.getElementById('det-op').textContent = _opActual.codigo_op_interno || _opActual.v14_orden || _opActual.op_numero || '';
   document.getElementById('det-cliente').textContent = _opActual.cliente||'';
   document.getElementById('det-producto').textContent = (_opActual.producto_nombre||'') + (_opActual.tipos_proyecto?.nombre ? ' · '+_opActual.tipos_proyecto.nombre : '');
   document.getElementById('overlay').classList.add('open');
@@ -485,9 +485,16 @@ function renderDetBody(comentarios=[], archivos=[]){
   const op = _opActual;
   const etapa = op.etapa_tablero||'en_proceso';
 
-  // Descripción extra
+  // Número de OP + Descripción
   const descSection = `<div class="det-section">
-    <div class="det-section-title">Descripción / notas del proyecto</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
+      <div style="flex:0 0 auto">
+        <div class="det-section-title" style="margin-bottom:4px">Número de OP</div>
+        <input type="text" id="det-op-num" value="${esc(op.codigo_op_interno||'')}" placeholder="ej: OP525/26" style="width:110px;font-family:'DM Mono',monospace;font-size:13px">
+      </div>
+      <button class="btn solid" onclick="guardarOpNum()" style="font-size:11px;padding:5px 12px;flex:0 0 auto">Guardar</button>
+    </div>
+    <div class="det-section-title" style="margin-bottom:4px">Descripción / notas del proyecto</div>
     <textarea class="det-desc-input" id="det-desc-input" placeholder="Ej: Software a medida para control de turnos...">${esc(op.descripcion_extra||'')}</textarea>
     <div><button class="btn solid" onclick="guardarDesc()" style="font-size:11px;padding:5px 12px">Guardar</button></div>
   </div>`;
@@ -509,46 +516,35 @@ function renderDetBody(comentarios=[], archivos=[]){
     <div class="areas-grid" id="areas-grid">${areasToggle}</div>
   </div>`;
 
-  // Etiquetas
-  let etiquetasContent;
-  if(_modoDisenador){
-    const filas = _etiquetasDisponibles.map(et=>{
-      const activa = _etiquetasActivas.find(a=>a.etiqueta_id===et.id);
-      const areaCode = et.areas?.codigo||'';
-      const waUrl = activa ? generarUrlWA(et, op) : null;
-      return `<div class="etiq-row ${activa?'activa':''}" id="etiq-row-${et.id}">
-        <div class="etiq-info">
-          <div class="etiq-titulo">${esc(et.titulo)}</div>
-          <div class="etiq-area">${esc(areaCode)} — ${esc(et.areas?.nombre||'')}</div>
+  // Mensajes WhatsApp
+  const areasConWA = _areas.filter(a=>a.whatsapp_numero);
+  let waContent;
+  if(!areasConWA.length){
+    waContent = '<div style="font-size:12px;color:var(--text3)">Sin áreas con WhatsApp configurado.</div>';
+  } else {
+    waContent = areasConWA.map((area,idx)=>{
+      const plantillas = _etiquetasDisponibles.filter(e=>e.area_id===area.id);
+      const opts = [
+        '<option value="">— Seleccionar plantilla —</option>',
+        ...plantillas.map(t=>`<option value="${t.id}">${esc(t.titulo)}</option>`),
+        '<option value="libre">✏ Mensaje personalizado</option>'
+      ].join('');
+      return `<div style="${idx>0?'margin-top:14px;padding-top:14px;border-top:1px solid var(--border)':''}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span class="area-badge ${esc(area.codigo)}">${esc(area.codigo)}</span>
+          <span style="font-size:12px;color:var(--text2)">${esc(area.nombre)}</span>
         </div>
-        <div class="etiq-actions">
-          <button class="btn-etiq-toggle ${activa?'on':'off'}" onclick="toggleEtiqueta(${et.id})">${activa?'✓ Activa':'Activar'}</button>
-          ${activa&&waUrl?`<a class="btn-wa" href="${waUrl}" target="_blank">WhatsApp</a>`:''}
-        </div>
+        <select style="width:100%;margin-bottom:6px" onchange="selPlantilla(this,${area.id})">
+          ${opts}
+        </select>
+        <textarea id="wa-msg-${area.id}" class="det-desc-input" placeholder="Escribí el mensaje o elegí una plantilla..." style="min-height:72px"></textarea>
+        <button class="btn-wa" style="margin-top:6px;border:none;cursor:pointer;display:inline-block" onclick="abrirWA(${area.id})">📱 Enviar por WhatsApp</button>
       </div>`;
     }).join('');
-    etiquetasContent = filas || '<div style="font-size:12px;color:var(--text3)">Sin etiquetas disponibles</div>';
-  } else {
-    const activas = _etiquetasActivas;
-    if(activas.length===0){
-      etiquetasContent = '<div class="modo-dis-note">Sin etiquetas activas en este proyecto. (Activar en modo diseñador)</div>';
-    } else {
-      etiquetasContent = activas.map(a=>{
-        const et = a.etiquetas_accion;
-        const waUrl = et ? generarUrlWA(et, op) : null;
-        return `<div class="etiq-row activa">
-          <div class="etiq-info">
-            <div class="etiq-titulo">${esc(et?.titulo||'')}</div>
-            <div class="etiq-area">${esc(et?.areas?.codigo||'')} — ${esc(et?.areas?.nombre||'')}</div>
-          </div>
-          ${waUrl?`<a class="btn-wa" href="${waUrl}" target="_blank">WhatsApp</a>`:''}
-        </div>`;
-      }).join('');
-    }
   }
-  const etiquetasSection = `<div class="det-section">
-    <div class="det-section-title">Etiquetas de acción ${_modoDisenador?'<span style="font-size:9px;color:var(--purple);margin-left:4px;">MODO DISEÑADOR</span>':''}</div>
-    ${etiquetasContent}
+  const waSection = `<div class="det-section">
+    <div class="det-section-title">Mensajes WhatsApp</div>
+    ${waContent}
   </div>`;
 
   // Comentarios
@@ -596,26 +592,53 @@ function renderDetBody(comentarios=[], archivos=[]){
   </div>`;
 
   document.getElementById('det-body').innerHTML =
-    descSection + moverSection + areasSection + etiquetasSection + comsSection + archivosSection;
+    descSection + moverSection + areasSection + waSection + comsSection + archivosSection;
 
   // Restaurar scroll al top del panel
   document.getElementById('panel-det').scrollTop = 0;
 }
 
-function generarUrlWA(etiqueta, op){
-  if(!etiqueta.areas?.codigo) return null;
-  const area = _areas.find(a=>a.codigo===etiqueta.areas.codigo);
-  if(!area?.whatsapp_numero) return null;
+function rellenarPlantilla(template, op){
+  return (template||'')
+    .replace(/{empresa}/g, op.cliente||'')
+    .replace(/{referente}/g, op.cliente||'')
+    .replace(/{op}/g, op.v14_orden||op.op_numero||'')
+    .replace(/{telefono}/g, 'ver cotización')
+    .replace(/{tipo_proyecto}/g, op.tipos_proyecto?.nombre||'');
+}
+
+function selPlantilla(select, areaId){
+  const ta = document.getElementById('wa-msg-'+areaId);
+  if(!ta) return;
+  if(!select.value || select.value==='libre'){ ta.value=''; ta.focus(); return; }
+  const et = _etiquetasDisponibles.find(e=>String(e.id)===String(select.value));
+  if(et) ta.value = rellenarPlantilla(et.template_mensaje, _opActual);
+}
+
+function abrirWA(areaId){
+  const area = _areas.find(a=>a.id===areaId);
+  if(!area?.whatsapp_numero){ toast('Sin número de WhatsApp para esta área'); return; }
+  const ta = document.getElementById('wa-msg-'+areaId);
+  const msg = (ta?.value||'').trim();
+  if(!msg){ toast('Escribí un mensaje primero'); return; }
   const num = area.whatsapp_numero.replace(/\D/g,'');
-  let msg = etiqueta.template_mensaje||'';
-  msg = msg.replace(/{empresa}/g, op.cliente||'');
-  msg = msg.replace(/{referente}/g, op.cliente||'');
-  msg = msg.replace(/{telefono}/g, 'ver cotización');
-  msg = msg.replace(/{tipo_proyecto}/g, op.tipos_proyecto?.nombre||'');
-  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // ─── ACCIONES DETALLE ─────────────────────────────────────────
+async function guardarOpNum(){
+  const val = (document.getElementById('det-op-num')?.value||'').trim();
+  try{
+    await api(`ordenes_produccion?id=eq.${_opActual.id}`, 'PATCH', {codigo_op_interno: val||null});
+    _opActual.codigo_op_interno = val||null;
+    const op = _ops.find(o=>o.id===_opActual.id);
+    if(op) op.codigo_op_interno = val||null;
+    document.getElementById('det-op').textContent = val || _opActual.v14_orden || _opActual.op_numero || '';
+    toast('Número de OP guardado ✓');
+    renderBoard();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
 async function guardarDesc(){
   const val = document.getElementById('det-desc-input')?.value||'';
   try{
