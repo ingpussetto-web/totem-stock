@@ -358,19 +358,24 @@ async function init(){
     [_areas] = await Promise.all([
       api('areas?select=*&order=codigo.asc'),
     ]);
-    await cargarFaltantes();
     await cargarOps();
   } catch(e){ document.getElementById('board').innerHTML='<div class="loader" style="color:var(--red)">Error al cargar: '+esc(e.message)+'</div>'; }
 }
 
-async function cargarFaltantes(){
-  try{
-    const rows = await api('alertas_gerencia?tipo=eq.faltante_generacion_op&leida=eq.false&select=op_id');
-    _opsConFaltantes = new Set((rows||[]).map(r=>r.op_id));
-    // Actualizar badge del chip
-    const chip = document.getElementById('chip-faltantes');
-    if(chip && _opsConFaltantes.size > 0) chip.textContent = `⚠ Insumos faltantes (${_opsConFaltantes.size})`;
-  } catch(e){ _opsConFaltantes = new Set(); }
+function computarFaltantes(){
+  // Calcula desde los bom_items ya cargados en _ops (nunca usa alertas obsoletas)
+  _opsConFaltantes = new Set(
+    _ops.filter(o => {
+      const items = (o.op_bom_items||[]).filter(i => i.incluido !== false);
+      if(items.length === 0) return false;
+      const asignados = items.filter(i => i.estado === 'asignado').length;
+      return asignados < items.length;
+    }).map(o => o.id)
+  );
+  const chip = document.getElementById('chip-faltantes');
+  if(chip) chip.textContent = _opsConFaltantes.size > 0
+    ? `⚠ Insumos faltantes (${_opsConFaltantes.size})`
+    : '⚠ Insumos faltantes';
 }
 
 function setFiltro(filtro){
@@ -384,6 +389,7 @@ async function cargarOps(){
   _ops = await api(
     'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,contacto,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
   );
+  computarFaltantes();
   renderBoard();
 }
 
