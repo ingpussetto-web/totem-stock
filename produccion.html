@@ -1842,4 +1842,83 @@ async function renderFeedNotas(){
     // Scroll al final
     feed.scrollTop = feed.scrollHeight;
   }catch(e){
-    feed.innerHTML=`<div style="color:var(--red);padding:20px
+    feed.innerHTML=`<div style="color:var(--red);padding:20px;font-size:13px;">Error al cargar notas: ${e.message}</div>`;
+  }
+}
+
+async function publicarNota(){
+  if(!_notasOpId) return;
+  const autor = document.getElementById('nota-autor').value.trim();
+  const texto = document.getElementById('nota-texto').value.trim();
+  const etiqueta = document.getElementById('nota-etiqueta').value;
+  if(!autor){ alert('Ingresá tu nombre.'); return; }
+  if(!texto){ alert('Escribí una nota.'); return; }
+  localStorage.setItem('tn_nota_autor', autor);
+  const btn = document.getElementById('btn-publicar-nota');
+  btn.disabled = true; btn.textContent = 'Publicando...';
+  try{
+    const nota = await apiNotas('op_notas', 'POST', { op_id: _notasOpId, autor, texto, etiqueta: etiqueta||null });
+    const notaId = nota?.[0]?.id;
+    const files = document.getElementById('nota-archivos').files;
+    if(notaId && files.length){
+      for(const file of Array.from(files)){
+        try{
+          const ext = file.name.split('.').pop();
+          const fpath = `${_notasOpId}/${notaId}_${Date.now()}.${ext}`;
+          const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${fpath}`, {
+            method:'POST',
+            headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':file.type,'x-upsert':'true'},
+            body: file
+          });
+          if(upRes.ok){
+            const pubUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${fpath}`;
+            await apiNotas('op_notas_archivos','POST',{nota_id:notaId,op_id:_notasOpId,nombre_archivo:file.name,url:pubUrl});
+          }
+        }catch(fe){ console.warn('Error subiendo archivo:', fe.message); }
+      }
+    }
+    document.getElementById('nota-texto').value = '';
+    document.getElementById('nota-etiqueta').value = '';
+    document.getElementById('archivos-seleccionados').textContent = '';
+    document.getElementById('nota-archivos').value = '';
+    await renderFeedNotas();
+    const badge = document.getElementById('badge-notas-'+_notasOpId);
+    const btnNotas = document.getElementById('btn-notas-'+_notasOpId);
+    if(badge){ const n = parseInt(badge.textContent||'0')+1; badge.textContent=n; badge.style.display='inline'; }
+    if(btnNotas) btnNotas.style.color='var(--green)';
+  }catch(e){ alert('Error al publicar: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent='Publicar nota'; }
+}
+
+function editarNota(id){
+  document.getElementById('nota-texto-'+id).style.display='none';
+  document.getElementById('nota-edit-'+id).style.display='block';
+}
+
+function cancelarEdicionNota(id){
+  document.getElementById('nota-texto-'+id).style.display='block';
+  document.getElementById('nota-edit-'+id).style.display='none';
+}
+
+async function guardarEdicionNota(id){
+  const texto = document.getElementById('nota-edit-input-'+id).value.trim();
+  if(!texto) return;
+  try{
+    await apiNotas('op_notas?id=eq.'+id,'PATCH',{texto});
+    document.getElementById('nota-texto-'+id).textContent = texto;
+    cancelarEdicionNota(id);
+  }catch(e){ alert('Error al guardar: '+e.message); }
+}
+
+async function borrarNota(id){
+  if(!confirm('\u00bfEliminar esta nota?')) return;
+  try{
+    await apiNotas('op_notas_archivos?nota_id=eq.'+id,'DELETE');
+    await apiNotas('op_notas?id=eq.'+id,'DELETE');
+    const card = document.getElementById('nota-card-'+id);
+    if(card) card.remove();
+  }catch(e){ alert('Error al eliminar: '+e.message); }
+}
+</script>
+</body>
+</html>
