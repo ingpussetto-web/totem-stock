@@ -804,6 +804,15 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         </div>
         <div>
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;margin-bottom:8px;">Licencia de software</div>
+          <!-- Parametrización (pago único) -->
+          <div style="margin-bottom:8px;">
+            <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;">
+              <input type="checkbox" id="cot-tiene-param" onchange="toggleParam()" /> Incluir parametrización
+            </label>
+            <div id="cot-param-panel" style="display:none;margin-top:6px;display:none;">
+              <input type="number" id="cot-param-monto" placeholder="$ neto (pago único)" style="width:100%;" />
+            </div>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;">
               <input type="checkbox" id="cot-tiene-licencia" onchange="toggleLicencia()" /> Incluir licencia
@@ -812,7 +821,11 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <div id="cot-licencia-panel" style="display:none;margin-top:8px;">
             <input type="text" id="cot-lic-desc" placeholder="Descripción de la licencia" style="width:100%;margin-bottom:6px;" />
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <input type="number" id="cot-lic-monto" placeholder="$ neto" style="width:130px;" />
+              <select id="cot-lic-moneda" style="width:70px;height:36px;font-size:12px;" onchange="actualizarPlaceholderLicencia()">
+                <option value="ars">$</option>
+                <option value="usd">U$S</option>
+              </select>
+              <input type="number" id="cot-lic-monto" placeholder="neto" style="width:110px;" />
               <select id="cot-lic-tipo" style="flex:1;min-width:0;height:36px;font-size:12px;">
                 <option value="mensual">Mensual</option>
                 <option value="anual">Anual</option>
@@ -3596,6 +3609,12 @@ function abrirNuevaCotizacion(editId){
     const hdmiCant = document.getElementById('add-hdmi-cant');
     if(hdmiMonto && itemHdmi){ hdmiMonto.value = itemHdmi.precio; }
     if(hdmiCant && itemHdmi){ hdmiCant.value = itemHdmi.cant||1; }
+    // Parametrización
+    const paramCheck = document.getElementById('cot-tiene-param');
+    if(paramCheck){ paramCheck.checked = !!c.param; }
+    const paramPanel = document.getElementById('cot-param-panel');
+    if(paramPanel) paramPanel.style.display = c.param?'block':'none';
+    if(c.param) document.getElementById('cot-param-monto').value = c.paramMonto||'';
     // Licencia
     const licCheck = document.getElementById('cot-tiene-licencia');
     if(licCheck){ licCheck.checked = !!c.licencia; }
@@ -3604,6 +3623,9 @@ function abrirNuevaCotizacion(editId){
       document.getElementById('cot-lic-desc').value = c.licDesc||'';
       document.getElementById('cot-lic-monto').value = c.licMonto||'';
       document.getElementById('cot-lic-tipo').value = c.licTipo||'mensual';
+      const monedaEl = document.getElementById('cot-lic-moneda');
+      if(monedaEl) monedaEl.value = c.licMoneda||'ars';
+      actualizarPlaceholderLicencia();
       const licPres = document.getElementById('cot-lic-en-presupuesto');
       if(licPres) licPres.checked = !!c.licEnPresupuesto;
     }
@@ -3615,6 +3637,9 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-validez').value = '15';
     document.getElementById('cot-transporte').checked = false;
     document.getElementById('cot-transporte-monto').style.display = 'none';
+    document.getElementById('cot-tiene-param').checked = false;
+    document.getElementById('cot-param-panel').style.display = 'none';
+    document.getElementById('cot-param-monto').value = '';
     document.getElementById('cot-tiene-licencia').checked = false;
     document.getElementById('cot-licencia-panel').style.display = 'none';
     document.getElementById('cot-pago-tipo').value = 'senia_saldo';
@@ -3794,6 +3819,18 @@ function toggleLicencia(){
   if(panel) panel.style.display = chk.checked?'block':'none';
 }
 
+function toggleParam(){
+  const chk = document.getElementById('cot-tiene-param');
+  const panel = document.getElementById('cot-param-panel');
+  if(panel) panel.style.display = chk.checked?'block':'none';
+}
+
+function actualizarPlaceholderLicencia(){
+  const moneda = document.getElementById('cot-lic-moneda')?.value||'ars';
+  const el = document.getElementById('cot-lic-monto');
+  if(el) el.placeholder = moneda==='usd' ? 'U$S neto' : '$ neto';
+}
+
 var _pagoPersonalizadoTexto = '';
 
 function renderPagoOpciones(){
@@ -3877,7 +3914,8 @@ function calcPagoMontos(){
     subtotal += (parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400) * (parseInt(document.getElementById('add-hdmi-cant')?.value)||1);
   }
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
-  if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotal += c.licMonto;
+  if(c.param && c.paramMonto) subtotal += c.paramMonto;
+  if(c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') subtotal += c.licMonto;
   const totalConIva = subtotal + Math.round(subtotal * 0.105);
   const pctSenia = parseFloat(document.getElementById('pago-senia-pct')?.value) || 0;
   const pctSaldo = parseFloat(document.getElementById('pago-saldo-pct')?.value) || 0;
@@ -3934,9 +3972,13 @@ function getCotizacionData(estado){
     transporte: tieneTransporte,
     transporteMonto: tieneTransporte ? parseFloat(document.getElementById('cot-transporte-monto').value)||0 : 0,
 
+    param: !!document.getElementById('cot-tiene-param')?.checked,
+    paramMonto: document.getElementById('cot-tiene-param')?.checked ? parseFloat(document.getElementById('cot-param-monto').value)||0 : 0,
+
     licencia: tieneLicencia,
     licDesc: tieneLicencia ? document.getElementById('cot-lic-desc').value.trim() : '',
     licMonto: tieneLicencia ? parseFloat(document.getElementById('cot-lic-monto').value)||0 : 0,
+    licMoneda: tieneLicencia ? (document.getElementById('cot-lic-moneda')?.value||'ars') : 'ars',
     licTipo: tieneLicencia ? document.getElementById('cot-lic-tipo').value : '',
     licEnPresupuesto: tieneLicencia ? !!document.getElementById('cot-lic-en-presupuesto')?.checked : false,
     pagoTipo: document.getElementById('cot-pago-tipo').value,
@@ -3995,8 +4037,9 @@ function generarPreviewHTML(c){
     return s + base;
   },0);
   if(c.transporte && c.transporteMonto) subtotalNeto += c.transporteMonto;
+  if(c.param && c.paramMonto) subtotalNeto += c.paramMonto;
   // ploteo y seteo ya están incluidos en c.items
-  if(c.licencia && c.licEnPresupuesto && c.licMonto) subtotalNeto += c.licMonto;
+  if(c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') subtotalNeto += c.licMonto;
   const totalIva = Math.round(subtotalNeto*0.105);
   const totalConIva = subtotalNeto + totalIva;
 
@@ -4056,6 +4099,14 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.transporteMonto*0.105))+'</td>'
     +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.transporteMonto+Math.round(c.transporteMonto*0.105))+'</td>'
     +'</tr>' : '';
+  // Parametrización row
+  const paramRow = c.param && c.paramMonto ? '<tr style="background:#f5f7fa;">'
+    +'<td style="padding:7px 10px;font-style:italic;">Parametrización de software</td>'
+    +'<td style="padding:7px 10px;text-align:center;">1</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.paramMonto)+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.paramMonto*0.21))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.paramMonto+Math.round(c.paramMonto*0.21))+'</td>'
+    +'</tr>' : '';
   const ploteoRow = c.ploteo && c.ploteoMonto ? '<tr style="background:#f5f7fa;">'
     +'<td style="padding:7px 10px;">Ploteo personalizado</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
@@ -4064,8 +4115,9 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.ploteoMonto+Math.round(c.ploteoMonto*0.105))+'</td>'
     +'</tr>' : '';
 
-  // Fila de licencia en tabla (solo si licEnPresupuesto)
-  const licRow = (c.licencia && c.licEnPresupuesto && c.licMonto) ? '<tr style="background:#f5f7fa;">'
+  // Fila de licencia en tabla (solo si licEnPresupuesto y moneda ARS)
+  const _licEsUsd = c.licMoneda === 'usd';
+  const licRow = (c.licencia && c.licEnPresupuesto && c.licMonto && !_licEsUsd) ? '<tr style="background:#f5f7fa;">'
     +'<td style="padding:7px 10px;">'+c.licDesc+'</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.licMonto)+'</td>'
@@ -4076,12 +4128,14 @@ function generarPreviewHTML(c){
   // Bloque informativo de licencia
   let licHTML = '';
   if(c.licencia && c.licDesc){
+    const simb = _licEsUsd ? 'U$S ' : '';
+    const fmtLic = function(n){ return _licEsUsd ? 'U$S '+Math.round(n).toLocaleString('es-AR') : fmt2(n); };
     let montoTexto = '';
-    if(!c.licEnPresupuesto){
+    if(!c.licEnPresupuesto || _licEsUsd){
       if(c.licTipo==='bonificada') montoTexto = 'Bonificada';
       else if(c.licTipo==='por_definir') montoTexto = 'Monto a definir';
-      else if(c.licTipo==='anual') montoTexto = fmt2(c.licMonto)+' + IVA (21%) / año';
-      else montoTexto = fmt2(c.licMonto)+' + IVA (21%) / mes';
+      else if(c.licTipo==='anual') montoTexto = fmtLic(c.licMonto)+' + IVA (21%) / año';
+      else montoTexto = fmtLic(c.licMonto)+' + IVA (21%) / mes';
     }
     licHTML = '<div class="cot-licencia">'
       +'<div class="cot-licencia-label">Licencia de software</div>'
@@ -4127,7 +4181,7 @@ function generarPreviewHTML(c){
       +'<th style="text-align:right;">Neto Unit.</th><th style="text-align:right;">IVA 10,5%</th>'
       +'<th style="text-align:right;">Total</th>'
     +'</tr></thead>'
-    +'<tbody>'+itemsHTML+transpRow+ploteoRow+licRow+'</tbody>'
+    +'<tbody>'+itemsHTML+transpRow+paramRow+ploteoRow+licRow+'</tbody>'
   +'</table>'
   +'<div class="cot-total-row">'
     +'<div class="cot-total-box">'
