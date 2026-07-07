@@ -826,6 +826,8 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
                 <option value="usd">U$S</option>
               </select>
               <input type="number" id="cot-lic-monto" placeholder="neto" style="width:110px;" />
+              <span style="font-size:12px;color:var(--text3);">×</span>
+              <input type="number" id="cot-lic-cantidad" placeholder="cant." min="1" style="width:60px;" title="Cantidad de licencias" />
               <select id="cot-lic-tipo" style="flex:1;min-width:0;height:36px;font-size:12px;">
                 <option value="mensual">Mensual</option>
                 <option value="anual">Anual</option>
@@ -3622,6 +3624,7 @@ function abrirNuevaCotizacion(editId){
     if(c.licencia){
       document.getElementById('cot-lic-desc').value = c.licDesc||'';
       document.getElementById('cot-lic-monto').value = c.licMonto||'';
+      document.getElementById('cot-lic-cantidad').value = c.licCantidad||1;
       document.getElementById('cot-lic-tipo').value = c.licTipo||'mensual';
       const monedaEl = document.getElementById('cot-lic-moneda');
       if(monedaEl) monedaEl.value = c.licMoneda||'ars';
@@ -3642,6 +3645,7 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-param-monto').value = '';
     document.getElementById('cot-tiene-licencia').checked = false;
     document.getElementById('cot-licencia-panel').style.display = 'none';
+    document.getElementById('cot-lic-cantidad').value = 1;
     document.getElementById('cot-pago-tipo').value = 'senia_saldo';
     _pagoPersonalizadoTexto = '';
   }
@@ -3978,6 +3982,7 @@ function getCotizacionData(estado){
     licencia: tieneLicencia,
     licDesc: tieneLicencia ? document.getElementById('cot-lic-desc').value.trim() : '',
     licMonto: tieneLicencia ? parseFloat(document.getElementById('cot-lic-monto').value)||0 : 0,
+    licCantidad: tieneLicencia ? (parseInt(document.getElementById('cot-lic-cantidad').value)||1) : 1,
     licMoneda: tieneLicencia ? (document.getElementById('cot-lic-moneda')?.value||'ars') : 'ars',
     licTipo: tieneLicencia ? document.getElementById('cot-lic-tipo').value : '',
     licEnPresupuesto: tieneLicencia ? !!document.getElementById('cot-lic-en-presupuesto')?.checked : false,
@@ -4128,14 +4133,22 @@ function generarPreviewHTML(c){
   // Bloque informativo de licencia
   let licHTML = '';
   if(c.licencia && c.licDesc){
-    const simb = _licEsUsd ? 'U$S ' : '';
     const fmtLic = function(n){ return _licEsUsd ? 'U$S '+Math.round(n).toLocaleString('es-AR') : fmt2(n); };
+    const licCant = c.licCantidad||1;
+    const licTotal = (c.licMonto||0) * licCant;
     let montoTexto = '';
     if(!c.licEnPresupuesto || _licEsUsd){
       if(c.licTipo==='bonificada') montoTexto = 'Bonificada';
       else if(c.licTipo==='por_definir') montoTexto = 'Monto a definir';
-      else if(c.licTipo==='anual') montoTexto = fmtLic(c.licMonto)+' + IVA (21%) / año';
-      else montoTexto = fmtLic(c.licMonto)+' + IVA (21%) / mes';
+      else if(c.licTipo==='anual'){
+        montoTexto = licCant > 1
+          ? licCant+' licencias × '+fmtLic(c.licMonto)+' + IVA (21%) / año = '+fmtLic(licTotal)+' + IVA / año'
+          : fmtLic(c.licMonto)+' + IVA (21%) / año';
+      } else {
+        montoTexto = licCant > 1
+          ? licCant+' licencias × '+fmtLic(c.licMonto)+' + IVA (21%) / mes = '+fmtLic(licTotal)+' + IVA / mes'
+          : fmtLic(c.licMonto)+' + IVA (21%) / mes';
+      }
     }
     licHTML = '<div class="cot-licencia">'
       +'<div class="cot-licencia-label">Licencia de software</div>'
@@ -4266,19 +4279,28 @@ function aprobarCotizacion(){
   const filtroMesEl = document.getElementById('ventas-filtro-mes');
   if(filtroMesEl) filtroMesEl.value = '';
 
-  // Create licencia if applies
+  // Create licencia if applies (evitar duplicados)
   if(c.licencia && c.licDesc && c.licMonto>0){
-    licencias.push({
-      id: 'lic-'+c.id,
-      orden: orden,
-      cliente: c.empresa,
-      desc: c.licDesc,
-      totems: c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0),
-      monto: c.licMonto,
-      estado: 'comprometida',
-      mesInicio: '', anioInicio: '',
-      notas: 'Generada desde cotización '+c.numero
-    });
+    const licId = 'lic-'+c.id;
+    const licYaExiste = licencias.find(function(l){ return l.id===licId || l.orden===orden; });
+    if(licYaExiste){
+      // Actualizar en lugar de duplicar
+      licYaExiste.desc = c.licDesc;
+      licYaExiste.monto = c.licMonto;
+      licYaExiste.totems = c.licCantidad || c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0);
+    } else {
+      licencias.push({
+        id: licId,
+        orden: orden,
+        cliente: c.empresa,
+        desc: c.licDesc,
+        totems: c.licCantidad || c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0),
+        monto: c.licMonto,
+        estado: 'comprometida',
+        mesInicio: '', anioInicio: '',
+        notas: 'Generada desde cotización '+c.numero
+      });
+    }
   }
 
   cerrarPreview();
@@ -4319,17 +4341,21 @@ function cambiarEstadoCot(id, estado){
       proyectos.unshift(proyecto);
 
       if(c.licencia && c.licDesc && c.licMonto>0){
-        licencias.push({
-          id: 'lic-'+c.id,
-          orden: orden,
-          cliente: c.empresa,
-          desc: c.licDesc,
-          totems: c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0),
-          monto: c.licMonto,
-          estado: 'comprometida',
-          mesInicio: '', anioInicio: '',
-          notas: 'Generada desde cotización '+c.numero
-        });
+        const licId2 = 'lic-'+c.id;
+        const licYaExiste2 = licencias.find(function(l){ return l.id===licId2 || l.orden===orden; });
+        if(!licYaExiste2){
+          licencias.push({
+            id: licId2,
+            orden: orden,
+            cliente: c.empresa,
+            desc: c.licDesc,
+            totems: c.licCantidad || c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0),
+            monto: c.licMonto,
+            estado: 'comprometida',
+            mesInicio: '', anioInicio: '',
+            notas: 'Generada desde cotización '+c.numero
+          });
+        }
       }
 
       proyectos.sort(function(a,b){ return (b.anio*12+b.mes)-(a.anio*12+a.mes); });
@@ -5707,11 +5733,13 @@ function renderVentas(){
     }).join('');
     const licHTML = licAsociadas.length > 0
       ? licAsociadas.map(function(l){
+          const qty = parseInt(l.totems)||1;
           const estadoLic = l.estado === 'activa'
             ? '<span class="status-badge status-activa">Activa</span>'
             : '<span class="status-badge status-comprometida">Comprometida</span>';
+          const qtyBadge = qty > 1 ? ' <span style="background:var(--purple);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;font-family:monospace;">×'+qty+'</span>' : '';
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:12px;">'
-            +'<span style="color:var(--purple);">🔑 Licencia &nbsp;'+l.desc+'&nbsp;'+estadoLic+'</span>'
+            +'<span style="color:var(--purple);">🔑 Licencia &nbsp;'+l.desc+qtyBadge+'&nbsp;'+estadoLic+'</span>'
             +'<span style="font-family:monospace;color:var(--purple);">'+fmt(l.monto)+'/mes</span>'
           +'</div>';
         }).join('')
@@ -5991,6 +6019,10 @@ function guardarLicencia(){
 function eliminarLicencia(id){
   if(!confirm('¿Eliminar esta licencia?')) return;
   licencias = licencias.filter(function(l){ return l.id!==id; });
+  // Si es ID numérico (vino de Supabase), borrarlo también de la BD
+  if(id && Number.isInteger(Number(id)) && !String(id).includes('-')){
+    stockAPI('licencias_cotizador?id=eq.'+id, 'DELETE').catch(function(){});
+  }
   renderLicencias();
   sincronizarTodoElHistorial();
   autoSave();
@@ -6018,22 +6050,86 @@ function renderLicencias(){
   if(!tbody) return;
   if(lista.length===0){ tbody.innerHTML='<tr><td colspan="8" class="empty" style="padding:16px;text-align:center;">— Sin licencias para el filtro seleccionado.</td></tr>'; return; }
 
-  tbody.innerHTML = lista.map(function(l){
+  const rows = [];
+  lista.forEach(function(l){
     const inicio = l.mesInicio&&l.anioInicio ? MESES_NOMBRES[parseInt(l.mesInicio)]+' '+l.anioInicio : '—';
-    return '<tr>'
+    const qty = parseInt(l.totems)||1;
+    const qtyBadge = qty > 1 ? ' <span style="background:var(--purple);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 7px;font-family:var(--mono);">×'+qty+'</span>' : '';
+    const expandBtn = qty > 1
+      ? '<button class="btn" id="lic-expand-btn-'+l.id+'" onclick="toggleLicExpand(\''+l.id+'\')" style="height:26px;font-size:11px;padding:0 7px;margin-right:4px;" title="Ver activaciones individuales">▼</button>'
+      : '';
+    rows.push('<tr id="lic-row-'+l.id+'">'
       +'<td style="padding-left:14px;font-family:monospace;font-size:11px;color:var(--blue);">'+(l.orden||'—')+'</td>'
       +'<td class="td-name">'+l.cliente+'</td>'
       +'<td style="font-size:12px;color:var(--text2);">'+l.desc+'</td>'
-      +'<td style="text-align:center;font-family:monospace;">'+l.totems+'</td>'
+      +'<td style="text-align:center;font-family:monospace;">'+qty+qtyBadge+'</td>'
       +'<td style="text-align:right;font-family:monospace;color:var(--green);">'+fmt(l.monto)+'</td>'
       +'<td style="text-align:center;"><span class="status-badge status-'+l.estado+'">'+l.estado+'</span></td>'
       +'<td style="text-align:center;font-size:11px;color:var(--text3);">'+inicio+'</td>'
       +'<td style="text-align:center;">'
+        +expandBtn
         +'<button class="btn" onclick="abrirModalLicencia(\''+l.id+'\')" style="height:26px;font-size:11px;padding:0 7px;margin-right:4px;">✏</button>'
         +'<button class="btn red" onclick="eliminarLicencia(\''+l.id+'\')" style="height:26px;">✕</button>'
       +'</td>'
-    +'</tr>';
-  }).join('');
+    +'</tr>');
+
+    if(qty > 1){
+      const activaciones = Array.isArray(l.activaciones) ? l.activaciones : [];
+      const slots = [];
+      for(let n = 1; n <= qty; n++){
+        const act = activaciones.find(function(a){ return a.n === n; }) || {n:n, estado:'pendiente', fecha:''};
+        const col = act.estado === 'activa' ? 'var(--green)' : 'var(--amber)';
+        slots.push(
+          '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">'
+          +'<span style="font-family:var(--mono);font-size:11px;color:var(--text3);min-width:22px;">#'+n+'</span>'
+          +'<select id="lic-act-estado-'+l.id+'-'+n+'" style="height:28px;font-size:11px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:'+col+';padding:0 6px;font-family:var(--sans);">'
+            +'<option value="pendiente"'+(act.estado==='pendiente'?' selected':'')+'>Pendiente</option>'
+            +'<option value="activa"'+(act.estado==='activa'?' selected':'')+'>Activa</option>'
+          +'</select>'
+          +'<input type="date" id="lic-act-fecha-'+l.id+'-'+n+'" value="'+(act.fecha||'')+'" style="height:28px;font-size:11px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:var(--text);padding:0 6px;" />'
+          +'<button class="btn" style="height:26px;font-size:11px;padding:0 10px;background:var(--green);color:#000;" onclick="guardarActivacion(\''+l.id+'\','+n+')">Guardar</button>'
+          +'</div>'
+        );
+      }
+      rows.push('<tr id="lic-expand-'+l.id+'" style="display:none;">'
+        +'<td colspan="8" style="padding:6px 14px 10px 40px;background:rgba(167,139,250,0.06);border-bottom:1px solid var(--border);">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Activaciones individuales</div>'
+          +slots.join('')
+        +'</td>'
+      +'</tr>');
+    }
+  });
+
+  tbody.innerHTML = rows.join('');
+}
+
+function toggleLicExpand(id){
+  const row = document.getElementById('lic-expand-'+id);
+  const btn = document.getElementById('lic-expand-btn-'+id);
+  if(!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : '';
+  if(btn) btn.textContent = open ? '▼' : '▲';
+}
+
+function guardarActivacion(id, n){
+  const l = licencias.find(function(x){ return String(x.id) === String(id); });
+  if(!l) return;
+  const estado = document.getElementById('lic-act-estado-'+id+'-'+n)?.value || 'pendiente';
+  const fecha  = document.getElementById('lic-act-fecha-'+id+'-'+n)?.value  || '';
+  if(!Array.isArray(l.activaciones)) l.activaciones = [];
+  const idx = l.activaciones.findIndex(function(a){ return a.n === n; });
+  const slot = {n:n, estado:estado, fecha:fecha};
+  if(idx >= 0) l.activaciones[idx] = slot;
+  else l.activaciones.push(slot);
+  // Actualizar color del select sin re-renderizar
+  const sel = document.getElementById('lic-act-estado-'+id+'-'+n);
+  if(sel) sel.style.color = estado === 'activa' ? 'var(--green)' : 'var(--amber)';
+  // Persistir en Supabase
+  if(l.id && Number.isInteger(Number(l.id)) && !String(l.id).includes('-')){
+    stockAPI('licencias_cotizador?id=eq.'+l.id, 'PATCH', {activaciones: l.activaciones}).catch(function(){});
+  }
+  autoSave();
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -6253,7 +6349,7 @@ async function loadFromSheets(){
     const licRows = await stockAPI('licencias_cotizador?select=*&order=id.asc');
     if(licRows && licRows.length > 0){
       licencias = licRows.map(function(r){
-        return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', desc:r.descripcion||'', totems:parseInt(r.totems)||1, monto:parseFloat(r.monto)||0, estado:r.estado||'', mesInicio:r.mes_inicio||'', anioInicio:r.anio_inicio||'', notas:r.notas||'' };
+        return { id:r.id, orden:r.orden||'', cliente:r.cliente||'', desc:r.descripcion||'', totems:parseInt(r.totems)||1, monto:parseFloat(r.monto)||0, estado:r.estado||'', mesInicio:r.mes_inicio||'', anioInicio:r.anio_inicio||'', notas:r.notas||'', activaciones:Array.isArray(r.activaciones)?r.activaciones:[] };
       });
     }
 
@@ -6397,13 +6493,15 @@ async function saveToSheets(){
         await stockAPI('licencias_cotizador?id=eq.'+l.id, 'PATCH', {
           orden: l.orden||'', cliente: l.cliente, descripcion: l.desc,
           totems: l.totems, monto: l.monto, estado: l.estado,
-          mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||''
+          mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||'',
+          activaciones: l.activaciones||[]
         });
       } else if(!licIdNum) {
         const res = await stockAPI('licencias_cotizador', 'POST', [{
           orden: l.orden||'', cliente: l.cliente, descripcion: l.desc,
           totems: l.totems, monto: l.monto, estado: l.estado,
-          mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||''
+          mes_inicio: l.mesInicio||null, anio_inicio: l.anioInicio||null, notas: l.notas||'',
+          activaciones: l.activaciones||[]
         }]);
         if(res && res[0]) l.id = res[0].id;
       }
