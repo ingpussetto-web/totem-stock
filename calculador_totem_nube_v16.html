@@ -764,14 +764,6 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-ploteo-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
         </label>
-        <!-- Seteo inicial software -->
-        <label id="add-seteo-wrap" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
-          <input type="checkbox" id="add-seteo" onchange="toggleAdicional('seteo')" style="width:14px;height:14px;" />
-          Seteo inicial de software
-          <input type="number" id="add-seteo-precio" value="0" placeholder="$ neto" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
-          <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
-          <input type="number" id="add-seteo-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
-        </label>
         <!-- Mini PC -->
         <label id="add-minipc-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
           <input type="checkbox" id="add-minipc" onchange="toggleAdicional('minipc')" style="width:14px;height:14px;" />
@@ -3428,13 +3420,6 @@ function toggleAdicional(tipo){
     if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
     if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
   }
-  if(tipo === 'seteo'){
-    const checked = document.getElementById('add-seteo')?.checked;
-    const cantEl = document.getElementById('add-seteo-cant');
-    const precioEl = document.getElementById('add-seteo-precio');
-    if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
-    if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
-  }
   if(tipo === 'minipc'){
     const checked = document.getElementById('add-minipc')?.checked;
     const cantEl = document.getElementById('add-minipc-cant');
@@ -3475,11 +3460,6 @@ function sincronizarAdicionales(){
     const _ploteoRaw = parseFloat(document.getElementById('add-ploteo-precio')?.value);
     const precio = isNaN(_ploteoRaw) ? 55000 : _ploteoRaw;
     cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cant, precio:precio, cat:'servicio'});
-  }
-  if(document.getElementById('add-seteo')?.checked){
-    const cant = parseInt(document.getElementById('add-seteo-cant')?.value)||1;
-    const precio = parseFloat(document.getElementById('add-seteo-precio')?.value)||0;
-    cotItemsTemp.push({prodId:'seteo_sw', nombre:'Seteo inicial de software', cant:cant, precio:precio, cat:'servicio'});
   }
   if(document.getElementById('add-minipc')?.checked){
     const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
@@ -3579,16 +3559,16 @@ function abrirNuevaCotizacion(editId){
     if(transpMonto){ transpMonto.style.display = c.transporte?'block':'none'; transpMonto.value = c.transporteMonto||''; }
     // Restaurar adicionales desde items guardados
     const itemPloteo = (c.items||[]).find(function(i){ return i.prodId==='ploteo'; });
-    const itemSeteo = (c.items||[]).find(function(i){ return i.prodId==='seteo_sw'; });
+
     const itemMinipc = (c.items||[]).find(function(i){ return i.prodId==='minipc_beelink_n95'; });
     const itemHdmi = (c.items||[]).find(function(i){ return i.prodId==='hdmi_transmisor'; });
 
     const ploteoCheck = document.getElementById('add-ploteo');
-    const seteoCheck = document.getElementById('add-seteo');
+
     const minipcCheck2 = document.getElementById('add-minipc');
     const hdmiCheck2 = document.getElementById('add-hdmi');
     if(ploteoCheck){ ploteoCheck.checked = !!itemPloteo; toggleAdicional('ploteo'); }
-    if(seteoCheck){ seteoCheck.checked = !!itemSeteo; toggleAdicional('seteo'); }
+
     if(minipcCheck2){ minipcCheck2.checked = !!itemMinipc; toggleAdicional('minipc'); }
     if(hdmiCheck2){ hdmiCheck2.checked = !!itemHdmi; toggleAdicional('hdmi'); }
 
@@ -3596,11 +3576,6 @@ function abrirNuevaCotizacion(editId){
     const ploteoCant = document.getElementById('add-ploteo-cant');
     if(ploteoMonto && itemPloteo){ ploteoMonto.value = itemPloteo.precio; }
     if(ploteoCant && itemPloteo){ ploteoCant.value = itemPloteo.cant||1; }
-
-    const seteoMonto = document.getElementById('add-seteo-precio');
-    const seteoCant = document.getElementById('add-seteo-cant');
-    if(seteoMonto && itemSeteo){ seteoMonto.value = itemSeteo.precio; }
-    if(seteoCant && itemSeteo){ seteoCant.value = itemSeteo.cant||1; }
 
     const minipcMonto = document.getElementById('add-minipc-precio');
     const minipcCant = document.getElementById('add-minipc-cant');
@@ -3907,9 +3882,6 @@ function calcPagoMontos(){
   if(document.getElementById('add-ploteo')?.checked){
     const _pr = parseFloat(document.getElementById('add-ploteo-precio')?.value);
     subtotal += (isNaN(_pr) ? 55000 : _pr) * (parseInt(document.getElementById('add-ploteo-cant')?.value)||1);
-  }
-  if(document.getElementById('add-seteo')?.checked){
-    subtotal += (parseFloat(document.getElementById('add-seteo-precio')?.value)||0) * (parseInt(document.getElementById('add-seteo-cant')?.value)||1);
   }
   if(document.getElementById('add-minipc')?.checked){
     subtotal += (parseFloat(document.getElementById('add-minipc-precio')?.value)||610600) * (parseInt(document.getElementById('add-minipc-cant')?.value)||1);
@@ -4705,7 +4677,7 @@ const OP_MAPEO = {
   'autogestion': {
     material: 'Metálico', tactil: 'SI', impresora: 'SI',
     lectorQR: 'SI', camara: 'NO', playerVisible: false,
-    tipoPantallaVisible: false, softwareOpciones: ['No aplica']
+    tipoPantallaVisible: false, softwareOpciones: ['CUOS','No aplica']
   },
   'publicidad': {
     material: 'MDF', tactil: 'NO', impresora: 'NO',
@@ -4720,7 +4692,7 @@ const OP_MAPEO = {
   'nubipay': {
     material: 'Metálico', tactil: 'SI', impresora: 'SI',
     lectorQR: 'SI', camara: 'NO', playerVisible: false,
-    tipoPantallaVisible: false, softwareOpciones: ['No aplica']
+    tipoPantallaVisible: false, softwareOpciones: ['NubiPay','CUOS','No aplica']
   },
   'encuesta': {
     material: 'Metálico', tactil: 'SI', impresora: 'NO',
@@ -4745,7 +4717,8 @@ function detectarCategoriaOP(c){
   const s = ((c.sistema||'')+(c.items||[]).map(function(i){return i.nombre||'';}).join(' ')).toLowerCase();
   if(s.includes('turnero') || s.includes('turno')) return 'turnero';
   if(s.includes('vigilancia') || s.includes('vigilanci')) return 'vigilancia';
-  if(s.includes('autogestion') || s.includes('autogestión') || s.includes('nubipay')) return 'autogestion';
+  if(s.includes('nubipay')) return 'nubipay';
+  if(s.includes('autogestion') || s.includes('autogestión')) return 'autogestion';
   if(s.includes('publicidad') || s.includes('digital signage')) return 'publicidad';
   if(s.includes('atenci') || s.includes('remota')) return 'atencion';
   if(s.includes('encuesta')) return 'encuesta';
@@ -5241,8 +5214,10 @@ async function cargarDocOP(cotNumero){
       'tipo_pantalla','otros_accesorios','ploteo_vidrio','ploteo_totem','obs_ploteo',
       'obs_accesorios','obs_software',
       'config_software','ajustes_medida','obs_adicionales'];
+    // Algunos IDs difieren entre el modal normal y el de accesorios
+    const altIds = {'op-cantidad':'op-cant','op-windows':'op-winlic','op-sw':'op-software'};
     campos.forEach(function(id, i){
-      const el = document.getElementById(id);
+      const el = document.getElementById(id) || (altIds[id] ? document.getElementById(altIds[id]) : null);
       if(el && d[keys[i]] !== undefined) el.value = d[keys[i]];
     });
     if(document.getElementById('op-transporte') && d.transporte !== undefined){
