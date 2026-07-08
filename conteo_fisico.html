@@ -1279,8 +1279,9 @@ async function generarEtiquetasDesdeConteo(skuId, nombre, varianteId, cantidad){
     // Obtener codigo del SKU y nombre de variante
     const skuData = await api(`skus?id=eq.${skuId}&select=codigo,nombre`);
     const codigo  = skuData?.[0]?.codigo || String(skuId);
-    const varData = await api(`variantes?id=eq.${varianteId}&select=valor`);
-    const varNom  = varData?.[0]?.valor || null;
+    const varNom  = varianteId
+      ? ((await api(`variantes?id=eq.${varianteId}&select=valor`).catch(()=>[]))?.[0]?.valor || null)
+      : null;
 
     const prefijo = generarPrefijo(codigo, varNom);
 
@@ -1295,7 +1296,9 @@ async function generarEtiquetasDesdeConteo(skuId, nombre, varianteId, cantidad){
     const unidades = [], etiquetas = [];
     for(let i = 1; i <= cantidad; i++){
       const uid = `${prefijo}-${String(lastNum+i).padStart(4,'0')}`;
-      unidades.push({ uid, sku_id: skuId, variante_id: varianteId||null, estado: 'stock' });
+      const uRow = { uid, sku_id: skuId, estado: 'stock' };
+      if(varianteId) uRow.variante_id = varianteId;
+      unidades.push(uRow);
       etiquetas.push({ uid, nombre, variante: varNom, num: lastNum + i });
     }
 
