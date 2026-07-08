@@ -1095,7 +1095,8 @@ async function confirmarAjuste(){
     `;
 
     // Si es UID con diferencia positiva → generar etiquetas automáticamente
-    if(tracking === 'uid' && diferencia > 0 && varianteUIDId){
+    // varianteUIDId puede ser null para SKUs sin variantes (ej: Mini PC)
+    if(tracking === 'uid' && diferencia > 0){
       await generarEtiquetasDesdeConteo(skuId, nombre, varianteUIDId, diferencia);
     } else {
       setTimeout(() => iniciarConteo(), 800);
