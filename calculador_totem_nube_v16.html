@@ -780,6 +780,15 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-hdmi-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" onchange="syncAdicional('hdmi')" />
         </label>
+        <!-- Otros (campo libre) -->
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-top:6px;cursor:pointer;">
+          <input type="checkbox" id="add-otros" onchange="toggleAdicional('otros')" style="width:14px;height:14px;" />
+          Otro ítem
+          <input type="text" id="add-otros-desc" placeholder="Descripción" style="width:160px;height:24px;font-size:11px;display:none;padding:0 6px;" />
+          <input type="number" id="add-otros-precio" placeholder="$ neto" style="width:90px;height:24px;font-size:11px;display:none;" />
+          <span style="font-size:10px;color:var(--text3);display:none;" id="add-otros-label2">+ IVA · cant:</span>
+          <input type="number" id="add-otros-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
+        </label>
 
       </div>
 
@@ -3435,6 +3444,14 @@ function toggleAdicional(tipo){
     if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
     if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
   }
+  if(tipo === 'otros'){
+    const checked = document.getElementById('add-otros')?.checked;
+    const show = checked ? 'inline-block' : 'none';
+    ['add-otros-desc','add-otros-precio','add-otros-cant'].forEach(function(id){
+      const el = document.getElementById(id); if(el) el.style.display = show;
+    });
+    const lbl = document.getElementById('add-otros-label2'); if(lbl) lbl.style.display = show;
+  }
 }
 
 function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ }
@@ -3451,7 +3468,7 @@ function toggleAdicionalExtra(tipo){
 function sincronizarAdicionales(){
   // Limpiar adicionales previos
   cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','ploteo_grande',
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom','ploteo_grande',
              'extra_minipc','extra_impresora','extra_camara','extra_lectorqr'].includes(i.prodId);
   });
   // Agregar los activos leyendo directo del DOM
@@ -3470,6 +3487,12 @@ function sincronizarAdicionales(){
     const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
     const precio = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
     cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:precio, cat:'periferico'});
+  }
+  if(document.getElementById('add-otros')?.checked){
+    const cant = parseInt(document.getElementById('add-otros-cant')?.value)||1;
+    const precio = parseFloat(document.getElementById('add-otros-precio')?.value)||0;
+    const desc = document.getElementById('add-otros-desc')?.value.trim() || 'Otro ítem';
+    if(precio > 0 || desc !== 'Otro ítem') cotItemsTemp.push({prodId:'otros_custom', nombre:desc, cant:cant, precio:precio, cat:'periferico'});
   }
   // Otros periféricos
   const extrasConfig = [
@@ -3528,7 +3551,7 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-notas').value = c.notas||'';
     // Cargar items excluyendo adicionales que se restauran desde checkboxes
     cotItemsTemp = c.items ? c.items.filter(function(i){
-      return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
+      return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom'].includes(i.prodId);
     }) : [];
 
     // Detectar y restaurar categoría desde el primer ítem de equipo
@@ -3586,6 +3609,18 @@ function abrirNuevaCotizacion(editId){
     const hdmiCant = document.getElementById('add-hdmi-cant');
     if(hdmiMonto && itemHdmi){ hdmiMonto.value = itemHdmi.precio; }
     if(hdmiCant && itemHdmi){ hdmiCant.value = itemHdmi.cant||1; }
+
+    const itemOtros = (c.items||[]).find(function(i){ return i.prodId==='otros_custom'; });
+    const otrosCheck = document.getElementById('add-otros');
+    if(otrosCheck){ otrosCheck.checked = !!itemOtros; toggleAdicional('otros'); }
+    if(itemOtros){
+      const otrosDesc = document.getElementById('add-otros-desc');
+      const otrosMonto = document.getElementById('add-otros-precio');
+      const otrosCant = document.getElementById('add-otros-cant');
+      if(otrosDesc) otrosDesc.value = itemOtros.nombre||'';
+      if(otrosMonto) otrosMonto.value = itemOtros.precio||0;
+      if(otrosCant) otrosCant.value = itemOtros.cant||1;
+    }
     // Parametrización
     const paramCheck = document.getElementById('cot-tiene-param');
     if(paramCheck){ paramCheck.checked = !!c.param; }
@@ -3869,7 +3904,7 @@ function calcPagoMontos(){
   if(!c){ el.innerHTML = ''; return; }
   // Calcular subtotal desde cotItemsTemp (base) + adicionales activos
   const itemsBase = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor'].includes(i.prodId);
+    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom'].includes(i.prodId);
   });
   let subtotal = itemsBase.reduce(function(s,i){
     let base = (i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0);
@@ -3888,6 +3923,9 @@ function calcPagoMontos(){
   }
   if(document.getElementById('add-hdmi')?.checked){
     subtotal += (parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400) * (parseInt(document.getElementById('add-hdmi-cant')?.value)||1);
+  }
+  if(document.getElementById('add-otros')?.checked){
+    subtotal += (parseFloat(document.getElementById('add-otros-precio')?.value)||0) * (parseInt(document.getElementById('add-otros-cant')?.value)||1);
   }
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
   if(c.param && c.paramMonto) subtotal += c.paramMonto;
