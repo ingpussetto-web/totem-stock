@@ -355,6 +355,9 @@ async function renderReservado(){
     if(matchAP) asignadoPor = matchAP[1].split(' —')[0].trim();
   }
 
+  // Número de equipo (fuera del try para usarlo en el layout)
+  const equipoNum = bom?.equipo_num || null;
+
   // Conteo de este SKU en la OP: total y asignados
   let progresoBadge = '';
   if(op?.id && u.sku_id){
@@ -366,7 +369,6 @@ async function renderReservado(){
       const asignados = (todosLosItems||[]).filter(i => i.uid_asignado && i.uid_asignado !== 'CANTIDAD-DESCONTADA').length;
       const faltan = total - asignados;
       const completo = faltan === 0;
-      const equipoNum = bom?.equipo_num || '—';
       const colorProg = completo ? 'var(--green)' : 'var(--amber)';
       const iconProg = completo ? '✅' : '⚠️';
       const txtProg = completo
@@ -376,16 +378,25 @@ async function renderReservado(){
       <div style="margin-top:10px;padding:10px 12px;background:${completo?'var(--green-dim)':'var(--amber-dim)'};border:1px solid ${completo?'var(--green-border)':'var(--amber-border)'};border-radius:8px;">
         <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:4px;">PROGRESO EN ESTA OP</div>
         <div style="font-size:13px;font-weight:600;color:${colorProg};">${iconProg} ${txtProg}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px;">Equipo asignado: #${equipoNum}</div>
       </div>`;
     } catch(e){ console.warn('No se pudo calcular progreso:', e); }
   }
+
+  // Card de equipo — prominente, es lo primero que busca producción
+  const equipoCard = equipoNum ? `
+    <div style="text-align:center;padding:18px 16px;margin-bottom:12px;background:var(--amber-dim);border:2px solid var(--amber-border);border-radius:var(--radius-lg);">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;margin-bottom:6px;">Este insumo va en</div>
+      <div style="font-size:48px;font-weight:700;color:var(--amber);line-height:1;">EQUIPO ${equipoNum}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;">${esc(op?.op_numero||'')} · ${esc(op?.cliente||'')}</div>
+    </div>` : '';
 
   document.getElementById('container').innerHTML = `
     <div class="estado-card reservado">
       <div class="estado-icon">🔒</div>
       <div class="estado-label">Reservado — asignado a producción</div>
     </div>
+
+    ${equipoCard}
 
     <div class="insumo-card">
       <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
