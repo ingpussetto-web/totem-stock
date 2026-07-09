@@ -121,6 +121,16 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
   </div>
 </div>
 
+<!-- Sheet asignación de caja por unidad -->
+<div class="confirm-overlay" id="asig-caja-overlay">
+  <div class="confirm-sheet" style="max-height:82vh;display:flex;flex-direction:column;">
+    <div class="confirm-title" id="asig-caja-title"></div>
+    <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:16px;" id="asig-caja-sub"></div>
+    <div id="asig-caja-lista" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;margin-bottom:16px;"></div>
+    <button class="confirm-btn-no" onclick="cerrarAsigCajaSheet()">Listo / Cerrar</button>
+  </div>
+</div>
+
 <!-- Desasignación -->
 <div class="confirm-overlay" id="desasig-overlay">
   <div class="confirm-sheet">
@@ -638,10 +648,16 @@ async function renderCaja(sku){
           ${completo
             ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:600;padding:4px 0;">✓ Todos los ${total} asignados</div>`
             : hayStock
-              ? `<button data-bomid="${firstPending.id}" data-opnum="${esc(op.op_numero)}" data-varianteid="${variante_id||''}"
-                  onclick="asignarDesdeCaja(this)"
+              ? `<button
+                  data-pending-ids="${pendientes.map(p=>p.id).join(',')}"
+                  data-varianteid="${variante_id||''}"
+                  data-opnum="${esc(op.op_numero)}"
+                  data-cliente="${esc(op.cliente)}"
+                  data-total="${total}"
+                  data-asignados="${asignados}"
+                  onclick="abrirAsigCajaSheet(this)"
                   style="width:100%;padding:11px;background:var(--green);border:none;border-radius:6px;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">
-                  ✓ Asignar siguiente — faltan ${pendientes.length}
+                  → Asignar unidades — faltan ${pendientes.length}
                 </button>`
               : `<div style="text-align:center;font-size:12px;color:var(--red);padding:4px 0;">Sin stock disponible</div>`
           }
@@ -675,34 +691,99 @@ async function renderCaja(sku){
     </div>`;
 }
 
-async function asignarDesdeCaja(btn){
-  const bomId = btn.dataset.bomid;
-  const opNum = btn.dataset.opnum;
-  const varianteIdStr = btn.dataset.varianteid;
-  const varianteId = varianteIdStr ? parseInt(varianteIdStr) : null;
+// ─── SHEET DE ASIGNACIÓN POR UNIDAD (CAJA) ───────────────────
+let _sheetPendienteIds = [];
+let _sheetVarId = null;
+let _sheetAsignados = 0;
+let _sheetTotal = 0;
 
-  // Buscar fila de stock específica para esta variante
+function abrirAsigCajaSheet(btn){
+  _sheetPendienteIds = btn.dataset.pendingIds.split(',').map(Number);
+  _sheetVarId = btn.dataset.varianteid ? parseInt(btn.dataset.varianteid) : null;
+  _sheetAsignados = parseInt(btn.dataset.asignados);
+  _sheetTotal = parseInt(btn.dataset.total);
+
+  document.getElementById('asig-caja-title').textContent = btn.dataset.cliente;
+  document.getElementById('asig-caja-sub').textContent = btn.dataset.opnum;
+  renderSheetLista();
+
+  const ov = document.getElementById('asig-caja-overlay');
+  ov.classList.add('open');
+  ov.style.display = 'flex';
+}
+
+function renderSheetLista(){
+  const sub = document.getElementById('asig-caja-sub');
+  const lista = document.getElementById('asig-caja-lista');
+  if(!lista) return;
+
+  if(sub) sub.innerHTML = `<span style="font-family:'DM Mono',monospace;">${lista.dataset.opnum||''}</span>` +
+    ` — <strong style="color:var(--amber);">${_sheetAsignados} de ${_sheetTotal}</strong> asignados`;
+
+  lista.innerHTML = _sheetPendienteIds.length
+    ? _sheetPendienteIds.map((bomId, i) => {
+        const num = _sheetAsignados + i + 1;
+        return `<div id="sheet-row-${bomId}" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);">
+          <div>
+            <div style="font-size:14px;font-weight:600;">Unidad ${num} de ${_sheetTotal}</div>
+            <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">${cajaSkuActual?.nombre||''}</div>
+          </div>
+          <button onclick="asignarUnaDesdeSheet(${bomId})"
+            style="background:var(--green);border:none;border-radius:6px;padding:9px 18px;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;flex-shrink:0;">
+            ✓ Asignar
+          </button>
+        </div>`;
+      }).join('')
+    : `<div style="text-align:center;color:var(--green);padding:24px;font-size:15px;font-weight:700;">✓ Todos asignados</div>`;
+}
+
+async function asignarUnaDesdeSheet(bomId){
+  const varianteId = _sheetVarId;
   const stockRowVar = varianteId != null
     ? (cajaStockRowsAll||[]).find(r => r.variante_id === varianteId)
     : (cajaStockRowsAll||[]).find(r => r.variante_id == null) || cajaStockRowsAll?.[0];
+  if(!stockRowVar){ toast('Error: sin stock'); return; }
 
-  if(!stockRowVar){ alert('Error: sin stock registrado para esta variante'); return; }
-
-  // Reservado específico de esta variante
   const reservadoVar = (cajaAsignadosActivos||[]).filter(a =>
     varianteId != null ? a.variante_id === varianteId : a.variante_id == null
   ).length;
-  const disponible = (stockRowVar.cantidad||0) - reservadoVar;
-  if(disponible <= 0){ alert('Sin stock disponible en caja para esta variante'); return; }
-  if(!confirm('¿Asignar 1 unidad de ' + cajaSkuActual.nombre + ' a ' + opNum + '?')) return;
-  btn.disabled = true;
-  btn.textContent = 'Asignando...';
+  if((stockRowVar.cantidad||0) - reservadoVar <= 0){ toast('Sin stock disponible'); return; }
+
+  const row = document.getElementById(`sheet-row-${bomId}`);
+  const btnEl = row?.querySelector('button');
+  if(btnEl){ btnEl.disabled = true; btnEl.textContent = '...'; }
+
   try{
     await api('op_bom_items?id=eq.'+bomId, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
     await api('stock?id=eq.'+stockRowVar.id, 'PATCH', {cantidad_reservada: reservadoVar + 1});
-    // Re-renderizar para mostrar progreso actualizado
-    await renderCaja(cajaSkuActual);
-  }catch(e){ alert('Error: ' + e.message); btn.disabled = false; }
+
+    // Actualizar estado local
+    cajaAsignadosActivos.push({variante_id: varianteId, ordenes_produccion:{estado:'en_produccion'}});
+    _sheetPendienteIds = _sheetPendienteIds.filter(id => id !== bomId);
+    _sheetAsignados += 1;
+
+    // Marcar fila como asignada
+    if(row) row.innerHTML = `<div style="color:var(--green);font-size:13px;font-weight:600;padding:4px 0;">✓ Unidad ${_sheetAsignados} — asignada</div>`;
+
+    // Actualizar subtítulo
+    const sub = document.getElementById('asig-caja-sub');
+    if(sub) sub.innerHTML = `<strong style="color:var(--amber);">${_sheetAsignados} de ${_sheetTotal}</strong> asignados`;
+
+    // Si se asignaron todas, cerrar y refrescar
+    if(_sheetPendienteIds.length === 0){
+      setTimeout(async ()=>{ await cerrarAsigCajaSheet(); }, 900);
+    }
+  }catch(e){
+    toast('Error: '+e.message);
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '✓ Asignar'; }
+  }
+}
+
+async function cerrarAsigCajaSheet(){
+  const ov = document.getElementById('asig-caja-overlay');
+  ov.classList.remove('open');
+  ov.style.display = '';
+  await renderCaja(cajaSkuActual);
 }
 
 function renderNotFound(uid){
