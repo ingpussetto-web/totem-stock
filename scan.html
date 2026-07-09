@@ -719,7 +719,9 @@ function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales){
 }
 
 function closeConfirm(){
-  document.getElementById('confirm-overlay').classList.remove('open');
+  const ov = document.getElementById('confirm-overlay');
+  ov.classList.remove('open');
+  ov.style.display = '';  // limpiar inline style que sobreescribía el CSS
 }
 
 async function ejecutarAsignacion(nombre){
