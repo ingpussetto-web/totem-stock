@@ -612,6 +612,8 @@ function renderError(titulo, msg){
 let pendingBomId = null;
 let pendingOpId = null;
 let pendingBomNotas = '';
+let pendingOpNumero = '';
+let pendingCliente = '';
 
 function handleAsignarBtn(btn){
   const opId = parseInt(btn.dataset.opId);
@@ -686,6 +688,8 @@ function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales){
   pendingBomId = bomId;
   pendingOpId = opId;
   pendingBomNotas = notasOriginales || '';
+  pendingOpNumero = opNumero;
+  pendingCliente = cliente;
 
   // Obtener nombre actual (puede completarse en el confirm)
   const nombreActual = document.getElementById('inp-nombre')?.value.trim() || '';
@@ -742,13 +746,48 @@ async function ejecutarAsignacion(nombre){
     // Refrescar la vista
     unidadActual.estado = 'reservado';
     unidadActual.updated_at = new Date().toISOString();
-    toast('✓ Asignado correctamente');
-    await renderReservado();
+    renderExito(unidadActual.skus?.nombre||'', unidadActual.variantes?.valor||'', pendingOpNumero, pendingCliente, nombre);
 
   }catch(e){
     toast('Error: '+e.message);
     if(btn) btn.disabled = false;
   }
+}
+
+// ─── PANTALLA ÉXITO ───────────────────────────────────────────
+function renderExito(nombreInsumo, variante, opNumero, cliente, nombre){
+  document.getElementById('container').innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;padding:20px;">
+      <div style="width:88px;height:88px;background:var(--green-dim);border:2px solid var(--green-border);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+        <span style="font-size:42px;line-height:1;">✓</span>
+      </div>
+      <div style="font-size:24px;font-weight:700;color:var(--green);margin-bottom:6px;">¡Asignación OK!</div>
+      <div style="font-size:13px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:28px;">Por: ${esc(nombre)}</div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;width:100%;text-align:left;margin-bottom:28px;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px;">
+          ${esc(nombreInsumo)}${variante?` <span style="color:var(--amber);font-size:13px;">● ${esc(variante)}</span>`:''}
+        </div>
+        <div style="font-size:13px;color:var(--green);font-family:'DM Mono',monospace;font-weight:600;margin-bottom:2px;">→ ${esc(opNumero)}</div>
+        <div style="font-size:12px;color:var(--text2);">${esc(cliente)}</div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:16px;">
+        Mostrando detalles en <span id="exito-cd" style="color:var(--green);">3</span>s...
+      </div>
+      <button onclick="clearInterval(window._exitoTimer);renderReservado();"
+        style="background:transparent;border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);font-size:13px;padding:10px 24px;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        Ver detalles ahora
+      </button>
+    </div>`;
+
+  let n = 3;
+  window._exitoTimer = setInterval(()=>{
+    n--;
+    const el = document.getElementById('exito-cd');
+    if(el) el.textContent = n;
+    if(n <= 0){ clearInterval(window._exitoTimer); renderReservado(); }
+  }, 1000);
 }
 
 // ─── TOAST ────────────────────────────────────────────────────
