@@ -558,14 +558,31 @@ async function renderCaja(sku){
   const totalGlobal = (cajaStockRowsAll||[]).reduce((acc,r)=>acc+(r.cantidad||0),0);
   const disponibleGlobal = totalGlobal - cajaReservado;
 
-  // Traer OPs con este insumo pendiente
-  const bomItems = await api(
-    `op_bom_items?sku_id=eq.${sku.id}&estado=eq.pendiente&incluido=eq.true&select=id,qty,variante_id,variantes(valor),ordenes_produccion(id,op_numero,cliente,estado)`
+  // Traer todos los items (pendiente + asignado) para mostrar progreso agrupado
+  const allBomItems = await api(
+    `op_bom_items?sku_id=eq.${sku.id}&incluido=eq.true&estado=in.(pendiente,asignado)&select=id,estado,variante_id,variantes(valor),ordenes_produccion(id,op_numero,cliente,producto_nombre,estado)`
   ).catch(()=>[]);
-  const opsActivas = (bomItems||[]).filter(i =>
-    i.ordenes_produccion &&
-    ['en_produccion','iniciada','bom_confirmada'].includes(i.ordenes_produccion.estado)
+  const _estadosActivos = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+  const itemsActivos = (allBomItems||[]).filter(i =>
+    i.ordenes_produccion && _estadosActivos.includes(i.ordenes_produccion.estado)
   );
+
+  // Agrupar por OP (+ variante)
+  const opGroupsMap = {};
+  itemsActivos.forEach(item => {
+    const key = `${item.ordenes_produccion.id}_${item.variante_id||'null'}`;
+    if(!opGroupsMap[key]){
+      opGroupsMap[key] = {
+        op: item.ordenes_produccion,
+        variante: item.variantes?.valor || null,
+        variante_id: item.variante_id,
+        todos: [], pendientes: []
+      };
+    }
+    opGroupsMap[key].todos.push(item);
+    if(item.estado === 'pendiente') opGroupsMap[key].pendientes.push(item);
+  });
+  const opGroups = Object.values(opGroupsMap);
 
   // Breakdown de stock por color (si hay variantes)
   const variantesEnStock = (cajaStockRowsAll||[]).filter(r => r.variante_id != null);
@@ -589,33 +606,48 @@ async function renderCaja(sku){
       </div>`;
   }
 
-  const colorDisp = disponibleGlobal <= 0 ? 'var(--red)' : opsActivas.length > disponibleGlobal ? 'var(--amber)' : 'var(--green)';
+  const colorDisp = disponibleGlobal <= 0 ? 'var(--red)' : 'var(--green)';
 
-  const opsHTML = opsActivas.length
-    ? opsActivas.map(item => {
-        const op = item.ordenes_produccion;
-        const variante = item.variantes?.valor || null;
-        const varianteBadge = variante
-          ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.08);color:var(--amber);margin-left:6px;">● ${variante}</span>`
-          : '';
-        const d = dispDeVariante(item.variante_id);
+  const opsHTML = opGroups.length
+    ? opGroups.map(({op, variante, variante_id, todos, pendientes}) => {
+        const total = todos.length;
+        const asignados = total - pendientes.length;
+        const completo = pendientes.length === 0;
+        const pct = total > 0 ? Math.round((asignados / total) * 100) : 0;
+        const d = dispDeVariante(variante_id);
         const hayStock = d.disponible > 0;
-        const btnStyle = hayStock
-          ? 'background:var(--green);color:#000;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;'
-          : 'background:var(--surface2);color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:not-allowed;opacity:0.5;';
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border);">
-          <div>
-            <div style="font-size:13px;font-weight:600;font-family:monospace;color:var(--green);">${op.op_numero}${varianteBadge}</div>
-            <div style="font-size:11px;color:var(--text3);">${op.cliente}</div>
+        const firstPending = pendientes[0];
+        const colorBar = completo ? 'var(--green)' : 'var(--amber)';
+        return `
+        <div style="border:1px solid ${completo?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);padding:14px;margin-bottom:10px;background:${completo?'var(--green-dim)':'var(--surface2)'};">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:15px;font-weight:700;color:var(--text);">${esc(op.cliente)}</div>
+              <div style="font-size:11px;color:var(--text3);font-family:monospace;margin-top:1px;">${esc(op.op_numero)}</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px;">${esc(op.producto_nombre||'')}</div>
+              ${variante?`<div style="font-size:11px;color:var(--amber);margin-top:2px;">● ${esc(variante)}</div>`:''}
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+              <div style="font-size:26px;font-weight:700;color:${colorBar};line-height:1;">${asignados}<span style="font-size:14px;color:var(--text3);">/${total}</span></div>
+              <div style="font-size:9px;color:var(--text3);font-family:monospace;">ASIGNADOS</div>
+            </div>
           </div>
-          <button data-bomid="${item.id}" data-opnum="${op.op_numero}" data-varianteid="${item.variante_id||''}"
-            ${hayStock ? 'onclick="asignarDesdeCaja(this)"' : 'disabled'}
-            style="${btnStyle}">
-            ${hayStock ? '✓ Asignar' : 'Sin stock'}
-          </button>
+          <div style="height:5px;background:rgba(255,255,255,0.07);border-radius:3px;margin-bottom:10px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${colorBar};border-radius:3px;"></div>
+          </div>
+          ${completo
+            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:600;padding:4px 0;">✓ Todos los ${total} asignados</div>`
+            : hayStock
+              ? `<button data-bomid="${firstPending.id}" data-opnum="${esc(op.op_numero)}" data-varianteid="${variante_id||''}"
+                  onclick="asignarDesdeCaja(this)"
+                  style="width:100%;padding:11px;background:var(--green);border:none;border-radius:6px;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">
+                  ✓ Asignar siguiente — faltan ${pendientes.length}
+                </button>`
+              : `<div style="text-align:center;font-size:12px;color:var(--red);padding:4px 0;">Sin stock disponible</div>`
+          }
         </div>`;
       }).join('')
-    : '<div style="color:var(--text3);font-size:12px;padding:12px 0;">Sin OPs activas que necesiten este insumo</div>';
+    : '<div style="color:var(--text3);font-size:12px;padding:12px 0;text-align:center;">Sin OPs activas que necesiten este insumo</div>';
 
   document.getElementById('container').innerHTML = `
     <div style="padding:16px 0;">
@@ -663,25 +695,14 @@ async function asignarDesdeCaja(btn){
   const disponible = (stockRowVar.cantidad||0) - reservadoVar;
   if(disponible <= 0){ alert('Sin stock disponible en caja para esta variante'); return; }
   if(!confirm('¿Asignar 1 unidad de ' + cajaSkuActual.nombre + ' a ' + opNum + '?')) return;
+  btn.disabled = true;
+  btn.textContent = 'Asignando...';
   try{
-    // Marcar BOM item como asignado
     await api('op_bom_items?id=eq.'+bomId, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
-    // Incrementar reservado en la fila de stock correcta
     await api('stock?id=eq.'+stockRowVar.id, 'PATCH', {cantidad_reservada: reservadoVar + 1});
-    cajaReservado += 1;
-    // Actualizar cajaAsignadosActivos local para reflejar nuevo reservado
-    cajaAsignadosActivos.push({variante_id: varianteId, ordenes_produccion:{estado:'en_produccion'}});
-    // Reemplazar fila de la OP con confirmación visual
-    const filaOp = btn.closest('div');
-    if(filaOp) filaOp.innerHTML = '<div style="color:var(--green);font-size:12px;padding:10px 0;border-top:1px solid var(--border);">✓ Asignado a ' + opNum + '</div>';
-    // Actualizar contador global
-    const dispTotal = document.getElementById('caja-disp-total');
-    if(dispTotal){
-      const nuevoDisp = parseInt(dispTotal.textContent) - 1;
-      dispTotal.textContent = nuevoDisp;
-      dispTotal.style.color = nuevoDisp <= 0 ? 'var(--red)' : 'var(--green)';
-    }
-  }catch(e){ alert('Error: ' + e.message); }
+    // Re-renderizar para mostrar progreso actualizado
+    await renderCaja(cajaSkuActual);
+  }catch(e){ alert('Error: ' + e.message); btn.disabled = false; }
 }
 
 function renderNotFound(uid){
