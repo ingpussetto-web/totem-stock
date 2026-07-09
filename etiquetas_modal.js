@@ -35,6 +35,12 @@
     .etiq-link{font-size:11px;color:#4d9fff;cursor:pointer;font-family:'DM Mono',monospace;}
     .etiq-link:hover{text-decoration:underline;}
 
+    /* filtro fecha */
+    .etiq-filtro-fecha{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:#111620;border:1px solid rgba(255,255,255,0.06);border-radius:8px;}
+    .etiq-filtro-fecha label{font-size:10px;color:#7a8099;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;}
+    .etiq-filtro-fecha select{background:#0d1117;border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e8eaf0;font-size:12px;padding:4px 8px;cursor:pointer;font-family:'DM Mono',monospace;flex:1;}
+    .etiq-filtro-fecha select:focus{outline:none;border-color:rgba(0,229,160,0.4);}
+
     /* PASO 2 — grilla */
     .etiq-grilla-wrap{background:#111620;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;margin-bottom:16px;}
     .etiq-grilla{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
@@ -84,6 +90,7 @@
   let _celdaActiva = null;
   let _callback = null;
   let _paso = 1;
+  let _filtroFecha = null;
 
   // ─── ABRIR MODAL ───────────────────────────────────────────────────────────
   window.abrirModalEtiquetas = function(etiquetas, callback){
@@ -92,6 +99,7 @@
     _seleccionadas = new Set(etiquetas.map((_,i)=>i)); // todas preseleccionadas
     _grilla = {};
     _paso = 1;
+    _filtroFecha = null;
 
     renderModal();
   };
@@ -120,7 +128,17 @@
 
   // ─── PASO 1: seleccionar etiquetas ─────────────────────────────────────────
   function renderPaso1(){
-    const items = _etiquetas.map((et,i)=>{
+    // Fechas únicas para el filtro (solo si las etiquetas tienen campo fecha)
+    const hasFechas = _etiquetas.some(e=>e.fecha);
+    const fechas = hasFechas
+      ? [...new Set(_etiquetas.map(e=>e.fecha?e.fecha.substring(0,10):null).filter(Boolean))].sort().reverse()
+      : [];
+
+    // Items visibles según filtro activo
+    const itemsVisible = _etiquetas.map((et,i)=>({et,i}))
+      .filter(({et})=>!_filtroFecha||(et.fecha&&et.fecha.startsWith(_filtroFecha)));
+
+    const items = itemsVisible.map(({et,i})=>{
       const sel = _seleccionadas.has(i);
       return `<div class="etiq-item ${sel?'sel':''}" onclick="tnToggleItem(${i})">
         <div class="etiq-item-check">${sel?'✓':''}</div>
@@ -133,12 +151,27 @@
     }).join('');
 
     const nSel = _seleccionadas.size;
+
+    const filtroHTML = hasFechas && fechas.length ? `
+      <div class="etiq-filtro-fecha">
+        <label>Ingreso:</label>
+        <select id="etiq-fecha-sel" onchange="tnSetFiltroFecha(this.value)">
+          <option value="">Todos los ingresos (${_etiquetas.length})</option>
+          ${fechas.map(f=>{
+            const [y,m,d]=f.split('-');
+            const cnt=_etiquetas.filter(e=>e.fecha&&e.fecha.startsWith(f)).length;
+            return `<option value="${f}" ${_filtroFecha===f?'selected':''}>${d}/${m}/${y} — ${cnt} ud${cnt!==1?'s':''}</option>`;
+          }).join('')}
+        </select>
+      </div>` : '';
+
     return `
       <div class="etiq-paso">Paso <span>1 de 2</span> — Seleccioná las etiquetas a imprimir</div>
+      ${filtroHTML}
       <div class="etiq-sel-actions">
-        <span class="etiq-link" onclick="tnSelectAll(true)">✓ Todas</span>
+        <span class="etiq-link" onclick="tnSelectAll(true)">✓ Todas${_filtroFecha?' (filtradas)':''}</span>
         &nbsp;·&nbsp;
-        <span class="etiq-link" onclick="tnSelectAll(false)">✗ Ninguna</span>
+        <span class="etiq-link" onclick="tnSelectAll(false)">✗ Ninguna${_filtroFecha?' (filtradas)':''}</span>
       </div>
       <div class="etiq-lista">${items}</div>
       <div class="etiq-actions">
@@ -202,14 +235,30 @@
 
   // ─── HANDLERS PASO 1 ───────────────────────────────────────────────────────
   window.tnToggleItem = function(idx){
+    const lista = document.querySelector('.etiq-lista');
+    const st = lista ? lista.scrollTop : 0;
     if(_seleccionadas.has(idx)) _seleccionadas.delete(idx);
     else _seleccionadas.add(idx);
     renderPaso();
+    requestAnimationFrame(()=>{ const l=document.querySelector('.etiq-lista'); if(l) l.scrollTop=st; });
   };
 
   window.tnSelectAll = function(sel){
-    if(sel) _etiquetas.forEach((_,i)=>_seleccionadas.add(i));
-    else _seleccionadas.clear();
+    // Aplica solo a los items visibles con el filtro activo
+    const filtrados = _etiquetas.map((_,i)=>i)
+      .filter(i=>!_filtroFecha||(_etiquetas[i].fecha&&_etiquetas[i].fecha.startsWith(_filtroFecha)));
+    if(sel) filtrados.forEach(i=>_seleccionadas.add(i));
+    else filtrados.forEach(i=>_seleccionadas.delete(i));
+    renderPaso();
+  };
+
+  window.tnSetFiltroFecha = function(fecha){
+    _filtroFecha = fecha || null;
+    // Auto-selecciona solo los items de la fecha elegida
+    if(_filtroFecha){
+      _seleccionadas.clear();
+      _etiquetas.forEach((et,i)=>{ if(et.fecha&&et.fecha.startsWith(_filtroFecha)) _seleccionadas.add(i); });
+    }
     renderPaso();
   };
 
