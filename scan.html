@@ -121,6 +121,22 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
   </div>
 </div>
 
+<!-- Desasignación -->
+<div class="confirm-overlay" id="desasig-overlay">
+  <div class="confirm-sheet">
+    <div class="confirm-title" style="color:var(--red);">✕ Desasignar insumo</div>
+    <div class="confirm-body" id="desasig-body"></div>
+    <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Tu nombre</label>
+    <input id="desasig-nombre" type="text" placeholder="Ej: Juan García"
+      style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;margin-bottom:12px;">
+    <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Contraseña</label>
+    <input id="desasig-pass" type="password" placeholder="••••••••"
+      style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;margin-bottom:16px;">
+    <button class="confirm-btn-yes" id="desasig-yes" style="background:var(--red);color:#fff;margin-bottom:8px;">Desasignar</button>
+    <button class="confirm-btn-no" onclick="cerrarDesasigOverlay()">Cancelar</button>
+  </div>
+</div>
+
 <!-- Confirmación asignación -->
 <div class="confirm-overlay" id="confirm-overlay">
   <div class="confirm-sheet">
@@ -387,8 +403,82 @@ async function renderReservado(){
       <div class="asig-row"><div class="asig-key">Asignado por</div><div class="asig-val">${asignadoPor}</div></div>
       <div class="asig-row"><div class="asig-key">Fecha</div><div class="asig-val">${fechaAsig}</div></div>
       ${progresoBadge}
+      ${bom ? `<button onclick="confirmarDesasignar(${bom.id},'${esc(op.op_numero)}')"
+        style="width:100%;margin-top:14px;background:transparent;border:1px solid var(--red-border);border-radius:var(--radius);color:var(--red);font-size:13px;padding:10px;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        ✕ Desasignar de esta OP
+      </button>` : ''}
     </div>` : ''}
   `;
+}
+
+let _desasigBomId = null;
+let _desasigOpNumero = '';
+
+function confirmarDesasignar(bomId, opNumero){
+  _desasigBomId = bomId;
+  _desasigOpNumero = opNumero;
+
+  document.getElementById('desasig-body').innerHTML =
+    `Vas a quitar <strong>${esc(unidadActual.skus?.nombre||'')}</strong> de <strong>${esc(opNumero)}</strong>.<br>` +
+    `<span style="font-size:11px;color:var(--red);">Esta acción queda registrada en auditoría.</span><br><br>`;
+
+  document.getElementById('desasig-nombre').value = '';
+  document.getElementById('desasig-pass').value = '';
+
+  document.getElementById('desasig-yes').onclick = () => {
+    const nombre = document.getElementById('desasig-nombre').value.trim();
+    const pass   = document.getElementById('desasig-pass').value;
+    if(!nombre){ toast('Ingresá tu nombre'); return; }
+    if(pass !== '480'){ toast('Contraseña incorrecta'); return; }
+    cerrarDesasigOverlay();
+    ejecutarDesasignacion(nombre);
+  };
+
+  const ov = document.getElementById('desasig-overlay');
+  ov.classList.add('open');
+  ov.style.display = 'flex';
+}
+
+function cerrarDesasigOverlay(){
+  const ov = document.getElementById('desasig-overlay');
+  ov.classList.remove('open');
+  ov.style.display = '';
+}
+
+async function ejecutarDesasignacion(nombre){
+  try{
+    // Limpiar BOM item → pendiente (guardar nota de quién desasignó)
+    await api(`op_bom_items?id=eq.${_desasigBomId}`, 'PATCH', {
+      estado: 'pendiente',
+      uid_asignado: null,
+      notas: `Desasignado por: ${nombre} — ${new Date().toLocaleString('es-AR')}`
+    });
+    // Volver unidad a stock
+    await api(`unidades?id=eq.${unidadActual.id}`, 'PATCH', {
+      estado: 'stock',
+      updated_at: new Date().toISOString()
+    });
+    // Registrar en auditoría (no bloquea si la tabla no existe aún)
+    await api('auditoria', 'POST', {
+      accion: 'desasignacion',
+      usuario: nombre,
+      uid: unidadActual.uid,
+      sku_nombre: unidadActual.skus?.nombre || '',
+      op_numero: _desasigOpNumero,
+      detalle: {
+        bom_id: _desasigBomId,
+        variante: unidadActual.variantes?.valor || null,
+        sku_id: unidadActual.sku_id
+      }
+    }).catch(e => console.warn('Audit log:', e.message));
+
+    unidadActual.estado = 'stock';
+    unidadActual.updated_at = new Date().toISOString();
+    toast('✓ Desasignado — vuelto a stock');
+    await renderEnStock();
+  }catch(e){
+    toast('Error: '+e.message);
+  }
 }
 
 function renderProducido(){
