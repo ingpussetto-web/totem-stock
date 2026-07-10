@@ -1371,9 +1371,70 @@ async function liberarAProduccion(opId){
 
 async function cambiarEstado(opId, nuevoEstado){
   const labels = {en_produccion:'liberar a Producción',completada:'marcar como completada'};
-  if(!confirm(`¿Confirmás ${labels[nuevoEstado]||nuevoEstado} esta OP?`)) return;
+
+  if(nuevoEstado === 'completada'){
+    // Verificar items BOM pendientes antes de cerrar
+    let pendientes = [];
+    try{
+      pendientes = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&estado=eq.pendiente&select=id,sku_nombre,cantidad,variantes(valor)`);
+    }catch(e){ /* si falla la consulta, continúa */ }
+
+    if(pendientes.length > 0){
+      const lista = pendientes.map(p=>{
+        const v = p.variantes?.valor ? ` (${p.variantes.valor})` : '';
+        return `  • ${p.sku_nombre}${v} — qty ${p.cantidad}`;
+      }).join('\n');
+      const msg = `⚠️ Esta OP tiene ${pendientes.length} insumo${pendientes.length>1?'s':''} sin asignar:\n\n${lista}\n\n⚠️ El flujo correcto es cerrar desde Producción.\n¿Confirmás igualmente marcar como completada?`;
+      if(!confirm(msg)) return;
+    } else {
+      if(!confirm('¿Confirmás marcar como completada esta OP?\n\nNota: el flujo correcto es cerrar desde Producción.')) return;
+    }
+
+    // ── Descontar stock de insumos de caja asignados ────────────────────────
+    // (excepción: cierre desde Ventas sin pasar por Producción)
+    try{
+      const itemsCaja = await api(
+        `op_bom_items?op_id=eq.${opId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=sku_id,variante_id,uid_asignado,skus(tracking)`
+      ).catch(()=>[]);
+      const cajaItems = (itemsCaja||[]).filter(i => i.uid_asignado?.endsWith('-CAJA') && i.skus?.tracking === 'cantidad');
+      const stockUpdates = {};
+      for(const item of cajaItems){
+        const key = `${item.sku_id}_${item.variante_id||'null'}`;
+        if(!stockUpdates[key]) stockUpdates[key] = {sku_id:item.sku_id, variante_id:item.variante_id||null, count:0};
+        stockUpdates[key].count++;
+      }
+      for(const upd of Object.values(stockUpdates)){
+        const q = upd.variante_id
+          ? `stock?sku_id=eq.${upd.sku_id}&variante_id=eq.${upd.variante_id}&select=id,cantidad,cantidad_reservada`
+          : `stock?sku_id=eq.${upd.sku_id}&variante_id=is.null&select=id,cantidad,cantidad_reservada`;
+        const rows = await api(q).catch(()=>[]);
+        if(rows?.length){
+          const s = rows[0];
+          await api(`stock?id=eq.${s.id}`, 'PATCH', {
+            cantidad: Math.max(0, (s.cantidad||0) - upd.count),
+            cantidad_reservada: Math.max(0, (s.cantidad_reservada||0) - upd.count)
+          });
+        }
+      }
+      // Marcar unidades UID asignadas como producido
+      const uidsReales = (itemsCaja||[])
+        .filter(i => i.uid_asignado && !i.uid_asignado.endsWith('-CAJA'))
+        .map(i => i.uid_asignado);
+      for(const uid of uidsReales){
+        await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', {estado:'producido', op_id: opId});
+      }
+    }catch(e){ console.warn('Error descontando stock desde Ventas:', e); }
+    // ────────────────────────────────────────────────────────────────────────
+  } else {
+    if(!confirm(`¿Confirmás ${labels[nuevoEstado]||nuevoEstado} esta OP?`)) return;
+  }
+
   try{
-    await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', {estado:nuevoEstado, updated_at:new Date().toISOString()});
+    await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', {
+      estado: nuevoEstado,
+      notas: nuevoEstado === 'completada' ? 'Cierre desde módulo Ventas — insumos restados automáticamente.' : undefined,
+      updated_at: new Date().toISOString()
+    });
     toast('Estado actualizado ✓');
     loadOPs();
   }catch(e){toast('Error: '+e.message);}

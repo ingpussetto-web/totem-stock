@@ -536,6 +536,8 @@ async function renderCantidad(skuId, nombre, content){
   // (stock.cantidad ya descuenta las completadas tras el fix de ejecutarCierreOP)
   const _estadosActivosCF = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
   const bomItems = (bomItemsTodos||[]).filter(b => _estadosActivosCF.includes(b.ordenes_produccion?.estado));
+  // Completadas: para mostrar historial de últimas 5 salidas cerradas
+  const bomItemsCompletados = (bomItemsTodos||[]).filter(b => b.ordenes_produccion?.estado === 'completada');
 
   // Stock actual desde tabla stock (fuente de verdad)
   const stockRows = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
@@ -637,12 +639,12 @@ async function renderCantidad(skuId, nombre, content){
             </tbody>
           </table>
 
-          <div class="panel-title" style="margin-top:14px;">▼ SALIDAS (asignadas a OPs)</div>
+          <div class="panel-title" style="margin-top:14px;">▼ SALIDAS (OPs en curso)</div>
           <table class="mov-table">
             <thead><tr><th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th></tr></thead>
             <tbody>
               ${!salidasVar.length
-                ? `<tr><td colspan="4" class="empty-row">Sin asignaciones registradas</td></tr>`
+                ? `<tr><td colspan="4" class="empty-row">Sin asignaciones en OPs activas</td></tr>`
                 : salidasVar.map(s=>{
                     const op = s.ordenes_produccion;
                     return `<tr>
@@ -655,6 +657,35 @@ async function renderCantidad(skuId, nombre, content){
               }
             </tbody>
           </table>
+          ${(()=>{
+            const bomCompVar = (bomItemsCompletados||[]).filter(b=> b.variante_id === varId || (!b.variante_id && stockRows.length === 1));
+            const mapComp = {};
+            bomCompVar.forEach(s=>{
+              const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
+              if(!mapComp[opNum]){ mapComp[opNum] = { ...s, qty: 1 }; }
+              else { mapComp[opNum].qty += 1; }
+            });
+            const ultimas = Object.values(mapComp)
+              .sort((a,b)=>new Date(b.ordenes_produccion?.updated_at||0)-new Date(a.ordenes_produccion?.updated_at||0))
+              .slice(0,5);
+            if(!ultimas.length) return '';
+            return `
+              <div class="panel-title" style="margin-top:14px;color:var(--text3);">▼ ÚLTIMAS 5 SALIDAS (OPs cerradas)</div>
+              <table class="mov-table" style="opacity:0.7;">
+                <thead><tr><th>Fecha cierre</th><th>OP</th><th>Cliente</th><th style="text-align:right;">Cant.</th></tr></thead>
+                <tbody>
+                  ${ultimas.map(s=>{
+                    const op = s.ordenes_produccion;
+                    return `<tr>
+                      <td class="fecha">${fmt_fecha(op?.updated_at)}</td>
+                      <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
+                      <td>${op?.cliente||'—'} <span class="badge completada">Cerrada</span></td>
+                      <td class="num neg" style="color:var(--text3);">−${s.qty||0}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>`;
+          })()}
         </div>
       `;
     }).join('');
@@ -752,13 +783,13 @@ async function renderCantidad(skuId, nombre, content){
           </tbody>
         </table>
 
-        <!-- Salidas -->
-        <div class="panel-title" style="margin-top:18px;">▼ SALIDAS (asignadas a OPs)</div>
+        <!-- Salidas activas -->
+        <div class="panel-title" style="margin-top:18px;">▼ SALIDAS (OPs en curso)</div>
         <table class="mov-table">
           <thead><tr><th>Fecha</th><th>OP</th><th>Cliente · Estado</th><th style="text-align:right;">Cant.</th></tr></thead>
           <tbody>
             ${!salidas.length
-              ? `<tr><td colspan="4" class="empty-row">Sin asignaciones registradas</td></tr>`
+              ? `<tr><td colspan="4" class="empty-row">Sin asignaciones en OPs activas</td></tr>`
               : salidas.map(s=>{
                   const op = s.ordenes_produccion;
                   return `<tr>
@@ -771,6 +802,36 @@ async function renderCantidad(skuId, nombre, content){
             }
           </tbody>
         </table>
+
+        <!-- Últimas 5 salidas de OPs cerradas -->
+        ${(()=>{
+          const mapComp = {};
+          (bomItemsCompletados||[]).forEach(s=>{
+            const opNum = s.ordenes_produccion?.op_numero || ('op_'+s.op_id);
+            if(!mapComp[opNum]){ mapComp[opNum] = { ...s, qty: 1 }; }
+            else { mapComp[opNum].qty += 1; }
+          });
+          const ultimas = Object.values(mapComp)
+            .sort((a,b)=>new Date(b.ordenes_produccion?.updated_at||0)-new Date(a.ordenes_produccion?.updated_at||0))
+            .slice(0,5);
+          if(!ultimas.length) return '';
+          return `
+            <div class="panel-title" style="margin-top:18px;color:var(--text3);">▼ ÚLTIMAS 5 SALIDAS (OPs cerradas)</div>
+            <table class="mov-table" style="opacity:0.7;">
+              <thead><tr><th>Fecha cierre</th><th>OP</th><th>Cliente</th><th style="text-align:right;">Cant.</th></tr></thead>
+              <tbody>
+                ${ultimas.map(s=>{
+                  const op = s.ordenes_produccion;
+                  return `<tr>
+                    <td class="fecha">${fmt_fecha(op?.updated_at)}</td>
+                    <td style="font-family:'DM Mono',monospace;font-size:11px;">${op?.op_numero||'—'}</td>
+                    <td>${op?.cliente||'—'} <span class="badge completada">Cerrada</span></td>
+                    <td class="num neg" style="color:var(--text3);">−${s.qty||0}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>`;
+        })()}
 
         <!-- Conteo físico -->
         ${renderConteoInput(skuId, nombre, saldoTeorico, 'cantidad', stockRows)}
