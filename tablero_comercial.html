@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero Comercial — Totem Nube</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0f;--panel:#0d1117;--panel2:#111620;--panel3:#161c28;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);--border3:rgba(255,255,255,0.18);
+  --text:#e8eaf0;--text2:#7a8099;--text3:#3a4055;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.1);--green-border:rgba(0,229,160,0.25);
+  --amber:#ffb340;--amber-dim:rgba(255,179,64,0.1);--amber-border:rgba(255,179,64,0.25);
+  --red:#ff4d6a;--red-dim:rgba(255,77,106,0.1);--red-border:rgba(255,77,106,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);
+  --radius:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:100}
+.top-bar-left{display:flex;align-items:center;gap:16px}
+.back-btn{color:var(--text2);text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);transition:.15s}
+.back-btn:hover{border-color:var(--border2);color:var(--text)}
+.top-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.top-sub{font-size:11px;color:var(--text2);margin-top:1px}
+.btn-nuevo{font-size:12px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--green);background:var(--green-dim);color:var(--green);cursor:pointer;font-weight:600}
+
+.board-wrap{overflow-x:auto;padding:20px 24px 90px;display:flex;gap:14px;min-height:calc(100vh - 70px)}
+.col{min-width:250px;flex:0 0 250px;display:flex;flex-direction:column;gap:8px}
+.col-head{display:flex;align-items:center;justify-content:space-between;padding:6px 4px;margin-bottom:4px}
+.col-name{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text2)}
+.col-count{background:var(--panel2);border:1px solid var(--border);border-radius:10px;font-size:10px;padding:1px 7px;color:var(--text3);font-family:'DM Mono',monospace}
+.col-sep{width:1px;background:var(--border);min-height:300px;flex:0 0 1px;margin:0 2px}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:border-color .15s,transform .1s;position:relative}
+.card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.card.aprobado{border-left:3px solid var(--green);padding-left:10px}
+.card.espera{opacity:.6;border-left:3px solid var(--amber);padding-left:10px}
+.card.rechazado{opacity:.45;border-left:3px solid var(--text3);padding-left:10px}
+.card.finalizado{border-left:3px solid var(--blue);padding-left:10px}
+.card-cliente{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-empresa{font-size:10px;color:var(--text3);margin-bottom:4px}
+.card-producto{font-size:11px;color:var(--text2);margin-bottom:6px}
+.card-progress{margin-bottom:8px}
+.prog-label{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:3px}
+.prog-bar{height:3px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;background:var(--green);transition:width .3s}
+.card-footer{display:flex;justify-content:space-between;align-items:center}
+.card-dias{font-size:10px;color:var(--text3)}
+.card-dias.alerta{color:var(--amber)}
+.estado-chip{font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px}
+.estado-chip.aprobado{background:var(--green-dim);color:var(--green)}
+.estado-chip.espera{background:var(--amber-dim);color:var(--amber)}
+.estado-chip.rechazado{background:var(--panel2);color:var(--text3)}
+.badge-candidato{font-size:9px;background:var(--red-dim);color:var(--red);border:1px solid var(--red-border);border-radius:4px;padding:1px 6px;font-weight:600}
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:flex-start;justify-content:flex-end}
+.overlay.open{display:flex}
+.panel-det{background:var(--panel);border-left:1px solid var(--border2);width:440px;max-width:100vw;height:100vh;overflow-y:auto;display:flex;flex-direction:column}
+.det-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;position:sticky;top:0;background:var(--panel);z-index:10}
+.det-cliente{font-size:16px;font-weight:600}
+.det-producto{font-size:12px;color:var(--text2);margin-top:2px}
+.close-btn{background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);cursor:pointer;padding:5px 10px;font-size:18px;line-height:1;flex:0 0 auto}
+.close-btn:hover{border-color:var(--border2);color:var(--text)}
+.det-body{padding:20px;display:flex;flex-direction:column;gap:20px}
+.det-section{display:flex;flex-direction:column;gap:8px}
+.det-section-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
+.det-input,.det-desc-input,select,input[type=text],input[type=date]{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-size:12px;font-family:inherit;width:100%}
+.det-input:focus,select:focus,input:focus{outline:none;border-color:var(--border2)}
+.det-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+.mover-grid{display:flex;flex-wrap:wrap;gap:6px}
+.mover-btn{font-size:11px;padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);cursor:pointer;transition:.15s}
+.mover-btn:hover{border-color:var(--green);color:var(--green)}
+.mover-btn.activo{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.mover-btn.auto{opacity:.4;cursor:not-allowed}
+
+.checklist-row{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;display:flex;align-items:center;gap:8px}
+.checklist-row.on{border-color:var(--green-border);background:var(--green-dim)}
+.checklist-label{flex:1;font-size:12px}
+.btn-wa{font-size:11px;padding:4px 10px;border-radius:var(--radius);border:1px solid #25d366;background:rgba(37,211,102,0.1);color:#25d366;cursor:pointer;font-weight:600;white-space:nowrap}
+.pct-box{font-size:12px;padding:8px 10px;border-radius:var(--radius);background:var(--panel2);border:1px solid var(--border);display:flex;justify-content:space-between}
+.pct-box.ok{border-color:var(--green-border);color:var(--green)}
+
+.btn{padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
+.btn:hover{border-color:var(--green);color:var(--green)}
+.btn.solid{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+.btn.solid:hover{opacity:.85}
+
+.recordatorio-box{border:1px solid var(--red-border);background:var(--red-dim);border-radius:var(--radius);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.recordatorio-box .rt{font-size:12px;color:var(--red);font-weight:600}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 18px;font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.col-empty{font-size:11px;color:var(--text3);text-align:center;padding:20px 10px;border:1px dashed var(--border);border-radius:10px}
+.loader{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px}
+.card.dragging{opacity:.35;transform:scale(.97);cursor:grabbing}
+.col.drag-over{background:rgba(0,229,160,0.04);border-radius:10px;outline:1px dashed var(--green-border)}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <a href="index.html" class="back-btn">← Sistema</a>
+    <div>
+      <div class="top-title">Tablero Comercial</div>
+      <div class="top-sub">Totem Nube — gestión comercial</div>
+    </div>
+  </div>
+  <button class="btn-nuevo" onclick="nuevoContacto()">+ Nuevo contacto</button>
+</div>
+
+<div class="board-wrap" id="board">
+  <div class="loader">Cargando proyectos...</div>
+</div>
+
+<div class="overlay" id="overlay" onclick="cerrarDetalle(event)">
+  <div class="panel-det" id="panel-det">
+    <div class="det-head">
+      <div>
+        <div class="det-cliente" id="det-cliente"></div>
+        <div class="det-producto" id="det-producto"></div>
+      </div>
+      <button class="close-btn" onclick="cerrarDetalleBtn()">✕</button>
+    </div>
+    <div class="det-body" id="det-body">
+      <div class="loader">Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
+
+const ESTADOS = [
+  { key:'ingreso_contacto',    label:'Ingreso Contacto',      col:'ingreso_contacto' },
+  { key:'informacion_enviada', label:'Información Enviada',   col:'informacion_enviada' },
+  { key:'envio_presupuesto',   label:'Envío de Presupuesto',  col:'envio_presupuesto' },
+  { key:'aprobado',            label:'Aprobado',               col:'resolucion' },
+  { key:'espera_indefinida',   label:'En espera indefinida',   col:'resolucion' },
+  { key:'rechazado',           label:'Rechazado',              col:'resolucion' },
+  { key:'proyecto_finalizado', label:'Proyecto Finalizado',    col:'proyecto_finalizado', auto:true },
+];
+const COLUMNAS = [
+  { key:'ingreso_contacto',    label:'Ingreso Contacto' },
+  { key:'informacion_enviada', label:'Información Enviada' },
+  { key:'envio_presupuesto',   label:'Envío de Presupuesto' },
+  { key:'resolucion',          label:'Resolución' },
+  { key:'proyecto_finalizado', label:'Proyecto Finalizado' },
+];
+const CHECKLIST = [
+  { campo:'info_general_enviada',        categoria:'info_general',        label:'Información general' },
+  { campo:'info_funcionamiento_enviada', categoria:'info_funcionamiento', label:'Funcionamiento específico' },
+  { campo:'info_licencia_enviada',       categoria:'info_licencia',       label:'Información de licencia' },
+  { campo:'info_llamada_enviada',        categoria:'info_llamada',        label:'¿Querés que te llamemos?' },
+];
+const PESOS = { info_general_enviada:20, info_funcionamiento_enviada:20, info_licencia_enviada:20, info_llamada_enviada:40 };
+
+let _proyectos = [];
+let _templates = [];
+let _actual = null;
+
+async function api(path, method='GET', body=null){
+  const opts = { method, headers: {
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer '+SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  }};
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(SUPABASE_URL+'/rest/v1/'+path, opts);
+  if(!r.ok){ const e=await r.text(); throw new Error(e); }
+  return r.status===204 ? null : r.json();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function toast(msg, dur=2800){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), dur);
+}
+function colOf(estado){ return ESTADOS.find(e=>e.key===estado)?.col || 'ingreso_contacto'; }
+function labelOf(estado){ return ESTADOS.find(e=>e.key===estado)?.label || estado; }
+function diasDesde(iso){
+  if(!iso) return 0;
+  return Math.floor((new Date() - new Date(iso)) / 86400000);
+}
+function pctInteres(p){
+  return CHECKLIST.reduce((acc,c)=> acc + (p[c.campo] ? PESOS[c.campo] : 0), 0);
+}
+function normNumero(tel){
+  let n = String(tel||'').replace(/\D/g,'');
+  if(n.length<=10) n = '549'+n;
+  return n;
+}
+
+async function init(){
+  try{
+    [_proyectos, _templates] = await Promise.all([
+      api('proyectos_comercial?select=*&order=id.desc'),
+      api('wa_templates_producto?select=*'),
+    ]);
+    renderBoard();
+  } catch(e){
+    document.getElementById('board').innerHTML = '<div class="loader" style="color:var(--red)">Error al cargar: '+esc(e.message)+'</div>';
+  }
+}
+
+function renderBoard(){
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  COLUMNAS.forEach((col, ci)=>{
+    const items = _proyectos.filter(p => colOf(p.estado) === col.key);
+    const colEl = document.createElement('div');
+    colEl.className = 'col';
+    colEl.dataset.colkey = col.key;
+    colEl.addEventListener('dragover', e=>{ e.preventDefault(); colEl.classList.add('drag-over'); });
+    colEl.addEventListener('dragleave', e=>{ if(!colEl.contains(e.relatedTarget)) colEl.classList.remove('drag-over'); });
+    colEl.addEventListener('drop', e=>{ e.preventDefault(); colEl.classList.remove('drag-over'); dropOnCol(col.key); });
+    colEl.innerHTML = `<div class="col-head"><span class="col-name">${esc(col.label)}</span><span class="col-count">${items.length}</span></div>`
+      + (items.length===0 ? '<div class="col-empty">Sin proyectos</div>' : items.map(p=>cardHTML(p)).join(''));
+    board.appendChild(colEl);
+    if(ci < COLUMNAS.length-1){
+      const sep = document.createElement('div'); sep.className='col-sep';
+      board.appendChild(sep);
+    }
+  });
+}
+
+function cardHTML(p){
+  const claseEstado = p.estado==='aprobado' ? 'aprobado' : p.estado==='espera_indefinida' ? 'espera' : p.estado==='rechazado' ? 'rechazado' : p.estado==='proyecto_finalizado' ? 'finalizado' : '';
+  const dias = diasDesde(p.fecha_estado_actual);
+  const chip = colOf(p.estado)==='resolucion' ? `<span class="estado-chip ${claseEstado}">${esc(labelOf(p.estado))}</span>` : '';
+  const candidato = p.recordatorio_candidato && !p.recordatorio_enviado ? '<span class="badge-candidato">⏰ recordatorio</span>' : '';
+  const pct = p.estado==='informacion_enviada' ? `<div class="card-progress"><div class="prog-label"><span>Interés</span><span>${pctInteres(p)}%</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pctInteres(p)}%"></div></div></div>` : '';
+
+  return `<div class="card ${claseEstado}" draggable="true" data-id="${p.id}"
+      onclick="cardClick(event,${p.id})" ondragstart="dragStart(event,${p.id})" ondragend="dragEnd(event)">
+    <div class="card-cliente">${esc(p.cliente_nombre)}</div>
+    ${p.empresa?`<div class="card-empresa">${esc(p.empresa)}</div>`:''}
+    <div class="card-producto">${esc(p.producto)}</div>
+    ${pct}
+    <div class="card-footer">
+      <div class="card-dias ${dias>10?'alerta':''}">${dias}d en este estado</div>
+      ${chip}${candidato}
+    </div>
+  </div>`;
+}
+
+function cardClick(e, id){ if(_dragMoved) return; abrirDetalle(id); }
+
+async function nuevoContacto(){
+  const nombre = prompt('Nombre del cliente / contacto:');
+  if(!nombre) return;
+  const telefono = prompt('Teléfono (con característica, sin +):');
+  if(!telefono) return;
+  const producto = prompt('Producto de interés:') || '';
+  try{
+    const nuevo = await api('proyectos_comercial', 'POST', {
+      cliente_nombre: nombre, telefono, producto, estado: 'ingreso_contacto'
+    });
+    _proyectos.unshift(nuevo[0]);
+    renderBoard();
+    toast('Contacto creado ✓');
+    abrirDetalle(nuevo[0].id);
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+function abrirDetalle(id){
+  _actual = _proyectos.find(p=>p.id===id);
+  if(!_actual) return;
+  document.getElementById('det-cliente').textContent = _actual.cliente_nombre||'';
+  document.getElementById('det-producto').textContent = _actual.producto||'';
+  document.getElementById('overlay').classList.add('open');
+  renderDetBody();
+}
+
+function renderDetBody(){
+  const p = _actual;
+
+  const datosSection = `<div class="det-section">
+    <div class="det-section-title">Datos del contacto</div>
+    <input class="det-input" id="d-nombre" value="${esc(p.cliente_nombre||'')}" placeholder="Nombre">
+    <input class="det-input" id="d-empresa" value="${esc(p.empresa||'')}" placeholder="Empresa">
+    <div class="det-row2">
+      <input class="det-input" id="d-mail" value="${esc(p.mail||'')}" placeholder="Mail">
+      <input class="det-input" id="d-telefono" value="${esc(p.telefono||'')}" placeholder="Teléfono">
+    </div>
+    <input class="det-input" id="d-producto" value="${esc(p.producto||'')}" placeholder="Producto de interés" list="lista-productos">
+    <datalist id="lista-productos">${[...new Set(_templates.map(t=>t.producto))].map(pr=>`<option value="${esc(pr)}">`).join('')}</datalist>
+    <select id="d-canal">
+      <option value="">Canal de ingreso</option>
+      <option value="mail" ${p.canal_ingreso==='mail'?'selected':''}>Mail</option>
+      <option value="telefono" ${p.canal_ingreso==='telefono'?'selected':''}>Teléfono</option>
+      <option value="whatsapp" ${p.canal_ingreso==='whatsapp'?'selected':''}>WhatsApp</option>
+    </select>
+    <textarea class="det-desc-input" id="d-desc" placeholder="Notas del proyecto..." style="min-height:56px">${esc(p.descripcion||'')}</textarea>
+    <button class="btn solid" onclick="guardarDatos()" style="align-self:flex-start">Guardar</button>
+  </div>`;
+
+  const moverBtns = ESTADOS.map(e=>
+    `<button class="mover-btn ${p.estado===e.key?'activo':''} ${e.auto?'auto':''}"
+      ${e.auto?'title="Se actualiza solo cuando el proyecto pasa a Terminadas en producción" onclick="toast(\'Este estado es automático\')"':`onclick="moverEstado('${e.key}')"`}>
+      ${esc(e.label)}</button>`).join('');
+  const moverSection = `<div class="det-section">
+    <div class="det-section-title">Mover a estado</div>
+    <div class="mover-grid">${moverBtns}</div>
+    ${p.estado==='rechazado' ? `<input class="det-input" id="d-motivo" value="${esc(p.motivo_rechazo||'')}" placeholder="Motivo de rechazo (opcional)" onchange="guardarMotivo(this.value)" style="margin-top:6px">` : ''}
+  </div>`;
+
+  let infoSection = '';
+  if(p.estado==='informacion_enviada' || p.estado==='ingreso_contacto'){
+    const rows = CHECKLIST.map(c=>{
+      const on = !!p[c.campo];
+      return `<div class="checklist-row ${on?'on':''}">
+        <input type="checkbox" ${on?'checked':''} onchange="toggleChecklist('${c.campo}', this.checked)">
+        <span class="checklist-label">${esc(c.label)}</span>
+        <button class="btn-wa" onclick="enviarInfo('${c.categoria}')">📱 Enviar</button>
+      </div>`;
+    }).join('');
+    const pct = pctInteres(p);
+    infoSection = `<div class="det-section">
+      <div class="det-section-title">Información enviada</div>
+      ${rows}
+      <div class="pct-box ${pct>=50?'ok':''}"><span>% de interés</span><span>${pct}%</span></div>
+      ${pct>=50 && p.estado!=='envio_presupuesto' ? `<div style="font-size:11px;color:var(--text3)">Interés alto — se puede pasar a Envío de presupuesto.</div>` : ''}
+    </div>`;
+  }
+
+  let presupuestoSection = '';
+  if(colOf(p.estado)!=='ingreso_contacto'){
+    const dias = p.fecha_envio_presupuesto ? diasDesde(p.fecha_envio_presupuesto) : null;
+    let recBox = '';
+    if(p.recordatorio_candidato && !p.recordatorio_autorizado){
+      recBox = `<div class="recordatorio-box">
+        <div class="rt">⏰ Pasaron 7 días sin respuesta — ¿autorizás el recordatorio?</div>
+        <div style="font-size:11px;color:var(--text2)">Verificá que no hubo contacto reciente sin registrar antes de autorizar.</div>
+        <button class="btn solid" onclick="autorizarRecordatorio()">Autorizar recordatorio</button>
+      </div>`;
+    } else if(p.recordatorio_autorizado && !p.recordatorio_enviado){
+      recBox = `<div class="recordatorio-box">
+        <div class="rt">Recordatorio autorizado — listo para enviar</div>
+        <button class="btn-wa" onclick="enviarRecordatorio()">📱 Enviar recordatorio</button>
+      </div>`;
+    }
+    presupuestoSection = `<div class="det-section">
+      <div class="det-section-title">Envío de presupuesto</div>
+      <input type="date" class="det-input" id="d-fecha-presu" value="${p.fecha_envio_presupuesto||''}">
+      <button class="btn solid" onclick="guardarFechaPresupuesto()" style="align-self:flex-start">Guardar fecha</button>
+      ${dias!==null ? `<div style="font-size:11px;color:var(--text3)">${dias} días desde el envío</div>` : ''}
+      ${recBox}
+    </div>`;
+  }
+
+  document.getElementById('det-body').innerHTML = datosSection + moverSection + infoSection + presupuestoSection;
+  document.getElementById('panel-det').scrollTop = 0;
+}
+
+async function guardarDatos(){
+  const patch = {
+    cliente_nombre: document.getElementById('d-nombre').value.trim(),
+    empresa: document.getElementById('d-empresa').value.trim() || null,
+    mail: document.getElementById('d-mail').value.trim() || null,
+    telefono: document.getElementById('d-telefono').value.trim(),
+    producto: document.getElementById('d-producto').value.trim(),
+    canal_ingreso: document.getElementById('d-canal').value || null,
+    descripcion: document.getElementById('d-desc').value || null,
+  };
+  try{
+    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', patch);
+    Object.assign(_actual, patch);
+    const p = _proyectos.find(x=>x.id===_actual.id); if(p) Object.assign(p, patch);
+    document.getElementById('det-cliente').textContent = patch.cliente_nombre;
+    document.getElementById('det-producto').textContent = patch.producto;
+    toast('Datos guardados ✓'); renderBoard();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function guardarMotivo(val){
+  try{ await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', {motivo_rechazo: val||null});
+    _actual.motivo_rechazo = val||null;
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function moverEstado(estado){
+  if(_actual.estado===estado) return;
+  try{
+    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', {estado});
+    _actual.estado = estado;
+    const p = _proyectos.find(x=>x.id===_actual.id); if(p) p.estado = estado;
+    toast('Movido a "'+labelOf(estado)+'" ✓');
+    renderBoard(); renderDetBody();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function toggleChecklist(campo, val){
+  try{
+    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', {[campo]: val});
+    _actual[campo] = val;
+    const p = _proyectos.find(x=>x.id===_actual.id); if(p) p[campo] = val;
+    renderBoard(); renderDetBody();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function buscarOCrearTemplate(categoria){
+  let t = _templates.find(x=>x.producto===_actual.producto && x.categoria===categoria);
+  if(t) return t;
+  const crear = confirm(`No hay mensaje de "${categoria}" para "${_actual.producto}". ¿Crear uno ahora?`);
+  if(!crear) return null;
+  const mensaje_base = prompt('Mensaje (usá {nombre} para el nombre del cliente):');
+  if(!mensaje_base) return null;
+  const link_extra = prompt('Link opcional (ej: YouTube) — dejar vacío si no aplica:') || null;
+  try{
+    const nuevo = await api('wa_templates_producto', 'POST', { producto: _actual.producto, categoria, mensaje_base, link_extra });
+    _templates.push(nuevo[0]);
+    toast('Plantilla creada ✓');
+    return nuevo[0];
+  } catch(e){ toast('Error al crear plantilla: '+e.message); return null; }
+}
+
+async function enviarInfo(categoria){
+  const t = await buscarOCrearTemplate(categoria);
+  if(!t) return;
+  const msg = t.mensaje_base.replace(/{nombre}/g, _actual.cliente_nombre||'') + (t.link_extra?'\n'+t.link_extra:'');
+  window.open(`https://wa.me/${normNumero(_actual.telefono)}?text=${encodeURIComponent(msg)}`, '_blank');
+  await api('rpc/fn_incrementar_contador', 'POST', { p_categoria: categoria }).catch(()=>{});
+}
+
+async function guardarFechaPresupuesto(){
+  const val = document.getElementById('d-fecha-presu').value || null;
+  try{
+    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', { fecha_envio_presupuesto: val, recordatorio_candidato:false, recordatorio_autorizado:false, recordatorio_enviado:false });
+    Object.assign(_actual, { fecha_envio_presupuesto: val, recordatorio_candidato:false, recordatorio_autorizado:false, recordatorio_enviado:false });
+    const p = _proyectos.find(x=>x.id===_actual.id); if(p) Object.assign(p, _actual);
+    toast('Fecha guardada ✓'); renderBoard(); renderDetBody();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function autorizarRecordatorio(){
+  try{
+    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', { recordatorio_autorizado: true });
+    _actual.recordatorio_autorizado = true;
+    toast('Recordatorio autorizado ✓'); renderDetBody();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+async function enviarRecordatorio(){
+  const t = await buscarOCrearTemplate('recordatorio');
+  const base = t ? t.mensaje_base : 'Hola {nombre}, ¿pudiste revisar el presupuesto que te enviamos? Cualquier duda estamos para ayudarte.';
+  const link = t?.link_extra ? '\n'+t.link_extra : '';
+  const msg = base.replace(/{nombre}/g, _actual.cliente_nombre||'') + link;
+  window.open(`https://wa.me/${normNumero(_actual.telefono)}?text=${encodeURIComponent(msg)}`, '_blank');
+  try{
+    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', { recordatorio_enviado: true });
+    _actual.recordatorio_enviado = true;
+    const p = _proyectos.find(x=>x.id===_actual.id); if(p) p.recordatorio_enviado = true;
+    await api('rpc/fn_incrementar_contador', 'POST', { p_categoria: 'recordatorio' }).catch(()=>{});
+    toast('Recordatorio enviado ✓'); renderBoard(); renderDetBody();
+  } catch(e){ toast('Error: '+e.message); }
+}
+
+function cerrarDetalle(e){ if(e.target===document.getElementById('overlay')) cerrarDetalleBtn(); }
+function cerrarDetalleBtn(){ document.getElementById('overlay').classList.remove('open'); _actual=null; }
+
+let _draggingId=null, _dragMoved=false;
+function dragStart(e,id){ _draggingId=id; _dragMoved=false; e.dataTransfer.effectAllowed='move'; setTimeout(()=>{ document.querySelector(`[data-id="${id}"]`)?.classList.add('dragging'); },0); }
+function dragEnd(){ _dragMoved=true; document.querySelectorAll('.card.dragging').forEach(el=>el.classList.remove('dragging')); document.querySelectorAll('.col.drag-over').forEach(el=>el.classList.remove('drag-over')); setTimeout(()=>{_dragMoved=false;},200); }
+
+async function dropOnCol(colKey){
+  if(!_draggingId) return;
+  const p = _proyectos.find(x=>x.id===_draggingId);
+  if(!p){ _draggingId=null; return; }
+  if(colKey==='resolucion'){ toast('Abrí la card y elegí Aprobado / En espera indefinida / Rechazado'); _draggingId=null; return; }
+  if(colKey==='proyecto_finalizado'){ toast('Este estado se actualiza solo desde producción'); _draggingId=null; return; }
+  if(p.estado===colKey){ _draggingId=null; return; }
+  try{
+    await api(`proyectos_comercial?id=eq.${p.id}`, 'PATCH', {estado: colKey});
+    p.estado = colKey;
+    toast('Movido a "'+labelOf(colKey)+'" ✓');
+    renderBoard();
+  } catch(e){ toast('Error: '+e.message); }
+  _draggingId=null;
+}
+
+init();
+</script>
+</body>
+</html>
