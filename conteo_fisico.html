@@ -1268,8 +1268,8 @@ function cancelarAjuste(){
 
   const isReadonly = params.get('mode') === 'readonly';
 
-  // Mostrar gernav para gerencia o cuando no hay area definida (acceso directo desde index general)
-  if((area === 'gerencia' || area === '') && !isReadonly){
+  // Mostrar gernav para gerencia (con o sin readonly) o acceso directo sin área
+  if(area === 'gerencia' || (area === '' && !isReadonly)){
     if(nav) nav.style.display = 'flex';
     document.body.style.paddingBottom = '90px';
     document.querySelectorAll('#gernav .gernav-btn').forEach(a => {
@@ -1283,8 +1283,8 @@ function cancelarAjuste(){
     });
   }
 
-  // Mostrar prodnav si area=produccion O mode=readonly
-  if(area === 'produccion' || isReadonly){
+  // Mostrar prodnav si area=produccion O mode=readonly SIN area gerencia
+  if(area === 'produccion' || (isReadonly && area !== 'gerencia')){
     const prodnav = document.getElementById('prodnav');
     if(prodnav) prodnav.style.display = 'flex';
     document.body.style.paddingBottom = '90px';
