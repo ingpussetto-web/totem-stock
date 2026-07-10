@@ -549,6 +549,9 @@ async function renderCantidad(skuId, nombre, content){
     const totalSalidasTotal = (bomItems||[]).length;
     const saldoTotal = stockActualTotal - totalSalidasTotal;
 
+    // Mapa de disponible por variante (para el conteo físico)
+    const disponiblesMap = {};
+
     // Construir HTML de cada variante
     const variantesHtml = (stockRows||[]).map(row=>{
       const varId   = row.variante_id;
@@ -580,6 +583,7 @@ async function renderCantidad(skuId, nombre, content){
       const totalEntradasVar = recVar.reduce((s,e)=>s+(e.cantidad_recibida||0),0);
       const totalAjustesVar  = ajVar.reduce((s,a)=>s+(a.diferencia||0),0);
       const saldoVar = stockVar - totalSalidasVar;
+      disponiblesMap[varId ?? 'null'] = saldoVar;  // disponible real (sin reservados activos)
       const sinRecVar = !recVar.length && !ajVar.length;
 
       return `
@@ -708,7 +712,7 @@ async function renderCantidad(skuId, nombre, content){
           </div>
         </div>
         ${variantesHtml}
-        ${renderConteoInput(skuId, nombre, saldoTotal, 'cantidad', stockRows)}
+        ${renderConteoInput(skuId, nombre, saldoTotal, 'cantidad', stockRows, undefined, undefined, disponiblesMap)}
       </div>
     `;
 
@@ -846,7 +850,7 @@ async function renderCantidad(skuId, nombre, content){
 }
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
-function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockUID, asignadasUID){
+function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockUID, asignadasUID, disponiblePorVariante){
   if(READONLY){
     return `
       <div class="conteo-section" style="opacity:0.5;pointer-events:none;">
@@ -856,22 +860,24 @@ function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockU
   }
   const tieneVar = (stockRows||[]).some(r=>r.variante_id !== null);
   if(tieneVar){
-    const variantesHtml = (stockRows||[]).map(r=>`
+    const variantesHtml = (stockRows||[]).map(r=>{
+      const dispVar = disponiblePorVariante?.[r.variante_id ?? 'null'] ?? r.cantidad ?? 0;
+      return `
       <div class="variante-card">
         <div class="variante-header">
           <span class="variante-nombre">● ${r.variantes?.valor||'Sin variante'}</span>
-          <span class="variante-stock">Stock sistema: ${r.cantidad||0}</span>
+          <span class="variante-stock">Disponible: ${dispVar}</span>
         </div>
         <div class="conteo-row">
           <span class="conteo-label">Conteo físico:</span>
           <input type="number" class="conteo-input input-variante" min="0" placeholder="0"
                  data-variante-id="${r.variante_id}" data-variante-nombre="${r.variantes?.valor||''}"
-                 data-stock-id="${r.id}" data-teorico="${r.cantidad||0}"
+                 data-stock-id="${r.id}" data-teorico="${dispVar}"
                  oninput="calcularConclusionVariantes(${skuId},'${nombre.replace(/'/g,"\'")}')">
         </div>
         <div class="variante-conclusion" id="concl-var-${r.variante_id}"></div>
       </div>
-    `).join('');
+    `}).join('');
     return `
       <div class="conteo-section">
         <div class="conteo-title">🔢 Conteo por variante</div>
