@@ -99,6 +99,13 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .loader{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px}
 .card.dragging{opacity:.35;transform:scale(.97);cursor:grabbing}
 .col.drag-over{background:rgba(0,229,160,0.04);border-radius:10px;outline:1px dashed var(--green-border)}
+
+/* Modal centrado (nuevo contacto / nueva plantilla) */
+.overlay.center{justify-content:center;align-items:center}
+.modal-box{background:var(--panel);border:1px solid var(--border2);border-radius:14px;width:480px;max-width:92vw;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column}
+.flabel{font-size:11px;color:var(--text2);margin-bottom:-2px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 20px 20px}
+.modal-hint{font-size:12px;color:var(--text2);line-height:1.4;background:var(--panel2);border-radius:var(--radius);padding:8px 10px;border:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -135,6 +142,20 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 
 <div class="toast" id="toast"></div>
 
+<div class="overlay center" id="modal2-overlay" onclick="if(event.target===this) cerrarModal2()">
+  <div class="modal-box">
+    <div class="det-head">
+      <div class="det-cliente" id="modal2-title"></div>
+      <button class="close-btn" onclick="cerrarModal2()">✕</button>
+    </div>
+    <div class="det-body" id="modal2-body"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal2()">Cancelar</button>
+      <button class="btn solid" onclick="_modal2Callback && _modal2Callback()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
@@ -166,6 +187,20 @@ const PESOS = { info_general_enviada:20, info_funcionamiento_enviada:20, info_li
 let _proyectos = [];
 let _templates = [];
 let _actual = null;
+let _modal2Callback = null;
+let _modal2Resolve = null;
+
+function abrirModal2(title, bodyHtml, callback){
+  document.getElementById('modal2-title').textContent = title;
+  document.getElementById('modal2-body').innerHTML = bodyHtml;
+  _modal2Callback = callback;
+  document.getElementById('modal2-overlay').classList.add('open');
+}
+function cerrarModal2(){
+  document.getElementById('modal2-overlay').classList.remove('open');
+  _modal2Callback = null;
+  if(_modal2Resolve){ const r=_modal2Resolve; _modal2Resolve=null; r(null); }
+}
 
 async function api(path, method='GET', body=null){
   const opts = { method, headers: {
@@ -238,7 +273,9 @@ function cardHTML(p){
   const claseEstado = p.estado==='aprobado' ? 'aprobado' : p.estado==='espera_indefinida' ? 'espera' : p.estado==='rechazado' ? 'rechazado' : p.estado==='proyecto_finalizado' ? 'finalizado' : '';
   const dias = diasDesde(p.fecha_estado_actual);
   const chip = colOf(p.estado)==='resolucion' ? `<span class="estado-chip ${claseEstado}">${esc(labelOf(p.estado))}</span>` : '';
-  const candidato = p.recordatorio_candidato && !p.recordatorio_enviado ? '<span class="badge-candidato">⏰ recordatorio</span>' : '';
+  const diasPresu = p.fecha_envio_presupuesto ? diasDesde(p.fecha_envio_presupuesto) : null;
+  const necesitaRecordatorio = diasPresu!==null && diasPresu>=7 && !p.recordatorio_autorizado && !p.recordatorio_enviado;
+  const candidato = necesitaRecordatorio ? '<span class="badge-candidato">⏰ recordatorio</span>' : '';
   const pct = p.estado==='informacion_enviada' ? `<div class="card-progress"><div class="prog-label"><span>Interés</span><span>${pctInteres(p)}%</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pctInteres(p)}%"></div></div></div>` : '';
 
   return `<div class="card ${claseEstado}" draggable="true" data-id="${p.id}"
@@ -256,17 +293,49 @@ function cardHTML(p){
 
 function cardClick(e, id){ if(_dragMoved) return; abrirDetalle(id); }
 
-async function nuevoContacto(){
-  const nombre = prompt('Nombre del cliente / contacto:');
-  if(!nombre) return;
-  const telefono = prompt('Teléfono (con característica, sin +):');
-  if(!telefono) return;
-  const producto = prompt('Producto de interés:') || '';
+function nuevoContacto(){
+  const productos = [...new Set(_templates.map(t=>t.producto))];
+  const body = `
+    <div class="det-section">
+      <div class="flabel">Nombre del contacto</div>
+      <input class="det-input" id="mc-nombre" placeholder="Nombre y apellido">
+      <div class="flabel">Empresa</div>
+      <input class="det-input" id="mc-empresa" placeholder="Nombre de la empresa (opcional)">
+      <div class="det-row2">
+        <div><div class="flabel">Teléfono</div><input class="det-input" id="mc-telefono" placeholder="ej: 351 2345678"></div>
+        <div><div class="flabel">Email</div><input class="det-input" id="mc-mail" placeholder="email@empresa.com (opcional)"></div>
+      </div>
+      <div class="flabel">Producto de interés</div>
+      <input class="det-input" id="mc-producto" list="lista-productos-modal" placeholder="ej: Turnero">
+      <datalist id="lista-productos-modal">${productos.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+      <div class="flabel">Canal de ingreso</div>
+      <select id="mc-canal">
+        <option value="">— Seleccionar —</option>
+        <option value="mail">Mail</option>
+        <option value="telefono">Teléfono</option>
+        <option value="whatsapp">WhatsApp</option>
+      </select>
+    </div>`;
+  abrirModal2('Nuevo contacto comercial', body, guardarNuevoContacto);
+}
+
+async function guardarNuevoContacto(){
+  const nombre = document.getElementById('mc-nombre').value.trim();
+  const telefono = document.getElementById('mc-telefono').value.trim();
+  if(!nombre || !telefono){ toast('Nombre y teléfono son obligatorios'); return; }
+  const patch = {
+    cliente_nombre: nombre,
+    empresa: document.getElementById('mc-empresa').value.trim() || null,
+    mail: document.getElementById('mc-mail').value.trim() || null,
+    telefono,
+    producto: document.getElementById('mc-producto').value.trim(),
+    canal_ingreso: document.getElementById('mc-canal').value || null,
+    estado: 'ingreso_contacto'
+  };
   try{
-    const nuevo = await api('proyectos_comercial', 'POST', {
-      cliente_nombre: nombre, telefono, producto, estado: 'ingreso_contacto'
-    });
+    const nuevo = await api('proyectos_comercial', 'POST', patch);
     _proyectos.unshift(nuevo[0]);
+    cerrarModal2();
     renderBoard();
     toast('Contacto creado ✓');
     abrirDetalle(nuevo[0].id);
@@ -338,7 +407,7 @@ function renderDetBody(){
   if(colOf(p.estado)!=='ingreso_contacto'){
     const dias = p.fecha_envio_presupuesto ? diasDesde(p.fecha_envio_presupuesto) : null;
     let recBox = '';
-    if(p.recordatorio_candidato && !p.recordatorio_autorizado){
+    if(dias!==null && dias>=7 && !p.recordatorio_autorizado && !p.recordatorio_enviado){
       recBox = `<div class="recordatorio-box">
         <div class="rt">⏰ Pasaron 7 días sin respuesta — ¿autorizás el recordatorio?</div>
         <div style="font-size:11px;color:var(--text2)">Verificá que no hubo contacto reciente sin registrar antes de autorizar.</div>
@@ -409,20 +478,33 @@ async function toggleChecklist(campo, val){
   } catch(e){ toast('Error: '+e.message); }
 }
 
-async function buscarOCrearTemplate(categoria){
-  let t = _templates.find(x=>x.producto===_actual.producto && x.categoria===categoria);
-  if(t) return t;
-  const crear = confirm(`No hay mensaje de "${categoria}" para "${_actual.producto}". ¿Crear uno ahora?`);
-  if(!crear) return null;
-  const mensaje_base = prompt('Mensaje (usá {nombre} para el nombre del cliente):');
-  if(!mensaje_base) return null;
-  const link_extra = prompt('Link opcional (ej: YouTube) — dejar vacío si no aplica:') || null;
-  try{
-    const nuevo = await api('wa_templates_producto', 'POST', { producto: _actual.producto, categoria, mensaje_base, link_extra });
-    _templates.push(nuevo[0]);
-    toast('Plantilla creada ✓');
-    return nuevo[0];
-  } catch(e){ toast('Error al crear plantilla: '+e.message); return null; }
+function buscarOCrearTemplate(categoria){
+  return new Promise(resolve=>{
+    let t = _templates.find(x=>x.producto===_actual.producto && x.categoria===categoria);
+    if(t){ resolve(t); return; }
+    _modal2Resolve = resolve;
+    const body = `
+      <div class="det-section">
+        <div class="modal-hint">No hay mensaje de <b>${esc(categoria)}</b> para <b>${esc(_actual.producto)}</b> todavía. Lo cargás una vez y queda disponible para siempre.</div>
+        <div class="flabel">Mensaje (usá {nombre} para el nombre del cliente)</div>
+        <textarea class="det-desc-input" id="mt-mensaje" style="min-height:90px" placeholder="Hola {nombre}, te contamos..."></textarea>
+        <div class="flabel">Link opcional (YouTube, etc.)</div>
+        <input class="det-input" id="mt-link" placeholder="https://...">
+      </div>`;
+    abrirModal2('Nueva plantilla de mensaje', body, async ()=>{
+      const mensaje_base = document.getElementById('mt-mensaje').value.trim();
+      if(!mensaje_base){ toast('Escribí el mensaje'); return; }
+      const link_extra = document.getElementById('mt-link').value.trim() || null;
+      try{
+        const nuevo = await api('wa_templates_producto', 'POST', { producto: _actual.producto, categoria, mensaje_base, link_extra });
+        _templates.push(nuevo[0]);
+        toast('Plantilla creada ✓');
+        _modal2Resolve = null;
+        cerrarModal2();
+        resolve(nuevo[0]);
+      } catch(e){ toast('Error: '+e.message); }
+    });
+  });
 }
 
 async function enviarInfo(categoria){

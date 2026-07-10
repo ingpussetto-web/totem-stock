@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mensajería Comercial — Totem Nube</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0f;--panel:#0d1117;--panel2:#111620;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
+  --text:#e8eaf0;--text2:#7a8099;--text3:#3a4055;
+  --green:#00e5a0;--green-dim:rgba(0,229,160,0.1);--green-border:rgba(0,229,160,0.25);
+  --amber:#ffb340;--amber-dim:rgba(255,179,64,0.1);--amber-border:rgba(255,179,64,0.25);
+  --red:#ff4d6a;--red-dim:rgba(255,77,106,0.1);--red-border:rgba(255,77,106,0.25);
+  --radius:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:100}
+.top-bar-left{display:flex;align-items:center;gap:16px}
+.back-btn{color:var(--text2);text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius)}
+.back-btn:hover{border-color:var(--border2);color:var(--text)}
+.top-title{font-size:15px;font-weight:600}
+.top-sub{font-size:11px;color:var(--text2);margin-top:1px}
+
+.tabs{display:flex;gap:8px;padding:16px 24px 0}
+.tab{font-size:12px;padding:8px 16px;border-radius:var(--radius) var(--radius) 0 0;border:1px solid var(--border2);border-bottom:none;background:var(--panel2);color:var(--text2);cursor:pointer}
+.tab.activo{background:var(--panel);color:var(--green);border-color:var(--green-border)}
+.tab .n{background:var(--border2);border-radius:8px;font-size:10px;padding:1px 6px;margin-left:6px}
+
+.wrap{max-width:840px;margin:0 auto;padding:20px 24px 60px}
+.contadores{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.cont-chip{font-size:11px;padding:6px 12px;border-radius:var(--radius);background:var(--panel2);border:1px solid var(--border);color:var(--text2)}
+.cont-chip b{color:var(--text)}
+
+.cliente-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.cliente-nombre{font-size:14px;font-weight:600}
+.cliente-meta{font-size:11px;color:var(--text3);margin-top:2px;margin-bottom:10px}
+.item-row{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.item-row:last-child{margin-bottom:0}
+.item-info{flex:1;min-width:0}
+.item-producto{font-size:12px;font-weight:500}
+.item-msg{font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-actions{display:flex;gap:6px;flex-shrink:0}
+.btn-wa{font-size:11px;padding:5px 10px;border-radius:var(--radius);border:1px solid #25d366;background:rgba(37,211,102,0.1);color:#25d366;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn-ok{font-size:11px;padding:5px 10px;border-radius:var(--radius);border:1px solid var(--green-border);background:var(--green-dim);color:var(--green);cursor:pointer;font-weight:600;white-space:nowrap}
+.btn-crear{font-size:11px;padding:5px 10px;border-radius:var(--radius);border:1px solid var(--amber-border);background:var(--amber-dim);color:var(--amber);cursor:pointer;font-weight:600;white-space:nowrap}
+.empty{font-size:12px;color:var(--text3);text-align:center;padding:40px 20px;border:1px dashed var(--border);border-radius:10px}
+.loader{font-size:12px;color:var(--text3);padding:20px;text-align:center}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 18px;font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* Modal centrado */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal-box{background:var(--panel);border:1px solid var(--border2);border-radius:14px;width:460px;max-width:92vw;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column}
+.det-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.det-cliente{font-size:15px;font-weight:600}
+.close-btn{background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);cursor:pointer;padding:5px 10px;font-size:18px;line-height:1}
+.close-btn:hover{border-color:var(--border2);color:var(--text)}
+.det-body{padding:20px;display:flex;flex-direction:column;gap:8px}
+.det-section{display:flex;flex-direction:column;gap:8px}
+.det-input,textarea{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 10px;font-size:12px;font-family:inherit;width:100%}
+.flabel{font-size:11px;color:var(--text2);margin-bottom:-2px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 20px 20px}
+.modal-hint{font-size:12px;color:var(--text2);line-height:1.4;background:var(--panel2);border-radius:var(--radius);padding:8px 10px;border:1px solid var(--border)}
+.btn{padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit}
+.btn:hover{border-color:var(--green);color:var(--green)}
+.btn.solid{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <a href="index.html" class="back-btn">← Sistema</a>
+    <div>
+      <div class="top-title">Mensajería Comercial</div>
+      <div class="top-sub">Encuestas · Newsletter · Reventa</div>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab activo" id="tab-encuesta" onclick="setTab('encuesta')">Encuestas <span class="n" id="n-encuesta">0</span></button>
+  <button class="tab" id="tab-newsletter" onclick="setTab('newsletter')">Newsletter <span class="n" id="n-newsletter">0</span></button>
+  <button class="tab" id="tab-reventa" onclick="setTab('reventa')">Reventa <span class="n" id="n-reventa">0</span></button>
+</div>
+
+<div class="wrap">
+  <div class="contadores" id="contadores"></div>
+  <div id="contenido"><div class="loader">Cargando...</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="modal2-overlay" onclick="if(event.target===this) cerrarModal2()">
+  <div class="modal-box">
+    <div class="det-head">
+      <div class="det-cliente" id="modal2-title"></div>
+      <button class="close-btn" onclick="cerrarModal2()">✕</button>
+    </div>
+    <div class="det-body" id="modal2-body"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal2()">Cancelar</button>
+      <button class="btn solid" onclick="_modal2Callback && _modal2Callback()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
+
+let _proyectos = [];
+let _templates = [];
+let _tabActivo = 'encuesta';
+let _modal2Callback = null;
+
+function abrirModal2(title, bodyHtml, callback){
+  document.getElementById('modal2-title').textContent = title;
+  document.getElementById('modal2-body').innerHTML = bodyHtml;
+  _modal2Callback = callback;
+  document.getElementById('modal2-overlay').classList.add('open');
+}
+function cerrarModal2(){
+  document.getElementById('modal2-overlay').classList.remove('open');
+  _modal2Callback = null;
+}
+
+async function api(path, method='GET', body=null){
+  const opts = { method, headers: {
+    'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY,
+    'Content-Type': 'application/json', 'Prefer': 'return=representation'
+  }};
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(SUPABASE_URL+'/rest/v1/'+path, opts);
+  if(!r.ok){ const e=await r.text(); throw new Error(e); }
+  return r.status===204 ? null : r.json();
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function toast(msg, dur=2800){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), dur);
+}
+function diasDesde(iso){ if(!iso) return 0; return Math.floor((new Date()-new Date(iso))/86400000); }
+function normNumero(tel){ let n=String(tel||'').replace(/\D/g,''); if(n.length<=10) n='549'+n; return n; }
+
+async function init(){
+  try{
+    [_proyectos, _templates] = await Promise.all([
+      api('proyectos_comercial?select=*'),
+      api('wa_templates_producto?select=*'),
+    ]);
+    await cargarContadores();
+    render();
+  } catch(e){
+    document.getElementById('contenido').innerHTML = '<div class="empty" style="color:var(--red)">Error: '+esc(e.message)+'</div>';
+  }
+}
+
+async function cargarContadores(){
+  try{
+    const mesActual = new Date().toISOString().slice(0,7)+'-01';
+    const rows = await api(`wa_contadores?mes=eq.${mesActual}&select=*`);
+    const box = document.getElementById('contadores');
+    if(!rows || !rows.length){ box.innerHTML = '<span class="cont-chip">Sin envíos este mes todavía</span>'; return; }
+    box.innerHTML = rows.map(r=>`<span class="cont-chip"><b>${r.cantidad_enviada}</b> ${esc(r.categoria)}</span>`).join('');
+  } catch(e){}
+}
+
+// ─── Candidatos por categoría (calculados en vivo, sin cron) ──
+function candidatosEncuesta(){
+  return _proyectos.filter(p =>
+    p.estado === 'proyecto_finalizado' &&
+    !p.encuesta_generada &&
+    diasDesde(p.fecha_estado_actual) >= 30
+  );
+}
+function candidatosNewsletter(){
+  return _proyectos.filter(p =>
+    p.estado === 'espera_indefinida' &&
+    (!p.ultimo_newsletter_enviado || diasDesde(p.ultimo_newsletter_enviado) >= 15)
+  );
+}
+function candidatosReventa(){
+  return _proyectos.filter(p =>
+    p.estado === 'proyecto_finalizado' &&
+    !p.reventa_enviada
+  );
+}
+
+function setTab(tab){
+  _tabActivo = tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('activo'));
+  document.getElementById('tab-'+tab).classList.add('activo');
+  render();
+}
+
+function render(){
+  document.getElementById('n-encuesta').textContent = candidatosEncuesta().length;
+  document.getElementById('n-newsletter').textContent = agruparPorCliente(candidatosNewsletter()).length;
+  document.getElementById('n-reventa').textContent = agruparPorCliente(candidatosReventa()).length;
+
+  const cont = document.getElementById('contenido');
+  if(_tabActivo === 'encuesta'){
+    cont.innerHTML = renderEncuestas(candidatosEncuesta());
+  } else if(_tabActivo === 'newsletter'){
+    cont.innerHTML = renderAgrupado(agruparPorCliente(candidatosNewsletter()), 'newsletter');
+  } else {
+    cont.innerHTML = renderAgrupado(agruparPorCliente(candidatosReventa()), 'reventa');
+  }
+}
+
+function agruparPorCliente(lista){
+  const map = new Map();
+  lista.forEach(p=>{
+    const key = p.cliente_nombre + '|' + p.telefono;
+    if(!map.has(key)) map.set(key, { cliente_nombre:p.cliente_nombre, telefono:p.telefono, empresa:p.empresa, items:[] });
+    map.get(key).items.push(p);
+  });
+  return [...map.values()];
+}
+
+function renderEncuestas(lista){
+  if(!lista.length) return '<div class="empty">No hay encuestas pendientes por ahora.</div>';
+  return lista.map(p=>{
+    const t = _templates.find(x=>x.producto===p.producto && x.categoria==='encuesta');
+    const msg = t ? t.mensaje_base.replace(/{nombre}/g, p.cliente_nombre) + (t.link_extra?'\n'+t.link_extra:'') : null;
+    return `<div class="cliente-card">
+      <div class="cliente-nombre">${esc(p.cliente_nombre)}</div>
+      <div class="cliente-meta">${esc(p.producto)} · finalizado hace ${diasDesde(p.fecha_estado_actual)} días</div>
+      <div class="item-row">
+        <div class="item-info">
+          <div class="item-msg">${msg ? esc(msg) : 'Sin plantilla de encuesta para este producto'}</div>
+        </div>
+        <div class="item-actions">
+          ${msg
+            ? `<button class="btn-wa" onclick="enviar(${p.id},'encuesta')">📱 Enviar</button>`
+            : `<button class="btn-crear" onclick="crearYEnviar(${p.id},'encuesta')">Crear plantilla</button>`}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAgrupado(grupos, categoria){
+  if(!grupos.length) return `<div class="empty">No hay clientes pendientes de ${categoria} por ahora.</div>`;
+  return grupos.map(g=>{
+    const rows = g.items.map(p=>{
+      const t = _templates.find(x=>x.producto===p.producto && x.categoria===categoria);
+      return `<div class="item-row">
+        <div class="item-info">
+          <div class="item-producto">${esc(p.producto)}</div>
+          <div class="item-msg">${t ? esc(t.mensaje_base) : 'Sin plantilla — creála para habilitar el envío'}</div>
+        </div>
+        <div class="item-actions">
+          ${t
+            ? `<button class="btn-wa" onclick="enviar(${p.id},'${categoria}')">📱 Enviar</button>`
+            : `<button class="btn-crear" onclick="crearYEnviar(${p.id},'${categoria}')">Crear plantilla</button>`}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="cliente-card">
+      <div class="cliente-nombre">${esc(g.cliente_nombre)}</div>
+      <div class="cliente-meta">${esc(g.empresa||'')}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function crearYEnviar(proyectoId, categoria){
+  const p = _proyectos.find(x=>x.id===proyectoId);
+  const body = `
+    <div class="det-section">
+      <div class="modal-hint">No hay mensaje de <b>${esc(categoria)}</b> para <b>${esc(p.producto)}</b> todavía. Lo cargás una vez y queda disponible para siempre.</div>
+      <div class="flabel">Mensaje (usá {nombre} para el nombre del cliente)</div>
+      <textarea id="mt-mensaje" style="min-height:90px" placeholder="Hola {nombre}, te contamos..."></textarea>
+      <div class="flabel">Link opcional (YouTube, etc.)</div>
+      <input class="det-input" id="mt-link" placeholder="https://...">
+    </div>`;
+  abrirModal2('Nueva plantilla de mensaje', body, async ()=>{
+    const mensaje_base = document.getElementById('mt-mensaje').value.trim();
+    if(!mensaje_base){ toast('Escribí el mensaje'); return; }
+    const link_extra = document.getElementById('mt-link').value.trim() || null;
+    try{
+      const nuevo = await api('wa_templates_producto', 'POST', { producto: p.producto, categoria, mensaje_base, link_extra });
+      _templates.push(nuevo[0]);
+      cerrarModal2();
+      toast('Plantilla creada ✓');
+      render();
+    } catch(e){ toast('Error: '+e.message); }
+  });
+}
+
+async function enviar(proyectoId, categoria){
+  const p = _proyectos.find(x=>x.id===proyectoId);
+  if(!p) return;
+  const t = _templates.find(x=>x.producto===p.producto && x.categoria===categoria);
+  if(!t){ toast('No hay plantilla — creála primero'); return; }
+  const msg = t.mensaje_base.replace(/{nombre}/g, p.cliente_nombre||'') + (t.link_extra?'\n'+t.link_extra:'');
+  window.open(`https://wa.me/${normNumero(p.telefono)}?text=${encodeURIComponent(msg)}`, '_blank');
+
+  const patch = {};
+  if(categoria==='encuesta') patch.encuesta_generada = true;
+  if(categoria==='newsletter') patch.ultimo_newsletter_enviado = new Date().toISOString();
+  if(categoria==='reventa') patch.reventa_enviada = true;
+
+  try{
+    await api(`proyectos_comercial?id=eq.${proyectoId}`, 'PATCH', patch);
+    Object.assign(p, patch);
+    await api('rpc/fn_incrementar_contador', 'POST', { p_categoria: categoria }).catch(()=>{});
+    toast('Enviado ✓ registrado en contadores');
+    await cargarContadores();
+    render();
+  } catch(e){ toast('Error al registrar: '+e.message); }
+}
+
+init();
+</script>
+</body>
+</html>
