@@ -402,7 +402,7 @@ function renderRespuestasRapidas(){
   let filtradas = _respuestas;
   if(_filtroProducto !== 'todos') filtradas = filtradas.filter(r=>r.producto===_filtroProducto || r.producto==='General');
   if(_filtroTipo !== 'todos') filtradas = filtradas.filter(r=>r.tipo_consulta===_filtroTipo);
-  if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra || r.filtro_extra==='todos');
+  if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra || r.filtro_extra==='todos' || !r.filtro_extra);
 
   // Orden cronológico de conversación
   const sorted = [...filtradas].sort((a,b)=>
