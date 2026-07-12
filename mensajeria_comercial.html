@@ -410,6 +410,11 @@ function renderRespuestasRapidas(){
     (a.titulo||'').localeCompare(b.titulo||'')
   );
 
+  // Auto-seleccionar el primero si la selección actual no está en los resultados
+  if(!sorted.find(r=>r.id===_seleccionadaId)){
+    _seleccionadaId = sorted[0]?.id || null;
+  }
+
   // Detectar alternativas: agrupar por objetivo
   const porObjetivo = {};
   sorted.forEach(r=>{
