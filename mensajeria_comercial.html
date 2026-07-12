@@ -80,6 +80,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .filter-chip.t-tecnica.activo{background:rgba(110,168,255,.12);border-color:rgba(110,168,255,.3);color:#6ea8ff}
 .filter-chip.t-logistica.activo{background:var(--green-dim);border-color:var(--green-border);color:var(--green)}
 .filter-chip.t-post_venta.activo{background:rgba(255,77,106,.1);border-color:var(--red-border);color:var(--red)}
+.filter-chip.t-servicios_personalizados.activo{background:rgba(180,130,255,.1);border-color:rgba(180,130,255,.3);color:#b482ff}
 .filter-chip.t-general.activo{background:var(--panel2);border-color:var(--border2);color:var(--text)}
 
 .rr-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
@@ -94,6 +95,31 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .rr-mensaje{font-size:11px;color:var(--text2);white-space:pre-wrap;line-height:1.5;margin-bottom:10px;max-height:80px;overflow:hidden;position:relative}
 .rr-mensaje::after{content:'';position:absolute;bottom:0;left:0;right:0;height:20px;background:linear-gradient(transparent,var(--panel))}
 .rr-actions{display:flex;gap:6px;align-items:center}
+
+/* Layout dos columnas */
+.rr-layout{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.rr-lista{display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 300px);overflow-y:auto;padding-right:4px}
+.rr-list-item{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+.rr-list-item:hover{border-color:var(--border2)}
+.rr-list-item.seleccionado{border-color:var(--green-border);background:rgba(0,229,160,0.05)}
+.rr-list-main{display:flex;align-items:flex-start;gap:8px;margin-bottom:5px}
+.rr-list-texto{flex:1;min-width:0}
+.rr-list-titulo{font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr-list-objetivo{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr-list-badges{display:flex;gap:4px;flex-wrap:wrap}
+.orden-badge{font-size:10px;min-width:20px;text-align:center;padding:2px 5px;border-radius:6px;background:var(--panel2);border:1px solid var(--border);color:var(--text3);flex-shrink:0}
+.alt-badge{font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(255,179,64,.1);border:1px solid var(--amber-border);color:var(--amber);flex-shrink:0;white-space:nowrap}
+
+.rr-preview{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;position:sticky;top:80px;max-height:calc(100vh - 260px);overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.rr-preview-empty{font-size:12px;color:var(--text3);text-align:center;padding:50px 20px;line-height:1.6}
+.rr-preview-head{border-bottom:1px solid var(--border);padding-bottom:10px}
+.rr-preview-titulo{font-size:14px;font-weight:600;margin-bottom:4px}
+.rr-preview-objetivo{font-size:11px;color:var(--green);font-weight:500}
+.rr-preview-partes{display:flex;flex-direction:column;gap:8px}
+.rr-burbuja{background:#0f1f14;border:1px solid rgba(0,229,160,.15);border-radius:12px 12px 3px 12px;padding:10px 14px}
+.rr-burbuja-num{font-size:10px;color:var(--green);font-weight:600;margin-bottom:4px;letter-spacing:.03em}
+.rr-burbuja-texto{font-size:12px;color:var(--text);white-space:pre-wrap;line-height:1.55}
+.rr-preview-actions{display:flex;gap:7px;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -150,14 +176,16 @@ let _modal2Callback = null;
 let _filtroProducto = 'todos';
 let _filtroTipo = 'todos';
 let _filtroExtra = 'todos';
+let _seleccionadaId = null;
 
 const TIPOS_CONSULTA = [
-  { key:'todos',      label:'Todos' },
-  { key:'comercial',  label:'Comercial' },
-  { key:'tecnica',    label:'Técnica' },
-  { key:'logistica',  label:'Logística' },
-  { key:'post_venta', label:'Post Venta' },
-  { key:'general',    label:'General' },
+  { key:'todos',                  label:'Todos' },
+  { key:'comercial',              label:'Comercial' },
+  { key:'tecnica',                label:'Técnica' },
+  { key:'logistica',              label:'Logística' },
+  { key:'post_venta',             label:'Post Venta' },
+  { key:'servicios_personalizados', label:'Servicios personalizados' },
+  { key:'general',                label:'General' },
 ];
 function labelTipo(k){ return TIPOS_CONSULTA.find(t=>t.key===k)?.label || k; }
 
@@ -376,6 +404,20 @@ function renderRespuestasRapidas(){
   if(_filtroTipo !== 'todos') filtradas = filtradas.filter(r=>r.tipo_consulta===_filtroTipo);
   if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra || r.filtro_extra==='todos');
 
+  // Orden cronológico de conversación
+  const sorted = [...filtradas].sort((a,b)=>
+    ((a.orden_conversacion||99)-(b.orden_conversacion||99)) ||
+    (a.titulo||'').localeCompare(b.titulo||'')
+  );
+
+  // Detectar alternativas: agrupar por objetivo
+  const porObjetivo = {};
+  sorted.forEach(r=>{
+    const k = (r.objetivo||'').trim() || ('__'+r.id);
+    if(!porObjetivo[k]) porObjetivo[k] = [];
+    porObjetivo[k].push(r.id);
+  });
+
   const productoSel = `<select class="det-input" style="width:auto;min-width:180px;" onchange="_filtroProducto=this.value;render()">
     ${productos.map(p=>`<option value="${esc(p)}" ${_filtroProducto===p?'selected':''}>${p==='todos'?'Todos los productos':esc(p)}</option>`).join('')}
   </select>`;
@@ -385,40 +427,81 @@ function renderRespuestasRapidas(){
   ).join('');
 
   const extraChips = [
-    {key:'todos',label:'Todos'},
-    {key:'hardware',label:'Hardware'},
-    {key:'software',label:'Software'},
+    {key:'todos',label:'Todos'},{key:'hardware',label:'Hardware'},{key:'software',label:'Software'},
   ].map(e=>
     `<button class="filter-chip ${_filtroExtra===e.key?'activo':''}" onclick="_filtroExtra='${e.key}';render()">${e.label}</button>`
   ).join('');
 
-  const cards = filtradas.length ? filtradas.map(r=>`
-    <div class="rr-card">
-      <div class="rr-header">
-        <div class="rr-titulo">${esc(r.titulo)}</div>
-        <div class="rr-badges">
-          <span class="rr-badge ${r.tipo_consulta}">${labelTipo(r.tipo_consulta)}</span>
-          ${r.filtro_extra!=='todos'?`<span class="rr-badge">${esc(r.filtro_extra)}</span>`:''}
-          <span class="rr-badge">${esc(r.producto)}</span>
+  const lista = sorted.length ? sorted.map(r=>{
+    const objKey = (r.objetivo||'').trim() || ('__'+r.id);
+    const alts = porObjetivo[objKey];
+    const altIdx = alts.length > 1 ? alts.indexOf(r.id)+1 : 0;
+    const altBadge = altIdx > 0 ? `<span class="alt-badge">Alt ${altIdx}</span>` : '';
+    const sel = _seleccionadaId === r.id;
+    return `<div class="rr-list-item ${sel?'seleccionado':''}" onclick="seleccionarRespuesta(${r.id})" data-id="${r.id}">
+      <div class="rr-list-main">
+        ${r.orden_conversacion && r.orden_conversacion<99 ? `<span class="orden-badge">${r.orden_conversacion}</span>` : ''}
+        <div class="rr-list-texto">
+          <div class="rr-list-titulo">${esc(r.titulo)}</div>
+          ${r.objetivo?`<div class="rr-list-objetivo">${esc(r.objetivo)}</div>`:''}
         </div>
+        ${altBadge}
       </div>
-      <div class="rr-mensaje">${esc(r.mensaje)}</div>
-      <div class="rr-actions">
-        <button class="btn-ok" onclick="copiarRespuesta(${r.id})">📋 Copiar y registrar</button>
-        <button class="btn-crear" onclick="editarRespuesta(${r.id})">✎ Editar</button>
-        <button class="btn" style="color:var(--red);border-color:var(--red-border);" onclick="eliminarRespuesta(${r.id})">✕</button>
+      <div class="rr-list-badges">
+        <span class="rr-badge ${r.tipo_consulta}">${labelTipo(r.tipo_consulta)}</span>
+        <span class="rr-badge">${esc(r.producto)}</span>
       </div>
-    </div>`).join('')
-  : `<div class="empty">Sin respuestas para estos filtros.<br><br><button class="btn-crear" onclick="nuevaRespuesta()">+ Crear la primera</button></div>`;
+    </div>`;
+  }).join('')
+  : `<div class="empty">Sin respuestas para estos filtros.</div>`;
+
+  const sel = _respuestas.find(r=>r.id===_seleccionadaId);
+  const preview = sel ? renderPreviewHtml(sel)
+    : `<div class="rr-preview-empty">← Seleccioná un mensaje<br>para ver la vista previa</div>`;
 
   return `
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
       ${productoSel}
       <button class="btn-crear" onclick="nuevaRespuesta()">+ Nueva respuesta</button>
     </div>
     <div class="filter-row">${tipoChips}</div>
-    <div class="filter-row" style="margin-bottom:18px;">${extraChips}</div>
-    <div>${cards}</div>`;
+    <div class="filter-row" style="margin-bottom:14px;">${extraChips}</div>
+    <div class="rr-layout">
+      <div class="rr-lista">${lista}</div>
+      <div class="rr-preview" id="rr-preview">${preview}</div>
+    </div>`;
+}
+
+function seleccionarRespuesta(id){
+  _seleccionadaId = id;
+  document.querySelectorAll('.rr-list-item').forEach(el=>{
+    el.classList.toggle('seleccionado', el.dataset.id===String(id));
+  });
+  const preview = document.getElementById('rr-preview');
+  if(preview){
+    const r = _respuestas.find(x=>x.id===id);
+    preview.innerHTML = r ? renderPreviewHtml(r) : '';
+  }
+}
+
+function renderPreviewHtml(r){
+  const partes = Array.isArray(r.partes) ? r.partes : (r.mensaje ? [r.mensaje] : []);
+  const burbujas = partes.map((m,i)=>`
+    <div class="rr-burbuja">
+      ${partes.length>1 ? `<div class="rr-burbuja-num">Parte ${i+1}</div>` : ''}
+      <div class="rr-burbuja-texto">${esc(m)}</div>
+    </div>`).join('');
+  return `
+    <div class="rr-preview-head">
+      <div class="rr-preview-titulo">${esc(r.titulo)}</div>
+      ${r.objetivo?`<div class="rr-preview-objetivo">↳ ${esc(r.objetivo)}</div>`:''}
+    </div>
+    <div class="rr-preview-partes">${burbujas}</div>
+    <div class="rr-preview-actions">
+      <button class="btn-ok" onclick="copiarRespuesta(${r.id})">📋 Copiar y registrar</button>
+      <button class="btn-crear" onclick="editarRespuesta(${r.id})">✎ Editar</button>
+      <button class="btn" style="color:var(--red);border-color:var(--red-border);" onclick="eliminarRespuesta(${r.id})">✕ Eliminar</button>
+    </div>`;
 }
 
 async function copiarRespuesta(id){
@@ -477,25 +560,31 @@ function _formRespuesta(defaults={}){
         <option value="hardware" ${defaults.filtro_extra==='hardware'?'selected':''}>Hardware</option>
         <option value="software" ${defaults.filtro_extra==='software'?'selected':''}>Software</option>
       </select>
+      <div class="flabel">Objetivo <span style="color:var(--text3)">(qué logra este mensaje — ej: "Presentar el producto")</span></div>
+      <input class="det-input" id="rr-objetivo" value="${esc(defaults.objetivo||'')}" list="rr-obj-list" placeholder="ej: Aclarar alcance técnico">
+      <datalist id="rr-obj-list">${[...new Set(_respuestas.map(r=>r.objetivo).filter(Boolean))].map(o=>`<option value="${esc(o)}">`).join('')}</datalist>
+      <div class="flabel">Orden en la conversación <span style="color:var(--text3)">(número — menor = más temprano)</span></div>
+      <input class="det-input" id="rr-orden" type="number" min="1" max="99" value="${defaults.orden_conversacion||99}" style="width:100px;">
       <div class="flabel">Título</div>
       <input class="det-input" id="rr-titulo" value="${esc(defaults.titulo||'')}" placeholder="ej: Tipos de equipos disponibles">
       <div class="flabel">Mensaje <span style="color:var(--text3)">(usá {nombre} si aplica)</span></div>
-      <textarea id="rr-mensaje" style="min-height:130px;resize:vertical;">${esc(defaults.mensaje||'')}</textarea>
+      <textarea id="rr-mensaje" style="min-height:110px;resize:vertical;">${esc(defaults.mensaje||'')}</textarea>
     </div>`;
 }
 
 function nuevaRespuesta(){
   abrirModal2('Nueva respuesta rápida', _formRespuesta({ tipo_consulta:'comercial', filtro_extra:'todos' }), async ()=>{
-    const producto     = document.getElementById('rr-producto').value.trim();
-    const tipo_consulta= document.getElementById('rr-tipo').value;
-    const filtro_extra = document.getElementById('rr-extra').value;
-    const titulo       = document.getElementById('rr-titulo').value.trim();
-    const mensaje      = document.getElementById('rr-mensaje').value.trim();
+    const producto          = document.getElementById('rr-producto').value.trim();
+    const tipo_consulta     = document.getElementById('rr-tipo').value;
+    const filtro_extra      = document.getElementById('rr-extra').value;
+    const objetivo          = document.getElementById('rr-objetivo').value.trim() || null;
+    const orden_conversacion= parseInt(document.getElementById('rr-orden').value) || 99;
+    const titulo            = document.getElementById('rr-titulo').value.trim();
+    const mensaje           = document.getElementById('rr-mensaje').value.trim();
     if(!producto||!titulo||!mensaje){ toast('Producto, título y mensaje son obligatorios'); return; }
     try{
-      const nueva = await api('wa_respuestas_rapidas', 'POST', [{ producto, tipo_consulta, filtro_extra, titulo, mensaje }]);
+      const nueva = await api('wa_respuestas_rapidas', 'POST', [{ producto, tipo_consulta, filtro_extra, objetivo, orden_conversacion, titulo, mensaje }]);
       _respuestas.push(nueva[0]);
-      _respuestas.sort((a,b)=>a.titulo.localeCompare(b.titulo));
       cerrarModal2(); toast('Respuesta creada ✓'); render();
     } catch(e){ toast('Error: '+e.message); }
   });
@@ -505,16 +594,20 @@ function editarRespuesta(id){
   const r = _respuestas.find(x=>x.id===id);
   if(!r) return;
   abrirModal2('Editar respuesta', _formRespuesta(r), async ()=>{
-    const producto     = document.getElementById('rr-producto').value.trim();
-    const tipo_consulta= document.getElementById('rr-tipo').value;
-    const filtro_extra = document.getElementById('rr-extra').value;
-    const titulo       = document.getElementById('rr-titulo').value.trim();
-    const mensaje      = document.getElementById('rr-mensaje').value.trim();
+    const producto          = document.getElementById('rr-producto').value.trim();
+    const tipo_consulta     = document.getElementById('rr-tipo').value;
+    const filtro_extra      = document.getElementById('rr-extra').value;
+    const objetivo          = document.getElementById('rr-objetivo').value.trim() || null;
+    const orden_conversacion= parseInt(document.getElementById('rr-orden').value) || 99;
+    const titulo            = document.getElementById('rr-titulo').value.trim();
+    const mensaje           = document.getElementById('rr-mensaje').value.trim();
     if(!producto||!titulo||!mensaje){ toast('Producto, título y mensaje son obligatorios'); return; }
     try{
-      await api(`wa_respuestas_rapidas?id=eq.${id}`, 'PATCH', { producto, tipo_consulta, filtro_extra, titulo, mensaje });
-      Object.assign(r, { producto, tipo_consulta, filtro_extra, titulo, mensaje });
-      cerrarModal2(); toast('Respuesta actualizada ✓'); render();
+      await api(`wa_respuestas_rapidas?id=eq.${id}`, 'PATCH', { producto, tipo_consulta, filtro_extra, objetivo, orden_conversacion, titulo, mensaje });
+      Object.assign(r, { producto, tipo_consulta, filtro_extra, objetivo, orden_conversacion, titulo, mensaje });
+      cerrarModal2(); toast('Respuesta actualizada ✓');
+      if(_seleccionadaId===id){ const p=document.getElementById('rr-preview'); if(p) p.innerHTML=renderPreviewHtml(r); }
+      render();
     } catch(e){ toast('Error: '+e.message); }
   });
 }
