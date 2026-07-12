@@ -418,7 +418,7 @@ function renderRespuestasRapidas(){
   // Detectar alternativas: agrupar por objetivo
   const porObjetivo = {};
   sorted.forEach(r=>{
-    const k = (r.objetivo||'').trim() || ('__'+r.id);
+    const k = [(r.objetivo||'').trim(), r.producto||'', r.tipo_consulta||'', r.filtro_extra||''].join('|') || ('__'+r.id);
     if(!porObjetivo[k]) porObjetivo[k] = [];
     porObjetivo[k].push(r.id);
   });
@@ -438,7 +438,7 @@ function renderRespuestasRapidas(){
   ).join('');
 
   const lista = sorted.length ? sorted.map(r=>{
-    const objKey = (r.objetivo||'').trim() || ('__'+r.id);
+    const objKey = [(r.objetivo||'').trim(), r.producto||'', r.tipo_consulta||'', r.filtro_extra||''].join('|') || ('__'+r.id);
     const alts = porObjetivo[objKey];
     const altIdx = alts.length > 1 ? alts.indexOf(r.id)+1 : 0;
     const altBadge = altIdx > 0 ? `<span class="alt-badge">Alt ${altIdx}</span>` : '';
