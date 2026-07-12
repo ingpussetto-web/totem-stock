@@ -402,7 +402,7 @@ function renderRespuestasRapidas(){
   let filtradas = _respuestas;
   if(_filtroProducto !== 'todos') filtradas = filtradas.filter(r=>r.producto===_filtroProducto || r.producto==='General');
   if(_filtroTipo !== 'todos') filtradas = filtradas.filter(r=>r.tipo_consulta===_filtroTipo);
-  if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra || r.filtro_extra==='todos' || !r.filtro_extra);
+  if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra);
 
   // Orden cronológico de conversación
   const sorted = [...filtradas].sort((a,b)=>
@@ -455,6 +455,7 @@ function renderRespuestasRapidas(){
       <div class="rr-list-badges">
         <span class="rr-badge ${r.tipo_consulta}">${labelTipo(r.tipo_consulta)}</span>
         <span class="rr-badge">${esc(r.producto)}</span>
+        ${r.filtro_extra && r.filtro_extra!=='todos' ? `<span class="rr-badge" style="color:var(--text2)">${r.filtro_extra.charAt(0).toUpperCase()+r.filtro_extra.slice(1)}</span>` : ''}
       </div>
     </div>`;
   }).join('')
