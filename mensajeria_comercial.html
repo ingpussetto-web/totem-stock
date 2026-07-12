@@ -400,7 +400,7 @@ function renderRespuestasRapidas(){
   const productos = ['todos', ...[...new Set(_respuestas.map(r=>r.producto))].sort()];
 
   let filtradas = _respuestas;
-  if(_filtroProducto !== 'todos') filtradas = filtradas.filter(r=>r.producto===_filtroProducto);
+  if(_filtroProducto !== 'todos') filtradas = filtradas.filter(r=>r.producto===_filtroProducto || r.producto==='General');
   if(_filtroTipo !== 'todos') filtradas = filtradas.filter(r=>r.tipo_consulta===_filtroTipo);
   if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra || r.filtro_extra==='todos');
 
