@@ -176,16 +176,23 @@ const COLUMNAS = [
   { key:'resolucion',          label:'Resolución' },
   { key:'proyecto_finalizado', label:'Proyecto Finalizado' },
 ];
-const CHECKLIST = [
-  { campo:'info_general_enviada',        categoria:'info_general',        label:'Información general' },
-  { campo:'info_funcionamiento_enviada', categoria:'info_funcionamiento', label:'Funcionamiento específico' },
-  { campo:'info_licencia_enviada',       categoria:'info_licencia',       label:'Información de licencia' },
-  { campo:'info_llamada_enviada',        categoria:'info_llamada',        label:'¿Querés que te llamemos?' },
-];
-const PESOS = { info_general_enviada:20, info_funcionamiento_enviada:20, info_licencia_enviada:20, info_llamada_enviada:40 };
+const PESOS_TIPO = { comercial:25, post_venta:20, tecnica:20, logistica:15, general:10 };
+const LABEL_TIPO = { comercial:'Comercial', tecnica:'Técnica', logistica:'Logística', post_venta:'Post Venta', general:'General' };
+
+function calcularScore(proyectoId){
+  const inters = _interacciones.filter(i=>i.proyecto_id===proyectoId);
+  if(!inters.length) return { score:0, recencia:null, categorias:[] };
+  const cats = [...new Set(inters.map(i=>i.tipo_consulta))];
+  const base = cats.reduce((acc,c)=>acc+(PESOS_TIPO[c]||10), 0);
+  const sorted = [...inters].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const dias = diasDesde(sorted[0].created_at);
+  const bonus = dias<=7 ? 15 : dias<=30 ? 5 : 0;
+  return { score: Math.min(100, base+bonus), recencia: dias, categorias: cats };
+}
 
 let _proyectos = [];
 let _templates = [];
+let _interacciones = [];
 let _actual = null;
 let _modal2Callback = null;
 let _modal2Resolve = null;
@@ -227,9 +234,6 @@ function diasDesde(iso){
   if(!iso) return 0;
   return Math.floor((new Date() - new Date(iso)) / 86400000);
 }
-function pctInteres(p){
-  return CHECKLIST.reduce((acc,c)=> acc + (p[c.campo] ? PESOS[c.campo] : 0), 0);
-}
 function normNumero(tel){
   let n = String(tel||'').replace(/\D/g,'');
   if(n.length<=10) n = '549'+n;
@@ -238,9 +242,10 @@ function normNumero(tel){
 
 async function init(){
   try{
-    [_proyectos, _templates] = await Promise.all([
+    [_proyectos, _templates, _interacciones] = await Promise.all([
       api('proyectos_comercial?select=*&order=id.desc'),
       api('wa_templates_producto?select=*'),
+      api('wa_interacciones_lead?select=proyecto_id,tipo_consulta,created_at'),
     ]);
     renderBoard();
   } catch(e){
@@ -276,7 +281,11 @@ function cardHTML(p){
   const diasPresu = p.fecha_envio_presupuesto ? diasDesde(p.fecha_envio_presupuesto) : null;
   const necesitaRecordatorio = diasPresu!==null && diasPresu>=7 && !p.recordatorio_autorizado && !p.recordatorio_enviado;
   const candidato = necesitaRecordatorio ? '<span class="badge-candidato">⏰ recordatorio</span>' : '';
-  const pct = p.estado==='informacion_enviada' ? `<div class="card-progress"><div class="prog-label"><span>Interés</span><span>${pctInteres(p)}%</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pctInteres(p)}%"></div></div></div>` : '';
+  const sc = calcularScore(p.id);
+  const pct = sc.score > 0 ? `<div class="card-progress">
+    <div class="prog-label"><span>Engagement</span><span>${sc.score}%${sc.recencia!==null?' · '+sc.recencia+'d':''}</span></div>
+    <div class="prog-bar"><div class="prog-fill" style="width:${sc.score}%"></div></div>
+  </div>` : '';
 
   return `<div class="card ${claseEstado}" draggable="true" data-id="${p.id}"
       onclick="cardClick(event,${p.id})" ondragstart="dragStart(event,${p.id})" ondragend="dragEnd(event)">
@@ -384,24 +393,22 @@ function renderDetBody(){
     ${p.estado==='rechazado' ? `<input class="det-input" id="d-motivo" value="${esc(p.motivo_rechazo||'')}" placeholder="Motivo de rechazo (opcional)" onchange="guardarMotivo(this.value)" style="margin-top:6px">` : ''}
   </div>`;
 
-  let infoSection = '';
-  if(p.estado==='informacion_enviada' || p.estado==='ingreso_contacto'){
-    const rows = CHECKLIST.map(c=>{
-      const on = !!p[c.campo];
-      return `<div class="checklist-row ${on?'on':''}">
-        <input type="checkbox" ${on?'checked':''} onchange="toggleChecklist('${c.campo}', this.checked)">
-        <span class="checklist-label">${esc(c.label)}</span>
-        <button class="btn-wa" onclick="enviarInfo('${c.categoria}')">📱 Enviar</button>
-      </div>`;
-    }).join('');
-    const pct = pctInteres(p);
-    infoSection = `<div class="det-section">
-      <div class="det-section-title">Información enviada</div>
-      ${rows}
-      <div class="pct-box ${pct>=50?'ok':''}"><span>% de interés</span><span>${pct}%</span></div>
-      ${pct>=50 && p.estado!=='envio_presupuesto' ? `<div style="font-size:11px;color:var(--text3)">Interés alto — se puede pasar a Envío de presupuesto.</div>` : ''}
-    </div>`;
-  }
+  const sc = calcularScore(p.id);
+  const catPills = sc.categorias.map(c=>`<span style="font-size:10px;padding:2px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text2);">${LABEL_TIPO[c]||c}</span>`).join('');
+  const recenciaText = sc.recencia!==null
+    ? (sc.recencia===0 ? 'Hoy' : `Hace ${sc.recencia} día${sc.recencia!==1?'s':''}`)
+    : 'Sin interacciones';
+  const infoSection = `<div class="det-section">
+    <div class="det-section-title">Engagement</div>
+    <div class="pct-box ${sc.score>=50?'ok':''}">
+      <span>Score</span><span>${sc.score}%</span>
+    </div>
+    <div class="prog-bar" style="margin-top:-4px"><div class="prog-fill" style="width:${sc.score}%"></div></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:2px;">Último contacto: ${recenciaText}</div>
+    ${catPills ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">${catPills}</div>` : ''}
+    ${sc.score===0 ? `<div style="font-size:11px;color:var(--text3);">Usá <b>Respuestas Rápidas</b> en Mensajería para registrar interacciones.</div>` : ''}
+    ${sc.score>=60 && p.estado==='informacion_enviada' ? `<div style="font-size:11px;color:var(--green);margin-top:2px;">Engagement alto — candidato a pasar a Envío de presupuesto.</div>` : ''}
+  </div>`;
 
   let presupuestoSection = '';
   if(colOf(p.estado)!=='ingreso_contacto'){
@@ -469,15 +476,6 @@ async function moverEstado(estado){
   } catch(e){ toast('Error: '+e.message); }
 }
 
-async function toggleChecklist(campo, val){
-  try{
-    await api(`proyectos_comercial?id=eq.${_actual.id}`, 'PATCH', {[campo]: val});
-    _actual[campo] = val;
-    const p = _proyectos.find(x=>x.id===_actual.id); if(p) p[campo] = val;
-    renderBoard(); renderDetBody();
-  } catch(e){ toast('Error: '+e.message); }
-}
-
 function buscarOCrearTemplate(categoria){
   return new Promise(resolve=>{
     let t = _templates.find(x=>x.producto===_actual.producto && x.categoria===categoria);
@@ -507,13 +505,6 @@ function buscarOCrearTemplate(categoria){
   });
 }
 
-async function enviarInfo(categoria){
-  const t = await buscarOCrearTemplate(categoria);
-  if(!t) return;
-  const msg = t.mensaje_base.replace(/{nombre}/g, _actual.cliente_nombre||'') + (t.link_extra?'\n'+t.link_extra:'');
-  window.open(`https://wa.me/${normNumero(_actual.telefono)}?text=${encodeURIComponent(msg)}`, '_blank');
-  await api('rpc/fn_incrementar_contador', 'POST', { p_categoria: categoria }).catch(()=>{});
-}
 
 async function guardarFechaPresupuesto(){
   const val = document.getElementById('d-fecha-presu').value || null;

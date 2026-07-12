@@ -729,6 +729,41 @@ function _areaActual(){
   return new URLSearchParams(window.location.search).get('area')||sessionStorage.getItem('tn_area')||'';
 }
 
+// ─── Sync con proyectos_comercial al terminar una OP ──────────────────────
+async function sincronizarProyectoComercial(op){
+  try{
+    const clienteNombre = (op.cliente||'').trim();
+    if(!clienteNombre) return;
+    const hoy = new Date().toISOString();
+
+    // Buscar proyecto comercial activo (no rechazado, no ya finalizado) para este cliente
+    const existentes = await api(
+      `proyectos_comercial?cliente_nombre=eq.${encodeURIComponent(clienteNombre)}&estado=not.in.(rechazado,proyecto_finalizado)&select=id,estado&order=id.desc&limit=1`
+    ).catch(()=>[]);
+
+    if(existentes && existentes.length > 0){
+      // Actualizar estado a proyecto_finalizado
+      await api(`proyectos_comercial?id=eq.${existentes[0].id}`, 'PATCH', {
+        estado: 'proyecto_finalizado',
+        fecha_estado_actual: hoy
+      });
+    } else {
+      // No hay proyecto comercial previo → crear uno automáticamente
+      await api('proyectos_comercial', 'POST', [{
+        cliente_nombre: clienteNombre,
+        producto: op.producto_nombre || '',
+        estado: 'proyecto_finalizado',
+        fecha_estado_actual: hoy,
+        encuesta_generada: false,
+        reventa_enviada: false
+      }]);
+    }
+  } catch(e){
+    console.warn('sincronizarProyectoComercial:', e.message);
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────
+
 async function moverColumna(colKey){
   if(_opActual.etapa_tablero===colKey) return;
   if(colKey==='terminadas' && !_insumosCompletos(_opActual) && _areaActual()!=='gerencia'){
@@ -739,6 +774,7 @@ async function moverColumna(colKey){
     _opActual.etapa_tablero = colKey;
     const op = _ops.find(o=>o.id===_opActual.id);
     if(op) op.etapa_tablero = colKey;
+    if(colKey==='terminadas') sincronizarProyectoComercial(_opActual); // fire & forget
     toast('Movido a "'+COLUMNAS.find(c=>c.key===colKey)?.label+'" ✓');
     renderBoard();
     renderDetBody([], []);
@@ -890,6 +926,7 @@ async function dropOnCol(colKey){
   try{
     await api(`ordenes_produccion?id=eq.${_draggingId}`, 'PATCH', {etapa_tablero: colKey});
     op.etapa_tablero = colKey;
+    if(colKey==='terminadas') sincronizarProyectoComercial(op); // fire & forget
     toast(`Movido a "${colLabel}" ✓`);
     renderBoard();
   } catch(err){ toast('Error al mover: '+err.message); }

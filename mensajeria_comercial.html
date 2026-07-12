@@ -70,6 +70,30 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .btn{padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit}
 .btn:hover{border-color:var(--green);color:var(--green)}
 .btn.solid{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+
+/* Respuestas Rápidas */
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.filter-chip{font-size:11px;padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s}
+.filter-chip:hover{border-color:var(--border2);color:var(--text)}
+.filter-chip.activo{background:var(--green-dim);border-color:var(--green-border);color:var(--green);font-weight:600}
+.filter-chip.t-comercial.activo{background:rgba(255,179,64,.12);border-color:var(--amber-border);color:var(--amber)}
+.filter-chip.t-tecnica.activo{background:rgba(110,168,255,.12);border-color:rgba(110,168,255,.3);color:#6ea8ff}
+.filter-chip.t-logistica.activo{background:var(--green-dim);border-color:var(--green-border);color:var(--green)}
+.filter-chip.t-post_venta.activo{background:rgba(255,77,106,.1);border-color:var(--red-border);color:var(--red)}
+.filter-chip.t-general.activo{background:var(--panel2);border-color:var(--border2);color:var(--text)}
+
+.rr-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.rr-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.rr-titulo{font-size:13px;font-weight:600;flex:1}
+.rr-badges{display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0}
+.rr-badge{font-size:10px;padding:2px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text2)}
+.rr-badge.comercial{background:rgba(255,179,64,.1);border-color:var(--amber-border);color:var(--amber)}
+.rr-badge.tecnica{background:rgba(110,168,255,.1);border-color:rgba(110,168,255,.3);color:#6ea8ff}
+.rr-badge.logistica{background:var(--green-dim);border-color:var(--green-border);color:var(--green)}
+.rr-badge.post_venta{background:rgba(255,77,106,.08);border-color:var(--red-border);color:var(--red)}
+.rr-mensaje{font-size:11px;color:var(--text2);white-space:pre-wrap;line-height:1.5;margin-bottom:10px;max-height:80px;overflow:hidden;position:relative}
+.rr-mensaje::after{content:'';position:absolute;bottom:0;left:0;right:0;height:20px;background:linear-gradient(transparent,var(--panel))}
+.rr-actions{display:flex;gap:6px;align-items:center}
 </style>
 </head>
 <body>
@@ -88,6 +112,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   <button class="tab activo" id="tab-encuesta" onclick="setTab('encuesta')">Encuestas <span class="n" id="n-encuesta">0</span></button>
   <button class="tab" id="tab-newsletter" onclick="setTab('newsletter')">Newsletter <span class="n" id="n-newsletter">0</span></button>
   <button class="tab" id="tab-reventa" onclick="setTab('reventa')">Reventa <span class="n" id="n-reventa">0</span></button>
+  <button class="tab" id="tab-plantillas" onclick="setTab('plantillas')">Plantillas</button>
+  <button class="tab" id="tab-respuestas" onclick="setTab('respuestas')">Respuestas Rápidas</button>
 </div>
 
 <div class="wrap">
@@ -117,8 +143,23 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 let _proyectos = [];
 let _templates = [];
+let _respuestas = [];
+let _interacciones_lead = [];
 let _tabActivo = 'encuesta';
 let _modal2Callback = null;
+let _filtroProducto = 'todos';
+let _filtroTipo = 'todos';
+let _filtroExtra = 'todos';
+
+const TIPOS_CONSULTA = [
+  { key:'todos',      label:'Todos' },
+  { key:'comercial',  label:'Comercial' },
+  { key:'tecnica',    label:'Técnica' },
+  { key:'logistica',  label:'Logística' },
+  { key:'post_venta', label:'Post Venta' },
+  { key:'general',    label:'General' },
+];
+function labelTipo(k){ return TIPOS_CONSULTA.find(t=>t.key===k)?.label || k; }
 
 function abrirModal2(title, bodyHtml, callback){
   document.getElementById('modal2-title').textContent = title;
@@ -152,9 +193,11 @@ function normNumero(tel){ let n=String(tel||'').replace(/\D/g,''); if(n.length<=
 
 async function init(){
   try{
-    [_proyectos, _templates] = await Promise.all([
+    [_proyectos, _templates, _respuestas, _interacciones_lead] = await Promise.all([
       api('proyectos_comercial?select=*'),
       api('wa_templates_producto?select=*'),
+      api('wa_respuestas_rapidas?select=*&order=producto.asc,tipo_consulta.asc,titulo.asc'),
+      api('wa_interacciones_lead?select=*&order=created_at.desc'),
     ]);
     await cargarContadores();
     render();
@@ -211,8 +254,12 @@ function render(){
     cont.innerHTML = renderEncuestas(candidatosEncuesta());
   } else if(_tabActivo === 'newsletter'){
     cont.innerHTML = renderAgrupado(agruparPorCliente(candidatosNewsletter()), 'newsletter');
-  } else {
+  } else if(_tabActivo === 'reventa'){
     cont.innerHTML = renderAgrupado(agruparPorCliente(candidatosReventa()), 'reventa');
+  } else if(_tabActivo === 'plantillas'){
+    cont.innerHTML = renderPlantillas();
+  } else if(_tabActivo === 'respuestas'){
+    cont.innerHTML = renderRespuestasRapidas();
   }
 }
 
@@ -319,6 +366,292 @@ async function enviar(proyectoId, categoria){
     render();
   } catch(e){ toast('Error al registrar: '+e.message); }
 }
+
+// ─── RESPUESTAS RÁPIDAS ───────────────────────────────────────────────────
+function renderRespuestasRapidas(){
+  const productos = ['todos', ...[...new Set(_respuestas.map(r=>r.producto))].sort()];
+
+  let filtradas = _respuestas;
+  if(_filtroProducto !== 'todos') filtradas = filtradas.filter(r=>r.producto===_filtroProducto);
+  if(_filtroTipo !== 'todos') filtradas = filtradas.filter(r=>r.tipo_consulta===_filtroTipo);
+  if(_filtroExtra !== 'todos') filtradas = filtradas.filter(r=>r.filtro_extra===_filtroExtra || r.filtro_extra==='todos');
+
+  const productoSel = `<select class="det-input" style="width:auto;min-width:180px;" onchange="_filtroProducto=this.value;render()">
+    ${productos.map(p=>`<option value="${esc(p)}" ${_filtroProducto===p?'selected':''}>${p==='todos'?'Todos los productos':esc(p)}</option>`).join('')}
+  </select>`;
+
+  const tipoChips = TIPOS_CONSULTA.map(t=>
+    `<button class="filter-chip t-${t.key} ${_filtroTipo===t.key?'activo':''}" onclick="_filtroTipo='${t.key}';render()">${t.label}</button>`
+  ).join('');
+
+  const extraChips = [
+    {key:'todos',label:'Todos'},
+    {key:'hardware',label:'Hardware'},
+    {key:'software',label:'Software'},
+  ].map(e=>
+    `<button class="filter-chip ${_filtroExtra===e.key?'activo':''}" onclick="_filtroExtra='${e.key}';render()">${e.label}</button>`
+  ).join('');
+
+  const cards = filtradas.length ? filtradas.map(r=>`
+    <div class="rr-card">
+      <div class="rr-header">
+        <div class="rr-titulo">${esc(r.titulo)}</div>
+        <div class="rr-badges">
+          <span class="rr-badge ${r.tipo_consulta}">${labelTipo(r.tipo_consulta)}</span>
+          ${r.filtro_extra!=='todos'?`<span class="rr-badge">${esc(r.filtro_extra)}</span>`:''}
+          <span class="rr-badge">${esc(r.producto)}</span>
+        </div>
+      </div>
+      <div class="rr-mensaje">${esc(r.mensaje)}</div>
+      <div class="rr-actions">
+        <button class="btn-ok" onclick="copiarRespuesta(${r.id})">📋 Copiar y registrar</button>
+        <button class="btn-crear" onclick="editarRespuesta(${r.id})">✎ Editar</button>
+        <button class="btn" style="color:var(--red);border-color:var(--red-border);" onclick="eliminarRespuesta(${r.id})">✕</button>
+      </div>
+    </div>`).join('')
+  : `<div class="empty">Sin respuestas para estos filtros.<br><br><button class="btn-crear" onclick="nuevaRespuesta()">+ Crear la primera</button></div>`;
+
+  return `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+      ${productoSel}
+      <button class="btn-crear" onclick="nuevaRespuesta()">+ Nueva respuesta</button>
+    </div>
+    <div class="filter-row">${tipoChips}</div>
+    <div class="filter-row" style="margin-bottom:18px;">${extraChips}</div>
+    <div>${cards}</div>`;
+}
+
+async function copiarRespuesta(id){
+  const r = _respuestas.find(x=>x.id===id);
+  if(!r) return;
+  try{ await navigator.clipboard.writeText(r.mensaje); }catch(e){}
+
+  const leadsActivos = _proyectos
+    .filter(p=>!['proyecto_finalizado','rechazado'].includes(p.estado))
+    .sort((a,b)=>a.cliente_nombre.localeCompare(b.cliente_nombre));
+
+  const optsLead = leadsActivos.map(p=>`<option value="${p.id}">${esc(p.cliente_nombre)} — ${esc(p.producto||'')}</option>`).join('');
+
+  const body = `
+    <div class="det-section">
+      <div class="modal-hint">✓ Mensaje copiado al portapapeles.<br>¿A qué lead le mandaste este mensaje?</div>
+      <div class="flabel">Lead (opcional)</div>
+      <select class="det-input" id="rr-lead-sel">
+        <option value="">— Sin vincular —</option>
+        ${optsLead}
+      </select>
+    </div>`;
+
+  abrirModal2('Registrar envío', body, async ()=>{
+    const proyId = document.getElementById('rr-lead-sel').value;
+    cerrarModal2();
+    if(!proyId) return;
+    try{
+      const nueva = await api('wa_interacciones_lead', 'POST', [{
+        proyecto_id: proyId,
+        respuesta_id: id,
+        tipo_consulta: r.tipo_consulta,
+        titulo: r.titulo,
+      }]);
+      if(nueva?.[0]) _interacciones_lead.unshift(nueva[0]);
+      toast('Interacción registrada ✓');
+    } catch(e){ toast('Error: '+e.message); }
+  });
+}
+
+function _formRespuesta(defaults={}){
+  const optsProducto = [...new Set([...(_respuestas.map(r=>r.producto)), defaults.producto||''].filter(Boolean))];
+  const optsTipo = TIPOS_CONSULTA.filter(t=>t.key!=='todos');
+  return `
+    <div class="det-section">
+      <div class="flabel">Producto</div>
+      <input class="det-input" id="rr-producto" value="${esc(defaults.producto||'')}" list="rr-prod-list" placeholder="ej: Turnero 32&quot;">
+      <datalist id="rr-prod-list">${optsProducto.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+      <div class="flabel">Tipo de consulta</div>
+      <select class="det-input" id="rr-tipo">
+        ${optsTipo.map(t=>`<option value="${t.key}" ${defaults.tipo_consulta===t.key?'selected':''}>${t.label}</option>`).join('')}
+      </select>
+      <div class="flabel">Filtro extra</div>
+      <select class="det-input" id="rr-extra">
+        <option value="todos" ${(defaults.filtro_extra||'todos')==='todos'?'selected':''}>Todos</option>
+        <option value="hardware" ${defaults.filtro_extra==='hardware'?'selected':''}>Hardware</option>
+        <option value="software" ${defaults.filtro_extra==='software'?'selected':''}>Software</option>
+      </select>
+      <div class="flabel">Título</div>
+      <input class="det-input" id="rr-titulo" value="${esc(defaults.titulo||'')}" placeholder="ej: Tipos de equipos disponibles">
+      <div class="flabel">Mensaje <span style="color:var(--text3)">(usá {nombre} si aplica)</span></div>
+      <textarea id="rr-mensaje" style="min-height:130px;resize:vertical;">${esc(defaults.mensaje||'')}</textarea>
+    </div>`;
+}
+
+function nuevaRespuesta(){
+  abrirModal2('Nueva respuesta rápida', _formRespuesta({ tipo_consulta:'comercial', filtro_extra:'todos' }), async ()=>{
+    const producto     = document.getElementById('rr-producto').value.trim();
+    const tipo_consulta= document.getElementById('rr-tipo').value;
+    const filtro_extra = document.getElementById('rr-extra').value;
+    const titulo       = document.getElementById('rr-titulo').value.trim();
+    const mensaje      = document.getElementById('rr-mensaje').value.trim();
+    if(!producto||!titulo||!mensaje){ toast('Producto, título y mensaje son obligatorios'); return; }
+    try{
+      const nueva = await api('wa_respuestas_rapidas', 'POST', [{ producto, tipo_consulta, filtro_extra, titulo, mensaje }]);
+      _respuestas.push(nueva[0]);
+      _respuestas.sort((a,b)=>a.titulo.localeCompare(b.titulo));
+      cerrarModal2(); toast('Respuesta creada ✓'); render();
+    } catch(e){ toast('Error: '+e.message); }
+  });
+}
+
+function editarRespuesta(id){
+  const r = _respuestas.find(x=>x.id===id);
+  if(!r) return;
+  abrirModal2('Editar respuesta', _formRespuesta(r), async ()=>{
+    const producto     = document.getElementById('rr-producto').value.trim();
+    const tipo_consulta= document.getElementById('rr-tipo').value;
+    const filtro_extra = document.getElementById('rr-extra').value;
+    const titulo       = document.getElementById('rr-titulo').value.trim();
+    const mensaje      = document.getElementById('rr-mensaje').value.trim();
+    if(!producto||!titulo||!mensaje){ toast('Producto, título y mensaje son obligatorios'); return; }
+    try{
+      await api(`wa_respuestas_rapidas?id=eq.${id}`, 'PATCH', { producto, tipo_consulta, filtro_extra, titulo, mensaje });
+      Object.assign(r, { producto, tipo_consulta, filtro_extra, titulo, mensaje });
+      cerrarModal2(); toast('Respuesta actualizada ✓'); render();
+    } catch(e){ toast('Error: '+e.message); }
+  });
+}
+
+async function eliminarRespuesta(id){
+  if(!confirm('¿Eliminás esta respuesta rápida?')) return;
+  try{
+    await api(`wa_respuestas_rapidas?id=eq.${id}`, 'DELETE');
+    _respuestas = _respuestas.filter(r=>r.id!==id);
+    toast('Eliminada'); render();
+  } catch(e){ toast('Error: '+e.message); }
+}
+// ──────────────────────────────────────────────────────────────────────────
+
+// ─── PLANTILLAS ───────────────────────────────────────────────────────────
+const CATEGORIAS = [
+  { key:'encuesta',    label:'Encuesta',    color:'var(--green)' },
+  { key:'newsletter',  label:'Newsletter',  color:'#6ea8ff' },
+  { key:'reventa',     label:'Reventa',     color:'var(--amber)' },
+];
+
+function renderPlantillas(){
+  // Agrupar por categoría
+  const html = CATEGORIAS.map(cat=>{
+    const grupo = _templates.filter(t=>t.categoria===cat.key)
+      .sort((a,b)=>(a.producto||'').localeCompare(b.producto||''));
+
+    const filas = grupo.length ? grupo.map(t=>`
+      <div class="cliente-card" style="margin-bottom:8px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-size:12px;font-weight:600;">${esc(t.producto)}</span>
+              ${t.nombre_enfoque ? `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text2);">${esc(t.nombre_enfoque)}</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:var(--text2);white-space:pre-wrap;line-height:1.5;">${esc(t.mensaje_base)}</div>
+            ${t.link_extra ? `<div style="font-size:10px;color:var(--text3);margin-top:4px;">🔗 ${esc(t.link_extra)}</div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+            <button class="btn-ok" onclick="editarPlantilla(${t.id})">✎ Editar</button>
+            <button class="btn-wa" style="border-color:var(--red-border);background:var(--red-dim);color:var(--red);" onclick="eliminarPlantilla(${t.id})">✕</button>
+          </div>
+        </div>
+      </div>`).join('')
+    : `<div class="empty" style="padding:16px;">Sin plantillas de ${cat.label} todavía.</div>`;
+
+    return `
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:600;color:${cat.color};letter-spacing:.05em;">${cat.label.toUpperCase()}</div>
+          <button class="btn-crear" onclick="nuevaPlantilla('${cat.key}')">+ Nueva plantilla</button>
+        </div>
+        ${filas}
+      </div>`;
+  }).join('');
+
+  return `<div>${html}</div>`;
+}
+
+function nuevaPlantilla(categoriaDefault){
+  const optsCategoria = CATEGORIAS.map(c=>`<option value="${c.key}" ${c.key===categoriaDefault?'selected':''}>${c.label}</option>`).join('');
+  const body = `
+    <div class="det-section">
+      <div class="flabel">Categoría</div>
+      <select class="det-input" id="pt-cat">${optsCategoria}</select>
+      <div class="flabel">Producto</div>
+      <input class="det-input" id="pt-producto" placeholder="ej: Totem Autogestion 43&quot;" list="pt-productos-list">
+      <datalist id="pt-productos-list">${[...new Set(_templates.map(t=>t.producto))].map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+      <div class="flabel">Nombre del enfoque <span style="color:var(--text3)">(opcional — ej: "Accesorios", "Upgrade software")</span></div>
+      <input class="det-input" id="pt-enfoque" placeholder="ej: Accesorios complementarios">
+      <div class="flabel">Mensaje <span style="color:var(--text3)">(usá {nombre} y {empresa})</span></div>
+      <textarea id="pt-mensaje" style="min-height:110px;resize:vertical;" placeholder="Hola {nombre}, esperamos que tu {producto} esté funcionando perfecto..."></textarea>
+      <div class="flabel">Link opcional</div>
+      <input class="det-input" id="pt-link" placeholder="https://...">
+    </div>`;
+  abrirModal2('Nueva plantilla', body, async ()=>{
+    const categoria    = document.getElementById('pt-cat').value;
+    const producto     = document.getElementById('pt-producto').value.trim();
+    const nombre_enfoque = document.getElementById('pt-enfoque').value.trim() || null;
+    const mensaje_base = document.getElementById('pt-mensaje').value.trim();
+    const link_extra   = document.getElementById('pt-link').value.trim() || null;
+    if(!producto || !mensaje_base){ toast('Producto y mensaje son obligatorios'); return; }
+    try{
+      const nuevo = await api('wa_templates_producto', 'POST', [{ producto, categoria, nombre_enfoque, mensaje_base, link_extra }]);
+      _templates.push(nuevo[0]);
+      cerrarModal2();
+      toast('Plantilla creada ✓');
+      render();
+    } catch(e){ toast('Error: '+e.message); }
+  });
+}
+
+function editarPlantilla(id){
+  const t = _templates.find(x=>x.id===id);
+  if(!t) return;
+  const optsCategoria = CATEGORIAS.map(c=>`<option value="${c.key}" ${c.key===t.categoria?'selected':''}>${c.label}</option>`).join('');
+  const body = `
+    <div class="det-section">
+      <div class="flabel">Categoría</div>
+      <select class="det-input" id="pt-cat">${optsCategoria}</select>
+      <div class="flabel">Producto</div>
+      <input class="det-input" id="pt-producto" value="${esc(t.producto||'')}" list="pt-productos-list">
+      <datalist id="pt-productos-list">${[...new Set(_templates.map(x=>x.producto))].map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+      <div class="flabel">Nombre del enfoque <span style="color:var(--text3)">(opcional)</span></div>
+      <input class="det-input" id="pt-enfoque" value="${esc(t.nombre_enfoque||'')}">
+      <div class="flabel">Mensaje</div>
+      <textarea id="pt-mensaje" style="min-height:110px;resize:vertical;">${esc(t.mensaje_base||'')}</textarea>
+      <div class="flabel">Link opcional</div>
+      <input class="det-input" id="pt-link" value="${esc(t.link_extra||'')}">
+    </div>`;
+  abrirModal2('Editar plantilla', body, async ()=>{
+    const categoria      = document.getElementById('pt-cat').value;
+    const producto       = document.getElementById('pt-producto').value.trim();
+    const nombre_enfoque = document.getElementById('pt-enfoque').value.trim() || null;
+    const mensaje_base   = document.getElementById('pt-mensaje').value.trim();
+    const link_extra     = document.getElementById('pt-link').value.trim() || null;
+    if(!producto || !mensaje_base){ toast('Producto y mensaje son obligatorios'); return; }
+    try{
+      await api(`wa_templates_producto?id=eq.${id}`, 'PATCH', { producto, categoria, nombre_enfoque, mensaje_base, link_extra });
+      Object.assign(t, { producto, categoria, nombre_enfoque, mensaje_base, link_extra });
+      cerrarModal2();
+      toast('Plantilla actualizada ✓');
+      render();
+    } catch(e){ toast('Error: '+e.message); }
+  });
+}
+
+async function eliminarPlantilla(id){
+  if(!confirm('¿Eliminás esta plantilla?')) return;
+  try{
+    await api(`wa_templates_producto?id=eq.${id}`, 'DELETE');
+    _templates = _templates.filter(t=>t.id!==id);
+    toast('Plantilla eliminada');
+    render();
+  } catch(e){ toast('Error: '+e.message); }
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 init();
 </script>
