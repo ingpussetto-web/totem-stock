@@ -517,7 +517,7 @@ let SUPA_URL = localStorage.getItem('supa_url') || '';
 let SUPA_KEY = localStorage.getItem('supa_key') || '';
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
-let areas = [];
+let sectores = [];
 let empleadosData = [];
 let bienesData = [];
 let bienesUnidadesData = [];
@@ -587,7 +587,7 @@ async function checkConnection(){
     dot.className='conn-dot err'; txt.textContent='Sin configurar'; return false;
   }
   try {
-    await api('areas?select=id&limit=1');
+    await api('sectores_bienes?select=id&limit=1');
     dot.className='conn-dot ok'; txt.textContent='Conectado'; return true;
   } catch(e){
     dot.className='conn-dot err'; txt.textContent='Error conexión'; return false;
@@ -605,8 +605,8 @@ function saveConfig(){
 
 // ─── SHARED LOADERS ─────────────────────────────────────────────────────────
 async function loadAreas(){
-  areas = await api('areas?select=*&activo=eq.true&order=nombre.asc').catch(()=>[]);
-  const opts = areas.map(a=>`<option value="${a.id}">${a.nombre}</option>`).join('');
+  sectores = await api('sectores_bienes?select=*&activo=eq.true&order=nombre.asc').catch(()=>[]);
+  const opts = sectores.map(a=>`<option value="${a.id}">${a.nombre}</option>`).join('');
   ['aa-area-sel','emp-area-sel'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.innerHTML = opts;
@@ -616,7 +616,7 @@ async function loadAreas(){
 }
 
 async function loadEmpleados(){
-  empleadosData = await api('empleados?select=*,areas(nombre)&order=apellido.asc').catch(()=>[]);
+  empleadosData = await api('empleados?select=*,sectores_bienes(nombre)&order=apellido.asc').catch(()=>[]);
 }
 
 async function loadBienesCatalogo(){
@@ -628,7 +628,7 @@ async function loadBienesUnidades(){
 }
 
 async function loadAsignacionesArea(){
-  asignacionesAreaData = await api('asignaciones_area?select=*,bienes_unidades(uid,bienes(codigo,nombre)),areas(nombre)&order=id.desc').catch(()=>[]);
+  asignacionesAreaData = await api('asignaciones_area?select=*,bienes_unidades(uid,bienes(codigo,nombre)),sectores_bienes(nombre)&order=id.desc').catch(()=>[]);
 }
 
 async function loadFallas(){
@@ -782,7 +782,7 @@ function renderBienesUnidades(){
     const asigArea = asignacionesAreaData.find(a=>a.bien_unidad_id===u.id && a.activa);
     const asigPers = asignacionesPersonalData.find(a=>a.item_type==='bien_unidad' && a.item_id===u.id && a.estado==='activa');
     let ubic = '—';
-    if(asigArea) ubic = 'Área: ' + (asigArea.areas?.nombre||'—');
+    if(asigArea) ubic = 'Área: ' + (asigArea.sectores_bienes?.nombre||'—');
     else if(asigPers) ubic = 'Personal: ' + (asigPers.empleados?.nombre||'')+' '+(asigPers.empleados?.apellido||'');
     return `<tr>
       <td class="td-mono">${u.uid||'—'}</td>
@@ -826,7 +826,7 @@ function renderAsignacionesArea(){
   const areaFil = document.getElementById('ba-area')?.value||'';
   const estFil = document.getElementById('ba-estado')?.value||'activas';
   let rows = asignacionesAreaData.filter(a=>{
-    if(areaFil && String(a.area_id)!==areaFil) return false;
+    if(areaFil && String(a.sector_id)!==areaFil) return false;
     if(estFil==='activas' && !a.activa) return false;
     return true;
   });
@@ -835,7 +835,7 @@ function renderAsignacionesArea(){
   tbody.innerHTML = rows.map(a=>`<tr>
     <td class="td-main">${a.bienes_unidades?.bienes?.codigo||'—'} — ${a.bienes_unidades?.bienes?.nombre||''}</td>
     <td class="td-mono">${a.bienes_unidades?.uid||'—'}</td>
-    <td>${a.areas?.nombre||'—'}</td>
+    <td>${a.sectores_bienes?.nombre||'—'}</td>
     <td>${a.responsable||'—'}</td>
     <td class="td-mono">${a.fecha_asignacion||'—'}</td>
     <td class="td-mono">${a.fecha_devolucion||'—'}</td>
@@ -852,11 +852,11 @@ function openModalAsigArea(){
 
 async function saveAsigArea(){
   const bien_unidad_id = document.getElementById('aa-unidad-sel').value;
-  const area_id = document.getElementById('aa-area-sel').value;
-  if(!bien_unidad_id || !area_id){ toast('Completá unidad y área'); return; }
+  const sector_id = document.getElementById('aa-area-sel').value;
+  if(!bien_unidad_id || !sector_id){ toast('Completá unidad y área'); return; }
   try{
     await api('asignaciones_area','POST',{
-      bien_unidad_id: Number(bien_unidad_id), area_id: Number(area_id),
+      bien_unidad_id: Number(bien_unidad_id), sector_id: Number(sector_id),
       responsable: document.getElementById('aa-responsable').value.trim()||null,
       notas: document.getElementById('aa-notas').value.trim()||null
     });
@@ -1035,7 +1035,7 @@ function renderEmpleados(){
   tbody.innerHTML = rows.map(e=>`<tr>
     <td class="td-main">${e.nombre} ${e.apellido}</td>
     <td class="td-mono" style="font-size:11px;color:var(--text3)">${e.dni||'—'}</td>
-    <td>${e.areas?.nombre||'—'}</td>
+    <td>${e.sectores_bienes?.nombre||'—'}</td>
     <td>${e.activo?'<span class="badge ok">Activo</span>':'<span class="badge sin">Inactivo</span>'}</td>
     <td class="td-actions"></td>
   </tr>`).join('');
@@ -1056,7 +1056,7 @@ async function saveEmpleado(){
     await api('empleados','POST',{
       nombre, apellido,
       dni: document.getElementById('emp-dni').value.trim()||null,
-      area_id: Number(document.getElementById('emp-area-sel').value)||null
+      sector_id: Number(document.getElementById('emp-area-sel').value)||null
     });
     toast('Empleado creado');
     closeModal('modal-empleado');
