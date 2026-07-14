@@ -1,0 +1,22 @@
+<!--
+  Snippet para agregar a index.html, dentro de la columna "📦 Depósito · Stock"
+  (insertar después de la card "Conteo Físico", antes del cierre de esa columna </div>).
+  También hay que sumar 'bienes_personal' al objeto tabNames en el <script>
+  si se quiere mantener el comportamiento de "reusar pestaña por módulo".
+-->
+
+<div style="height:8px;"></div>
+
+<a class="mod-card purple" href="https://ingpussetto-web.github.io/totem-stock/bienes_personal.html" target="_blank">
+  <div class="mod-icon">🖥</div>
+  <div class="mod-info">
+    <div class="mod-name">Bienes y Personal</div>
+    <div class="mod-desc">Bienes por área, fallas/service y asignación a empleados</div>
+  </div>
+  <div class="mod-arrow">→</div>
+</a>
+
+<!--
+  En el <script> del index.html, dentro de tabNames, agregar:
+  'bienes_personal': 'tn_bienes_personal',
+-->

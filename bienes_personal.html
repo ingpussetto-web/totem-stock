@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Bienes y Personal</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#666;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.09);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.09);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+.main{padding:28px 32px;overflow-y:auto;min-height:100vh;}
+.logo{padding:20px;border-bottom:1px solid var(--border);}
+.logo-name{font-size:14px;font-weight:600;letter-spacing:-0.02em;}
+.logo-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px;}
+.nav{padding:12px 0;flex:1;}
+.nav-section{padding:10px 16px 4px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;font-size:12.5px;color:var(--text2);transition:all 0.12s;border-left:2px solid transparent;}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.025);}
+.nav-item.active{color:var(--green);border-left-color:var(--green);background:var(--green-dim);}
+.nav-item .icon{width:15px;text-align:center;font-size:13px;}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+.conn-dot.ok{background:var(--green);}
+.conn-dot.err{background:var(--red);}
+.page{display:none;}
+.page.active{display:block;}
+.page-header{margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:12px;}
+.card-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:14px;}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px;}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+.metric.green{background:var(--green-dim);border-color:var(--green-border);}
+.metric.amber{background:var(--amber-dim);border-color:var(--amber-border);}
+.metric.red{background:var(--red-dim);border-color:var(--red-border);}
+.metric.blue{background:var(--blue-dim);border-color:rgba(77,159,255,0.25);}
+.metric-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;margin-bottom:5px;}
+.metric-value{font-size:22px;font-weight:600;font-family:'DM Mono',monospace;line-height:1;}
+.metric.green .metric-value{color:var(--green);}
+.metric.amber .metric-value{color:var(--amber);}
+.metric.red .metric-value{color:var(--red);}
+.metric.blue .metric-value{color:var(--blue);}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+.search-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;color:var(--text);font-size:12.5px;font-family:'DM Sans',sans-serif;width:220px;transition:border-color 0.15s;}
+.search-input:focus{outline:none;border-color:var(--green);}
+.search-input::placeholder{color:var(--text3);}
+select.filter{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text2);font-size:12px;cursor:pointer;height:34px;}
+select.filter:focus{outline:none;border-color:var(--green);}
+.spacer{flex:1;}
+.btn{padding:7px 14px;font-size:12px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;height:34px;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.sm{font-size:11px;padding:3px 9px;height:26px;}
+.btn.red{border-color:var(--red);color:var(--red);}
+.btn.red:hover{background:var(--red-dim);}
+.btn.amber{border-color:var(--amber);color:var(--amber);}
+.btn.amber:hover{background:var(--amber-dim);}
+.btn.blue{border-color:var(--blue);color:var(--blue);}
+.btn.blue:hover{background:var(--blue-dim);}
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;white-space:nowrap;}
+td{font-size:12.5px;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.015);}
+.td-main{color:var(--text)!important;font-weight:500;}
+.td-mono{font-family:'DM Mono',monospace;font-size:11.5px;}
+.td-num{font-family:'DM Mono',monospace;text-align:right;}
+.td-actions{text-align:right;white-space:nowrap;}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:10px;font-family:'DM Mono',monospace;font-weight:500;}
+.badge.ok{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);}
+.badge.bajo{background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-border);}
+.badge.sin{background:var(--red-dim);color:var(--red);border:1px solid var(--red-border);}
+.badge.uid{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.25);}
+.badge.qty{background:var(--surface2);color:var(--text3);border:1px solid var(--border);}
+.badge.purple{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(167,139,250,0.25);}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:24px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:600;letter-spacing:-0.02em;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;}
+.modal-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;color:var(--text2);margin-bottom:5px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:13px;transition:border-color 0.15s;}
+.form-input:focus{outline:none;border-color:var(--green);}
+.form-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:13px;cursor:pointer;}
+.form-select:focus{outline:none;border-color:var(--green);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+.empty{text-align:center;padding:40px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:11px;font-family:'DM Mono',monospace;padding:9px 14px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;}
+.loading{display:flex;align-items:center;gap:8px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;padding:20px 0;}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.config-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-size:13px;}
+.config-row:first-child{border-top:none;}
+.config-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);}
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);}
+.tab{padding:8px 14px;font-size:12px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-family:'DM Mono',monospace;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--green);border-bottom-color:var(--green);}
+.subpage{display:none;}
+.subpage.active{display:block;}
+.timeline{border-left:2px solid var(--border2);padding-left:14px;margin-left:6px;}
+.timeline-item{position:relative;padding-bottom:14px;}
+.timeline-item::before{content:'';position:absolute;left:-19px;top:3px;width:8px;height:8px;border-radius:50%;background:var(--text3);}
+.timeline-item.done::before{background:var(--green);}
+.timeline-item.active::before{background:var(--amber);}
+.timeline-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;}
+.timeline-val{font-size:12.5px;color:var(--text);margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-name">Totem Nube</div>
+      <div class="logo-sub">BIENES Y PERSONAL · v1.0</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Módulo</div>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <span class="icon">◈</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('bienes')">
+        <span class="icon">🖥</span> Bienes · Áreas
+      </div>
+      <div class="nav-item" onclick="showPage('fallas')">
+        <span class="icon">🛠</span> Fallas · Service
+      </div>
+      <div class="nav-item" onclick="showPage('personal')">
+        <span class="icon">👤</span> Asignación a personal
+      </div>
+      <div class="nav-section">Sistema</div>
+      <div class="nav-item" onclick="showPage('config')">
+        <span class="icon">⚙</span> Configuración
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="conn-status">
+        <div class="conn-dot" id="conn-dot"></div>
+        <span id="conn-text">Conectando...</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub">Resumen de bienes, fallas y asignaciones a personal</div>
+        </div>
+      </div>
+      <div class="metrics" id="dash-metrics">
+        <div class="metric"><div class="metric-label">Bienes totales</div><div class="metric-value" id="m-bienes">—</div></div>
+        <div class="metric green"><div class="metric-label">Disponibles</div><div class="metric-value" id="m-disp">—</div></div>
+        <div class="metric blue"><div class="metric-label">Asignados (área/personal)</div><div class="metric-value" id="m-asig">—</div></div>
+        <div class="metric amber"><div class="metric-label">En service</div><div class="metric-value" id="m-service">—</div></div>
+        <div class="metric red"><div class="metric-label">Dados de baja</div><div class="metric-value" id="m-baja">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Fallas abiertas</div>
+        <div id="dash-fallas"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Asignaciones a personal activas</div>
+        <div id="dash-personal"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
+      </div>
+    </div>
+
+    <!-- BIENES · ÁREAS -->
+    <div class="page" id="page-bienes">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Bienes no consumibles</div>
+          <div class="page-sub">Catálogo, unidades físicas y asignación a áreas internas</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab active" onclick="showTab('bienes','catalogo')">Catálogo</div>
+        <div class="tab" onclick="showTab('bienes','unidades')">Unidades físicas</div>
+        <div class="tab" onclick="showTab('bienes','asignaciones')">Asignaciones a áreas</div>
+      </div>
+
+      <!-- Catálogo de bienes -->
+      <div class="subpage active" id="bienes-catalogo">
+        <div class="toolbar">
+          <input class="search-input" type="text" placeholder="Buscar código o nombre..." id="bc-search" oninput="renderBienesCatalogo()">
+          <div class="spacer"></div>
+          <button class="btn green" onclick="openModalBien()">+ Nuevo bien</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Valor ref.</th><th></th></tr></thead>
+              <tbody id="bc-tbody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unidades físicas -->
+      <div class="subpage" id="bienes-unidades">
+        <div class="toolbar">
+          <input class="search-input" type="text" placeholder="Buscar UID / N° serie..." id="bu-search" oninput="renderBienesUnidades()">
+          <select class="filter" id="bu-estado" onchange="renderBienesUnidades()">
+            <option value="">Todos los estados</option>
+            <option value="disponible">Disponible</option>
+            <option value="asignado_area">Asignado a área</option>
+            <option value="asignado_personal">Asignado a personal</option>
+            <option value="en_reparacion">En reparación</option>
+            <option value="baja">Baja</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn green" onclick="openModalUnidadBien()">+ Registrar unidad</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>UID</th><th>Bien</th><th>N° serie</th><th>Estado</th><th>Ubicación / asignado a</th><th></th></tr></thead>
+              <tbody id="bu-tbody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Asignaciones a áreas -->
+      <div class="subpage" id="bienes-asignaciones">
+        <div class="toolbar">
+          <select class="filter" id="ba-area" onchange="renderAsignacionesArea()">
+            <option value="">Todas las áreas</option>
+          </select>
+          <select class="filter" id="ba-estado" onchange="renderAsignacionesArea()">
+            <option value="activas">Solo activas</option>
+            <option value="todas">Todas (incluye devueltas)</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn green" onclick="openModalAsigArea()">+ Asignar bien a área</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Bien</th><th>UID</th><th>Área</th><th>Responsable</th><th>Fecha asig.</th><th>Fecha devol.</th><th></th></tr></thead>
+              <tbody id="ba-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FALLAS · SERVICE -->
+    <div class="page" id="page-fallas">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Fallas y service técnico</div>
+          <div class="page-sub">Detección de falla → envío a service → costos → reingreso o baja</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <select class="filter" id="f-estado" onchange="renderFallas()">
+          <option value="">Todos los estados</option>
+          <option value="detectada">Detectada</option>
+          <option value="en_service">En service</option>
+          <option value="resuelta_reingreso">Resuelta · reingresó a stock</option>
+          <option value="resuelta_baja">Resuelta · dada de baja</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn green" onclick="openModalFalla()">+ Registrar falla</button>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Ítem</th><th>Descripción</th><th>Estado</th><th>Costo service</th><th></th></tr></thead>
+            <tbody id="f-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PERSONAL -->
+    <div class="page" id="page-personal">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Asignación a personal</div>
+          <div class="page-sub">Cesión o asignación con descuento de sueldo</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab active" onclick="showTab('personal','empleados')">Empleados</div>
+        <div class="tab" onclick="showTab('personal','asignaciones')">Asignaciones</div>
+      </div>
+
+      <div class="subpage active" id="personal-empleados">
+        <div class="toolbar">
+          <input class="search-input" type="text" placeholder="Buscar empleado..." id="e-search" oninput="renderEmpleados()">
+          <div class="spacer"></div>
+          <button class="btn green" onclick="openModalEmpleado()">+ Nuevo empleado</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Nombre</th><th>DNI</th><th>Área</th><th>Estado</th><th></th></tr></thead>
+              <tbody id="e-tbody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="subpage" id="personal-asignaciones">
+        <div class="toolbar">
+          <select class="filter" id="ap-estado" onchange="renderAsignacionesPersonal()">
+            <option value="">Todos los estados</option>
+            <option value="activa">Activa</option>
+            <option value="devuelta">Devuelta</option>
+            <option value="pagada">Pagada</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn green" onclick="openModalAsigPersonal()">+ Asignar a empleado</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Empleado</th><th>Ítem</th><th>Tipo</th><th>Valor</th><th>Cuotas</th><th>Estado</th><th></th></tr></thead>
+              <tbody id="ap-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="page" id="page-config">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Configuración</div>
+          <div class="page-sub">Conexión Supabase (compartida con el resto de Totem Nube)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Conexión Supabase</div>
+        <div class="form-group">
+          <label class="form-label">Project URL</label>
+          <input class="form-input" type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anon Key</label>
+          <input class="form-input" type="text" id="cfg-key" placeholder="eyJ...">
+        </div>
+        <button class="btn green" onclick="saveConfig()">Guardar y reconectar</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL BIEN (catálogo) -->
+<div class="modal-bg" id="modal-bien">
+  <div class="modal">
+    <div class="modal-title"><span>Nuevo bien</span><button class="modal-close" onclick="closeModal('modal-bien')">×</button></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Código *</label><input class="form-input" id="bien-codigo" placeholder="BIEN-MINIPC-01"></div>
+      <div class="form-group"><label class="form-label">Categoría</label><input class="form-input" id="bien-categoria" placeholder="Informática"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="bien-nombre" placeholder="Mini PC Intel NUC"></div>
+    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="bien-desc" placeholder="Opcional"></div>
+    <div class="form-group"><label class="form-label">Valor de referencia</label><input class="form-input" type="number" id="bien-valor" min="0" step="0.01"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-bien')">Cancelar</button>
+      <button class="btn green" onclick="saveBien()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL UNIDAD DE BIEN -->
+<div class="modal-bg" id="modal-unidad-bien">
+  <div class="modal">
+    <div class="modal-title"><span>Registrar unidad física</span><button class="modal-close" onclick="closeModal('modal-unidad-bien')">×</button></div>
+    <div class="form-group"><label class="form-label">Bien *</label><select class="form-select" id="ub-bien-sel"></select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">UID / código interno *</label><input class="form-input" id="ub-uid" placeholder="BIEN-MINIPC-01-0001"></div>
+      <div class="form-group"><label class="form-label">N° de serie</label><input class="form-input" id="ub-serie" placeholder="Opcional"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="ub-notas"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-unidad-bien')">Cancelar</button>
+      <button class="btn green" onclick="saveUnidadBien()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ASIGNAR BIEN A ÁREA -->
+<div class="modal-bg" id="modal-asig-area">
+  <div class="modal">
+    <div class="modal-title"><span>Asignar bien a área</span><button class="modal-close" onclick="closeModal('modal-asig-area')">×</button></div>
+    <div class="form-group"><label class="form-label">Unidad de bien disponible *</label><select class="form-select" id="aa-unidad-sel"></select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Área *</label><select class="form-select" id="aa-area-sel"></select></div>
+      <div class="form-group"><label class="form-label">Responsable</label><input class="form-input" id="aa-responsable" placeholder="Nombre del referente"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="aa-notas"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-asig-area')">Cancelar</button>
+      <button class="btn green" onclick="saveAsigArea()">Asignar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REGISTRAR FALLA -->
+<div class="modal-bg" id="modal-falla">
+  <div class="modal">
+    <div class="modal-title"><span>Registrar falla</span><button class="modal-close" onclick="closeModal('modal-falla')">×</button></div>
+    <div class="form-group">
+      <label class="form-label">Tipo de ítem *</label>
+      <select class="form-select" id="fa-tipo" onchange="loadItemsParaFalla()">
+        <option value="bien_unidad">Bien (activo no consumible)</option>
+        <option value="insumo_unidad">Insumo (unidad de stock)</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="fa-item-sel"></select></div>
+    <div class="form-group"><label class="form-label">Descripción de la falla *</label><input class="form-input" id="fa-desc" placeholder="Ej: no enciende, pantalla rota..."></div>
+    <div class="form-group"><label class="form-label">Detectado por</label><input class="form-input" id="fa-detectado" placeholder="Nombre"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-falla')">Cancelar</button>
+      <button class="btn green" onclick="saveFalla()">Registrar falla</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE / GESTIÓN DE FALLA -->
+<div class="modal-bg" id="modal-falla-detalle">
+  <div class="modal">
+    <div class="modal-title"><span id="fd-titulo">Falla</span><button class="modal-close" onclick="closeModal('modal-falla-detalle')">×</button></div>
+    <div id="fd-content"></div>
+  </div>
+</div>
+
+<!-- MODAL EMPLEADO -->
+<div class="modal-bg" id="modal-empleado">
+  <div class="modal">
+    <div class="modal-title"><span>Nuevo empleado</span><button class="modal-close" onclick="closeModal('modal-empleado')">×</button></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="emp-nombre"></div>
+      <div class="form-group"><label class="form-label">Apellido *</label><input class="form-input" id="emp-apellido"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">DNI</label><input class="form-input" id="emp-dni"></div>
+      <div class="form-group"><label class="form-label">Área</label><select class="form-select" id="emp-area-sel"></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-empleado')">Cancelar</button>
+      <button class="btn green" onclick="saveEmpleado()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ASIGNAR A PERSONAL -->
+<div class="modal-bg" id="modal-asig-personal">
+  <div class="modal">
+    <div class="modal-title"><span>Asignar a empleado</span><button class="modal-close" onclick="closeModal('modal-asig-personal')">×</button></div>
+    <div class="form-group"><label class="form-label">Empleado *</label><select class="form-select" id="apx-empleado-sel"></select></div>
+    <div class="form-group">
+      <label class="form-label">Tipo de ítem *</label>
+      <select class="form-select" id="apx-tipo" onchange="loadItemsParaAsigPersonal()">
+        <option value="bien_unidad">Bien (activo no consumible)</option>
+        <option value="insumo_unidad">Insumo (unidad de stock)</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="apx-item-sel"></select></div>
+    <div class="form-group">
+      <label class="form-label">Modalidad *</label>
+      <select class="form-select" id="apx-modalidad" onchange="toggleValorAsigPersonal()">
+        <option value="cesion">Cesión (sin costo)</option>
+        <option value="descuento_sueldo">Con valor a descontar de sueldo</option>
+      </select>
+    </div>
+    <div class="form-row" id="apx-valor-row" style="display:none;">
+      <div class="form-group"><label class="form-label">Valor total</label><input class="form-input" type="number" id="apx-valor" min="0" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Cuotas (meses)</label><input class="form-input" type="number" id="apx-cuotas" min="1" value="1"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="apx-notas"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-asig-personal')">Cancelar</button>
+      <button class="btn green" onclick="saveAsigPersonal()">Asignar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+let SUPA_URL = localStorage.getItem('supa_url') || '';
+let SUPA_KEY = localStorage.getItem('supa_key') || '';
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let areas = [];
+let empleadosData = [];
+let bienesData = [];
+let bienesUnidadesData = [];
+let asignacionesAreaData = [];
+let fallasData = [];
+let asignacionesPersonalData = [];
+let unidadesInsumoDisponibles = []; // unidades de stock (tabla "unidades") en estado 'stock'
+
+// ─── API ───────────────────────────────────────────────────────────────────
+async function api(path, method='GET', body=null){
+  if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración');
+  const opts = {
+    method,
+    headers:{
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'return=representation' : (method==='PATCH' ? 'return=representation' : '')
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  if(!res.ok){
+    const err = await res.text();
+    throw new Error(err);
+  }
+  if(res.status===204) return null;
+  return res.json();
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(()=>{ t.style.opacity='0'; }, 2200);
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+
+// ─── NAVIGATION ────────────────────────────────────────────────────────────
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')===`showPage('${id}')`) n.classList.add('active');
+  });
+  if(id==='dashboard') loadDashboard();
+  if(id==='bienes') loadBienesPage();
+  if(id==='fallas') loadFallasPage();
+  if(id==='personal') loadPersonalPage();
+}
+
+function showTab(section, tab){
+  document.querySelectorAll(`#page-${section} .tab`).forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll(`#page-${section} .subpage`).forEach(s=>s.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(`${section}-${tab}`).classList.add('active');
+}
+
+// ─── CONNECTION ─────────────────────────────────────────────────────────────
+async function checkConnection(){
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-text');
+  if(!SUPA_URL || !SUPA_KEY){
+    dot.className='conn-dot err'; txt.textContent='Sin configurar'; return false;
+  }
+  try {
+    await api('areas?select=id&limit=1');
+    dot.className='conn-dot ok'; txt.textContent='Conectado'; return true;
+  } catch(e){
+    dot.className='conn-dot err'; txt.textContent='Error conexión'; return false;
+  }
+}
+
+function saveConfig(){
+  SUPA_URL = document.getElementById('cfg-url').value.trim();
+  SUPA_KEY = document.getElementById('cfg-key').value.trim();
+  localStorage.setItem('supa_url', SUPA_URL);
+  localStorage.setItem('supa_key', SUPA_KEY);
+  toast('Configuración guardada');
+  checkConnection().then(ok=>{ if(ok) loadDashboard(); });
+}
+
+// ─── SHARED LOADERS ─────────────────────────────────────────────────────────
+async function loadAreas(){
+  areas = await api('areas?select=*&activo=eq.true&order=nombre.asc').catch(()=>[]);
+  const opts = areas.map(a=>`<option value="${a.id}">${a.nombre}</option>`).join('');
+  ['aa-area-sel','emp-area-sel'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = opts;
+  });
+  const filArea = document.getElementById('ba-area');
+  if(filArea) filArea.innerHTML = '<option value="">Todas las áreas</option>' + opts;
+}
+
+async function loadEmpleados(){
+  empleadosData = await api('empleados?select=*,areas(nombre)&order=apellido.asc').catch(()=>[]);
+}
+
+async function loadBienesCatalogo(){
+  bienesData = await api('bienes?select=*&activo=eq.true&order=codigo.asc').catch(()=>[]);
+}
+
+async function loadBienesUnidades(){
+  bienesUnidadesData = await api('bienes_unidades?select=*,bienes(codigo,nombre)&order=id.desc').catch(()=>[]);
+}
+
+async function loadAsignacionesArea(){
+  asignacionesAreaData = await api('asignaciones_area?select=*,bienes_unidades(uid,bienes(codigo,nombre)),areas(nombre)&order=id.desc').catch(()=>[]);
+}
+
+async function loadFallas(){
+  fallasData = await api('fallas?select=*,service_tecnico(*)&order=id.desc').catch(()=>[]);
+}
+
+async function loadAsignacionesPersonal(){
+  asignacionesPersonalData = await api('asignaciones_personal?select=*,empleados(nombre,apellido)&order=id.desc').catch(()=>[]);
+}
+
+// ─── DASHBOARD ──────────────────────────────────────────────────────────────
+async function loadDashboard(){
+  await Promise.all([loadBienesUnidades(), loadFallas(), loadAsignacionesPersonal()]);
+  const total = bienesUnidadesData.length;
+  const disp = bienesUnidadesData.filter(b=>b.estado==='disponible').length;
+  const asig = bienesUnidadesData.filter(b=>b.estado==='asignado_area'||b.estado==='asignado_personal').length;
+  const service = bienesUnidadesData.filter(b=>b.estado==='en_reparacion').length + fallasData.filter(f=>f.estado==='en_service').length;
+  const baja = bienesUnidadesData.filter(b=>b.estado==='baja').length;
+  document.getElementById('m-bienes').textContent = total;
+  document.getElementById('m-disp').textContent = disp;
+  document.getElementById('m-asig').textContent = asig;
+  document.getElementById('m-service').textContent = service;
+  document.getElementById('m-baja').textContent = baja;
+
+  const abiertas = fallasData.filter(f=>f.estado==='detectada'||f.estado==='en_service');
+  const elF = document.getElementById('dash-fallas');
+  if(!abiertas.length){
+    elF.innerHTML = '<div class="empty"><div class="empty-icon">✓</div>No hay fallas abiertas</div>';
+  } else {
+    elF.innerHTML = `<table><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Estado</th></tr></thead><tbody>
+      ${abiertas.map(f=>`<tr>
+        <td class="td-mono">${f.fecha_deteccion||'—'}</td>
+        <td>${f.item_type==='bien_unidad'?'Bien':'Insumo'}</td>
+        <td class="td-main">${f.descripcion_falla}</td>
+        <td>${badgeFalla(f.estado)}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  const activas = asignacionesPersonalData.filter(a=>a.estado==='activa');
+  const elP = document.getElementById('dash-personal');
+  if(!activas.length){
+    elP.innerHTML = '<div class="empty"><div class="empty-icon">—</div>No hay asignaciones activas</div>';
+  } else {
+    elP.innerHTML = `<table><thead><tr><th>Empleado</th><th>Modalidad</th><th>Valor</th><th>Fecha</th></tr></thead><tbody>
+      ${activas.map(a=>`<tr>
+        <td class="td-main">${a.empleados?.nombre||''} ${a.empleados?.apellido||''}</td>
+        <td>${a.tipo_asignacion==='cesion'?'Cesión':'Descuento sueldo'}</td>
+        <td class="td-num">${a.valor_total?('$'+Number(a.valor_total).toLocaleString('es-AR')):'—'}</td>
+        <td class="td-mono">${a.fecha_asignacion||'—'}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }
+}
+
+// ─── BADGES ─────────────────────────────────────────────────────────────────
+function badgeEstadoUnidad(estado){
+  const map = {
+    disponible:['ok','Disponible'], asignado_area:['uid','Asignado a área'],
+    asignado_personal:['purple','Asignado a personal'], en_reparacion:['bajo','En reparación'],
+    baja:['sin','Baja']
+  };
+  const [cls,label] = map[estado]||['qty',estado];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function badgeFalla(estado){
+  const map = {
+    detectada:['sin','Detectada'], en_service:['bajo','En service'],
+    resuelta_reingreso:['ok','Reingresó a stock'], resuelta_baja:['sin','Dada de baja']
+  };
+  const [cls,label] = map[estado]||['qty',estado];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function badgeAsigPersonal(estado){
+  const map = { activa:['uid','Activa'], devuelta:['qty','Devuelta'], pagada:['ok','Pagada'] };
+  const [cls,label] = map[estado]||['qty',estado];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ─── BIENES: CATÁLOGO ───────────────────────────────────────────────────────
+async function loadBienesPage(){
+  await loadAreas();
+  await Promise.all([loadBienesCatalogo(), loadBienesUnidades(), loadAsignacionesArea()]);
+  renderBienesCatalogo();
+  renderBienesUnidades();
+  renderAsignacionesArea();
+  fillBienSelects();
+}
+
+function renderBienesCatalogo(){
+  const search = document.getElementById('bc-search')?.value.toLowerCase()||'';
+  let rows = bienesData.filter(b=> !search || b.codigo.toLowerCase().includes(search) || b.nombre.toLowerCase().includes(search));
+  const tbody = document.getElementById('bc-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">🖥</div>No hay bienes registrados</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(b=>`<tr>
+    <td class="td-mono td-main">${b.codigo}</td>
+    <td>${b.nombre}</td>
+    <td style="font-size:11px;color:var(--text3)">${b.categoria||'—'}</td>
+    <td class="td-num">${b.valor_referencia?('$'+Number(b.valor_referencia).toLocaleString('es-AR')):'—'}</td>
+    <td class="td-actions"><button class="btn sm" onclick="openModalUnidadBien(${b.id})">+ Unidad</button></td>
+  </tr>`).join('');
+}
+
+function openModalBien(){
+  document.getElementById('bien-codigo').value='';
+  document.getElementById('bien-categoria').value='';
+  document.getElementById('bien-nombre').value='';
+  document.getElementById('bien-desc').value='';
+  document.getElementById('bien-valor').value='';
+  openModal('modal-bien');
+}
+
+async function saveBien(){
+  const codigo = document.getElementById('bien-codigo').value.trim();
+  const nombre = document.getElementById('bien-nombre').value.trim();
+  if(!codigo || !nombre){ toast('Completá código y nombre'); return; }
+  try{
+    await api('bienes','POST',{
+      codigo, nombre,
+      categoria: document.getElementById('bien-categoria').value.trim()||null,
+      descripcion: document.getElementById('bien-desc').value.trim()||null,
+      valor_referencia: parseFloat(document.getElementById('bien-valor').value)||null
+    });
+    toast('Bien creado');
+    closeModal('modal-bien');
+    await loadBienesCatalogo(); renderBienesCatalogo(); fillBienSelects();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+function fillBienSelects(){
+  const opts = bienesData.map(b=>`<option value="${b.id}">${b.codigo} — ${b.nombre}</option>`).join('');
+  const sel = document.getElementById('ub-bien-sel');
+  if(sel) sel.innerHTML = opts;
+  const disponibles = bienesUnidadesData.filter(u=>u.estado==='disponible');
+  const selAA = document.getElementById('aa-unidad-sel');
+  if(selAA) selAA.innerHTML = disponibles.map(u=>`<option value="${u.id}">${u.bienes?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades disponibles</option>';
+}
+
+// ─── BIENES: UNIDADES FÍSICAS ───────────────────────────────────────────────
+function renderBienesUnidades(){
+  const search = document.getElementById('bu-search')?.value.toLowerCase()||'';
+  const estFil = document.getElementById('bu-estado')?.value||'';
+  let rows = bienesUnidadesData.filter(u=>{
+    if(search && !(u.uid||'').toLowerCase().includes(search) && !(u.numero_serie||'').toLowerCase().includes(search)) return false;
+    if(estFil && u.estado!==estFil) return false;
+    return true;
+  });
+  const tbody = document.getElementById('bu-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">◈</div>No hay unidades</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(u=>{
+    const asigArea = asignacionesAreaData.find(a=>a.bien_unidad_id===u.id && a.activa);
+    const asigPers = asignacionesPersonalData.find(a=>a.item_type==='bien_unidad' && a.item_id===u.id && a.estado==='activa');
+    let ubic = '—';
+    if(asigArea) ubic = 'Área: ' + (asigArea.areas?.nombre||'—');
+    else if(asigPers) ubic = 'Personal: ' + (asigPers.empleados?.nombre||'')+' '+(asigPers.empleados?.apellido||'');
+    return `<tr>
+      <td class="td-mono">${u.uid||'—'}</td>
+      <td class="td-main">${u.bienes?.codigo||'—'} — ${u.bienes?.nombre||''}</td>
+      <td class="td-mono" style="font-size:11px;color:var(--text3)">${u.numero_serie||'—'}</td>
+      <td>${badgeEstadoUnidad(u.estado)}</td>
+      <td style="font-size:11.5px">${ubic}</td>
+      <td class="td-actions">${u.estado==='asignado_area'?`<button class="btn sm amber" onclick="devolverAsigArea(${u.id})">Devolver</button>`:''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openModalUnidadBien(bienId){
+  fillBienSelects();
+  if(bienId) document.getElementById('ub-bien-sel').value = bienId;
+  document.getElementById('ub-uid').value='';
+  document.getElementById('ub-serie').value='';
+  document.getElementById('ub-notas').value='';
+  openModal('modal-unidad-bien');
+}
+
+async function saveUnidadBien(){
+  const bien_id = document.getElementById('ub-bien-sel').value;
+  if(!bien_id){ toast('Elegí un bien'); return; }
+  try{
+    await api('bienes_unidades','POST',{
+      bien_id: Number(bien_id),
+      uid: document.getElementById('ub-uid').value.trim()||null,
+      numero_serie: document.getElementById('ub-serie').value.trim()||null,
+      notas: document.getElementById('ub-notas').value.trim()||null,
+      estado: 'disponible'
+    });
+    toast('Unidad registrada');
+    closeModal('modal-unidad-bien');
+    await loadBienesUnidades(); renderBienesUnidades(); fillBienSelects();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── BIENES: ASIGNACIÓN A ÁREAS ─────────────────────────────────────────────
+function renderAsignacionesArea(){
+  const areaFil = document.getElementById('ba-area')?.value||'';
+  const estFil = document.getElementById('ba-estado')?.value||'activas';
+  let rows = asignacionesAreaData.filter(a=>{
+    if(areaFil && String(a.area_id)!==areaFil) return false;
+    if(estFil==='activas' && !a.activa) return false;
+    return true;
+  });
+  const tbody = document.getElementById('ba-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">📍</div>Sin asignaciones</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(a=>`<tr>
+    <td class="td-main">${a.bienes_unidades?.bienes?.codigo||'—'} — ${a.bienes_unidades?.bienes?.nombre||''}</td>
+    <td class="td-mono">${a.bienes_unidades?.uid||'—'}</td>
+    <td>${a.areas?.nombre||'—'}</td>
+    <td>${a.responsable||'—'}</td>
+    <td class="td-mono">${a.fecha_asignacion||'—'}</td>
+    <td class="td-mono">${a.fecha_devolucion||'—'}</td>
+    <td class="td-actions">${a.activa?`<button class="btn sm amber" onclick="devolverAsigAreaById(${a.id})">Devolver</button>`:''}</td>
+  </tr>`).join('');
+}
+
+function openModalAsigArea(){
+  fillBienSelects();
+  document.getElementById('aa-responsable').value='';
+  document.getElementById('aa-notas').value='';
+  openModal('modal-asig-area');
+}
+
+async function saveAsigArea(){
+  const bien_unidad_id = document.getElementById('aa-unidad-sel').value;
+  const area_id = document.getElementById('aa-area-sel').value;
+  if(!bien_unidad_id || !area_id){ toast('Completá unidad y área'); return; }
+  try{
+    await api('asignaciones_area','POST',{
+      bien_unidad_id: Number(bien_unidad_id), area_id: Number(area_id),
+      responsable: document.getElementById('aa-responsable').value.trim()||null,
+      notas: document.getElementById('aa-notas').value.trim()||null
+    });
+    await api(`bienes_unidades?id=eq.${bien_unidad_id}`, 'PATCH', {estado:'asignado_area'});
+    toast('Bien asignado al área');
+    closeModal('modal-asig-area');
+    await Promise.all([loadBienesUnidades(), loadAsignacionesArea()]);
+    renderBienesUnidades(); renderAsignacionesArea(); fillBienSelects();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function devolverAsigAreaById(id){
+  if(!confirm('¿Marcar esta asignación como devuelta?')) return;
+  try{
+    const asig = asignacionesAreaData.find(a=>a.id===id);
+    await api(`asignaciones_area?id=eq.${id}`,'PATCH',{activa:false, fecha_devolucion: new Date().toISOString().slice(0,10)});
+    if(asig) await api(`bienes_unidades?id=eq.${asig.bien_unidad_id}`,'PATCH',{estado:'disponible'});
+    toast('Devolución registrada');
+    await Promise.all([loadBienesUnidades(), loadAsignacionesArea()]);
+    renderBienesUnidades(); renderAsignacionesArea();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function devolverAsigArea(bienUnidadId){
+  const asig = asignacionesAreaData.find(a=>a.bien_unidad_id===bienUnidadId && a.activa);
+  if(asig) await devolverAsigAreaById(asig.id);
+}
+
+// ─── FALLAS · SERVICE ────────────────────────────────────────────────────────
+async function loadFallasPage(){
+  await Promise.all([loadFallas(), loadBienesUnidades()]);
+  renderFallas();
+}
+
+function renderFallas(){
+  const estFil = document.getElementById('f-estado')?.value||'';
+  let rows = fallasData.filter(f=> !estFil || f.estado===estFil);
+  const tbody = document.getElementById('f-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">🛠</div>No hay fallas registradas</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(f=>{
+    const service = (f.service_tecnico||[])[0];
+    return `<tr style="cursor:pointer" onclick="abrirDetalleFalla(${f.id})">
+      <td class="td-mono">${f.fecha_deteccion||'—'}</td>
+      <td>${f.item_type==='bien_unidad'?'Bien':'Insumo'}</td>
+      <td class="td-mono" style="font-size:11px">#${f.item_id}</td>
+      <td class="td-main">${f.descripcion_falla}</td>
+      <td>${badgeFalla(f.estado)}</td>
+      <td class="td-num">${service?.costo?('$'+Number(service.costo).toLocaleString('es-AR')):'—'}</td>
+      <td class="td-actions"><button class="btn sm" onclick="event.stopPropagation();abrirDetalleFalla(${f.id})">Gestionar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadItemsParaFalla(){
+  const tipo = document.getElementById('fa-tipo').value;
+  const sel = document.getElementById('fa-item-sel');
+  if(tipo==='bien_unidad'){
+    await loadBienesUnidades();
+    const disponibles = bienesUnidadesData.filter(u=>['disponible','asignado_area','asignado_personal'].includes(u.estado));
+    sel.innerHTML = disponibles.map(u=>`<option value="${u.id}">${u.bienes?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades</option>';
+  } else {
+    unidadesInsumoDisponibles = await api('unidades?estado=in.(stock,reservado)&select=id,uid,skus(codigo,nombre)').catch(()=>[]);
+    sel.innerHTML = unidadesInsumoDisponibles.map(u=>`<option value="${u.id}">${u.skus?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades</option>';
+  }
+}
+
+function openModalFalla(){
+  document.getElementById('fa-tipo').value = 'bien_unidad';
+  document.getElementById('fa-desc').value='';
+  document.getElementById('fa-detectado').value='';
+  loadItemsParaFalla();
+  openModal('modal-falla');
+}
+
+async function saveFalla(){
+  const item_type = document.getElementById('fa-tipo').value;
+  const item_id = document.getElementById('fa-item-sel').value;
+  const descripcion_falla = document.getElementById('fa-desc').value.trim();
+  if(!item_id || !descripcion_falla){ toast('Completá ítem y descripción'); return; }
+  try{
+    await api('fallas','POST',{
+      item_type, item_id: Number(item_id), descripcion_falla,
+      detectado_por: document.getElementById('fa-detectado').value.trim()||null
+    });
+    const tabla = item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
+    await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado:'en_reparacion'});
+    toast('Falla registrada');
+    closeModal('modal-falla');
+    await loadFallasPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+function abrirDetalleFalla(id){
+  const f = fallasData.find(x=>x.id===id);
+  if(!f) return;
+  const service = (f.service_tecnico||[])[0];
+  document.getElementById('fd-titulo').textContent = `Falla #${f.id} — ${f.item_type==='bien_unidad'?'Bien':'Insumo'} #${f.item_id}`;
+  const puedeGestionar = f.estado==='detectada' || f.estado==='en_service';
+  document.getElementById('fd-content').innerHTML = `
+    <div class="timeline">
+      <div class="timeline-item done">
+        <div class="timeline-label">Detectada</div>
+        <div class="timeline-val">${f.fecha_deteccion||'—'} ${f.detectado_por?'· '+f.detectado_por:''}</div>
+        <div class="timeline-val" style="color:var(--text2)">${f.descripcion_falla}</div>
+      </div>
+      <div class="timeline-item ${service?'done':(f.estado==='detectada'?'active':'')}">
+        <div class="timeline-label">Service técnico</div>
+        ${service ? `
+          <div class="timeline-val">${service.proveedor} · enviado ${service.fecha_envio}</div>
+          <div class="timeline-val" style="color:var(--text2)">Costo: ${service.costo?('$'+Number(service.costo).toLocaleString('es-AR')):'—'} ${service.diagnostico?'· '+service.diagnostico:''}</div>
+          <div class="timeline-val">${service.resultado==='reparado'?'✓ Reparado':service.resultado==='irreparable'?'✗ Irreparable':'Pendiente de resultado'}</div>
+        ` : (f.estado==='detectada' ? `
+          <div class="form-group" style="margin-top:8px;"><label class="form-label">Proveedor / service *</label><input class="form-input" id="svc-proveedor" placeholder="Interno / Nombre del service"></div>
+          <div class="form-group"><label class="form-label">Costo estimado</label><input class="form-input" type="number" id="svc-costo" min="0" step="0.01"></div>
+          <button class="btn amber sm" onclick="enviarAService(${f.id})">Enviar a service</button>
+        ` : '<div class="timeline-val" style="color:var(--text3)">—</div>')}
+      </div>
+      <div class="timeline-item ${f.estado.startsWith('resuelta')?'done':''}">
+        <div class="timeline-label">Resolución</div>
+        ${f.estado.startsWith('resuelta') ? `<div class="timeline-val">${f.estado==='resuelta_reingreso'?'✓ Reingresó a stock':'✗ Dada de baja por rotura'}</div>` :
+          (service && !service.resultado ? `
+          <div class="form-group" style="margin-top:8px;"><label class="form-label">Costo final</label><input class="form-input" type="number" id="svc-costo-final" min="0" step="0.01" value="${service.costo||''}"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn green sm" onclick="resolverFalla(${f.id},'reparado')">✓ Reparado → reingresar a stock</button>
+            <button class="btn red sm" onclick="resolverFalla(${f.id},'irreparable')">✗ Irreparable → dar de baja</button>
+          </div>` : '<div class="timeline-val" style="color:var(--text3)">Pendiente de envío a service</div>')}
+      </div>
+    </div>`;
+  openModal('modal-falla-detalle');
+}
+
+async function enviarAService(fallaId){
+  const proveedor = document.getElementById('svc-proveedor').value.trim();
+  if(!proveedor){ toast('Completá el proveedor / service'); return; }
+  const costo = parseFloat(document.getElementById('svc-costo').value)||0;
+  try{
+    await api('service_tecnico','POST',{ falla_id: fallaId, proveedor, costo });
+    await api(`fallas?id=eq.${fallaId}`,'PATCH',{estado:'en_service'});
+    toast('Enviado a service');
+    await loadFallasPage();
+    closeModal('modal-falla-detalle');
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function resolverFalla(fallaId, resultado){
+  const f = fallasData.find(x=>x.id===fallaId);
+  const service = (f?.service_tecnico||[])[0];
+  const costoFinal = parseFloat(document.getElementById('svc-costo-final')?.value)||0;
+  try{
+    if(service) await api(`service_tecnico?id=eq.${service.id}`,'PATCH',{resultado, costo: costoFinal, fecha_retorno: new Date().toISOString().slice(0,10)});
+    const nuevoEstadoFalla = resultado==='reparado' ? 'resuelta_reingreso' : 'resuelta_baja';
+    await api(`fallas?id=eq.${fallaId}`,'PATCH',{estado: nuevoEstadoFalla});
+    const tabla = f.item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
+    const nuevoEstadoItem = resultado==='reparado' ? (f.item_type==='bien_unidad'?'disponible':'stock') : 'baja';
+    await api(`${tabla}?id=eq.${f.item_id}`,'PATCH',{estado: nuevoEstadoItem});
+    toast(resultado==='reparado' ? 'Reingresado a stock' : 'Dado de baja');
+    closeModal('modal-falla-detalle');
+    await loadFallasPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── PERSONAL: EMPLEADOS ────────────────────────────────────────────────────
+async function loadPersonalPage(){
+  await loadAreas();
+  await Promise.all([loadEmpleados(), loadAsignacionesPersonal(), loadBienesUnidades()]);
+  renderEmpleados();
+  renderAsignacionesPersonal();
+  fillEmpleadoSelects();
+}
+
+function renderEmpleados(){
+  const search = document.getElementById('e-search')?.value.toLowerCase()||'';
+  let rows = empleadosData.filter(e=> !search || (e.nombre+' '+e.apellido).toLowerCase().includes(search));
+  const tbody = document.getElementById('e-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">👤</div>No hay empleados registrados</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(e=>`<tr>
+    <td class="td-main">${e.nombre} ${e.apellido}</td>
+    <td class="td-mono" style="font-size:11px;color:var(--text3)">${e.dni||'—'}</td>
+    <td>${e.areas?.nombre||'—'}</td>
+    <td>${e.activo?'<span class="badge ok">Activo</span>':'<span class="badge sin">Inactivo</span>'}</td>
+    <td class="td-actions"></td>
+  </tr>`).join('');
+}
+
+function openModalEmpleado(){
+  document.getElementById('emp-nombre').value='';
+  document.getElementById('emp-apellido').value='';
+  document.getElementById('emp-dni').value='';
+  openModal('modal-empleado');
+}
+
+async function saveEmpleado(){
+  const nombre = document.getElementById('emp-nombre').value.trim();
+  const apellido = document.getElementById('emp-apellido').value.trim();
+  if(!nombre || !apellido){ toast('Completá nombre y apellido'); return; }
+  try{
+    await api('empleados','POST',{
+      nombre, apellido,
+      dni: document.getElementById('emp-dni').value.trim()||null,
+      area_id: Number(document.getElementById('emp-area-sel').value)||null
+    });
+    toast('Empleado creado');
+    closeModal('modal-empleado');
+    await loadEmpleados(); renderEmpleados(); fillEmpleadoSelects();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+function fillEmpleadoSelects(){
+  const opts = empleadosData.map(e=>`<option value="${e.id}">${e.nombre} ${e.apellido}</option>`).join('');
+  const sel = document.getElementById('apx-empleado-sel');
+  if(sel) sel.innerHTML = opts;
+}
+
+// ─── PERSONAL: ASIGNACIONES ─────────────────────────────────────────────────
+function renderAsignacionesPersonal(){
+  const estFil = document.getElementById('ap-estado')?.value||'';
+  let rows = asignacionesPersonalData.filter(a=> !estFil || a.estado===estFil);
+  const tbody = document.getElementById('ap-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">📋</div>No hay asignaciones</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(a=>`<tr>
+    <td class="td-main">${a.empleados?.nombre||''} ${a.empleados?.apellido||''}</td>
+    <td class="td-mono" style="font-size:11px">${a.item_type==='bien_unidad'?'Bien':'Insumo'} #${a.item_id}</td>
+    <td>${a.tipo_asignacion==='cesion'?'Cesión':'Descuento sueldo'}</td>
+    <td class="td-num">${a.valor_total?('$'+Number(a.valor_total).toLocaleString('es-AR')):'—'}</td>
+    <td class="td-num">${a.cuotas||1}</td>
+    <td>${badgeAsigPersonal(a.estado)}</td>
+    <td class="td-actions">${a.estado==='activa'?`<button class="btn sm amber" onclick="devolverAsigPersonal(${a.id})">Devolver</button>`:''}</td>
+  </tr>`).join('');
+}
+
+function toggleValorAsigPersonal(){
+  const modalidad = document.getElementById('apx-modalidad').value;
+  document.getElementById('apx-valor-row').style.display = modalidad==='descuento_sueldo' ? 'grid' : 'none';
+}
+
+async function loadItemsParaAsigPersonal(){
+  const tipo = document.getElementById('apx-tipo').value;
+  const sel = document.getElementById('apx-item-sel');
+  if(tipo==='bien_unidad'){
+    const disponibles = bienesUnidadesData.filter(u=>u.estado==='disponible');
+    sel.innerHTML = disponibles.map(u=>`<option value="${u.id}">${u.bienes?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades disponibles</option>';
+  } else {
+    const disponibles = await api('unidades?estado=eq.stock&select=id,uid,skus(codigo,nombre)').catch(()=>[]);
+    sel.innerHTML = disponibles.map(u=>`<option value="${u.id}">${u.skus?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades disponibles</option>';
+  }
+}
+
+function openModalAsigPersonal(){
+  document.getElementById('apx-tipo').value='bien_unidad';
+  document.getElementById('apx-modalidad').value='cesion';
+  document.getElementById('apx-valor').value='';
+  document.getElementById('apx-cuotas').value=1;
+  document.getElementById('apx-notas').value='';
+  toggleValorAsigPersonal();
+  loadItemsParaAsigPersonal();
+  openModal('modal-asig-personal');
+}
+
+async function saveAsigPersonal(){
+  const empleado_id = document.getElementById('apx-empleado-sel').value;
+  const item_type = document.getElementById('apx-tipo').value;
+  const item_id = document.getElementById('apx-item-sel').value;
+  const tipo_asignacion = document.getElementById('apx-modalidad').value;
+  if(!empleado_id || !item_id){ toast('Completá empleado e ítem'); return; }
+  try{
+    await api('asignaciones_personal','POST',{
+      empleado_id: Number(empleado_id), item_type, item_id: Number(item_id), tipo_asignacion,
+      valor_total: tipo_asignacion==='descuento_sueldo' ? (parseFloat(document.getElementById('apx-valor').value)||0) : 0,
+      cuotas: tipo_asignacion==='descuento_sueldo' ? (parseInt(document.getElementById('apx-cuotas').value)||1) : 1,
+      notas: document.getElementById('apx-notas').value.trim()||null
+    });
+    const tabla = item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
+    await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado: item_type==='bien_unidad' ? 'asignado_personal' : 'reservado'});
+    toast('Asignación registrada');
+    closeModal('modal-asig-personal');
+    await loadPersonalPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function devolverAsigPersonal(id){
+  if(!confirm('¿Marcar como devuelta?')) return;
+  const a = asignacionesPersonalData.find(x=>x.id===id);
+  try{
+    await api(`asignaciones_personal?id=eq.${id}`,'PATCH',{estado:'devuelta', fecha_devolucion: new Date().toISOString().slice(0,10)});
+    if(a){
+      const tabla = a.item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
+      await api(`${tabla}?id=eq.${a.item_id}`,'PATCH',{estado: a.item_type==='bien_unidad' ? 'disponible' : 'stock'});
+    }
+    toast('Devolución registrada');
+    await loadPersonalPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+(async function init(){
+  const url = new URLSearchParams(window.location.search);
+  if(url.get('v')){ /* cache-buster, no-op */ }
+  document.getElementById('cfg-url').value = SUPA_URL;
+  document.getElementById('cfg-key').value = SUPA_KEY;
+  const ok = await checkConnection();
+  if(ok) loadDashboard();
+})();
+</script>
+</body>
+</html>
