@@ -198,6 +198,27 @@ body::before{
 .modules-grid{animation:fadeUp 0.5s ease-out;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 .header{animation:fadeUp 0.4s ease-out;}
+
+/* Barra inferior de accesos secundarios (poco usados) */
+.utility-bar{
+  margin-top:24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.utility-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:transparent;border:1px solid var(--border2);
+  color:var(--text3);border-radius:8px;
+  padding:8px 16px;font-size:11px;font-family:'DM Mono',monospace;
+  cursor:pointer;letter-spacing:0.08em;
+  text-decoration:none;
+  transition:all 0.15s;
+}
+.utility-btn:hover{color:var(--text2);border-color:var(--border2);background:rgba(255,255,255,0.03);}
+
 /* ─── LOGIN ─────────────────────────────────────────────── */
 #login-overlay{
   position:fixed;inset:0;background:#0f0f11;z-index:9999;
@@ -387,22 +408,22 @@ body::before{
 
       <div style="height:8px;"></div>
 
-      <a class="mod-card blue" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST" target="_blank">
-        <div class="mod-icon">📱</div>
+      <a class="mod-card amber" href="https://ingpussetto-web.github.io/totem-stock/conteo_fisico.html" target="_blank">
+        <div class="mod-icon">🔢</div>
         <div class="mod-info">
-          <div class="mod-name">Escaneo QR</div>
-          <div class="mod-desc">Consulta de insumos desde el celular</div>
+          <div class="mod-name">Conteo Físico</div>
+          <div class="mod-desc">Verificación y ajuste de stock real vs sistema</div>
         </div>
         <div class="mod-arrow">→</div>
       </a>
 
       <div style="height:8px;"></div>
 
-      <a class="mod-card amber" href="https://ingpussetto-web.github.io/totem-stock/conteo_fisico.html" target="_blank">
-        <div class="mod-icon">🔢</div>
+      <a class="mod-card purple" href="https://ingpussetto-web.github.io/totem-stock/bienes_personal.html" target="_blank">
+        <div class="mod-icon">🖥</div>
         <div class="mod-info">
-          <div class="mod-name">Conteo Físico</div>
-          <div class="mod-desc">Verificación y ajuste de stock real vs sistema</div>
+          <div class="mod-name">Bienes y Personal</div>
+          <div class="mod-desc">Bienes por área, fallas/service y asignación a empleados</div>
         </div>
         <div class="mod-arrow">→</div>
       </a>
@@ -452,11 +473,14 @@ body::before{
     &nbsp;·&nbsp; Todos los módulos conectados a Supabase
   </div>
 
-  <!-- QR de configuración para celulares -->
-  <div style="margin-top:24px;text-align:center;">
-    <button onclick="mostrarQRConfig()" style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:8px;padding:8px 16px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;letter-spacing:0.08em;">
+  <!-- Accesos secundarios poco usados -->
+  <div class="utility-bar">
+    <button onclick="mostrarQRConfig()" class="utility-btn" style="border:1px solid var(--border2);">
       📱 QR configuración celulares
     </button>
+    <a class="utility-btn" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST" target="_blank">
+      🔎 Escaneo QR
+    </a>
   </div>
 
   <!-- Modal QR config -->
@@ -630,7 +654,8 @@ const tabNames = {
   'inventario_inicial': 'tn_inventario',
   'noticias': 'tn_noticias',
   'scan': 'tn_scan',
-  'dashboard_produccion': 'tn_dashboard'
+  'dashboard_produccion': 'tn_dashboard',
+  'bienes_personal': 'tn_bienes_personal'
 };
 
 // Módulos que no van en área gerencia (abren aparte)
