@@ -484,7 +484,12 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   <div class="modal">
     <div class="modal-title"><span>Asignar a empleado</span><button class="modal-close" onclick="closeModal('modal-asig-personal')">×</button></div>
     <div class="form-group"><label class="form-label">Empleado *</label><select class="form-select" id="apx-empleado-sel"></select></div>
-    <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="apx-item-sel"></select></div>
+    <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="apx-item-sel" onchange="toggleCantidadAsigPersonal()"></select></div>
+    <div class="form-group" id="apx-cantidad-row" style="display:none;">
+      <label class="form-label">Cantidad a entregar</label>
+      <input class="form-input" type="number" id="apx-cantidad" min="1" value="1" onchange="validarCantidadAsigPersonal()">
+      <div id="apx-cantidad-hint" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>
+    </div>
     <div class="form-group">
       <label class="form-label">Tipo de entrega *</label>
       <select class="form-select" id="apx-entrega">
@@ -527,6 +532,7 @@ let asignacionesAreaData = [];
 let fallasData = [];
 let asignacionesPersonalData = [];
 let unidadesInsumoDisponibles = []; // unidades de stock (tabla "unidades") en estado 'stock'
+let stockRowsAsigPersonal = []; // filas de stock (por cantidad) cacheadas para el modal de asignación a personal
 
 // ─── API ───────────────────────────────────────────────────────────────────
 async function api(path, method='GET', body=null){
@@ -1082,7 +1088,7 @@ function renderAsignacionesPersonal(){
   if(!rows.length){ tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📋</div>No hay asignaciones</div></td></tr>`; return; }
   tbody.innerHTML = rows.map(a=>`<tr>
     <td class="td-main">${a.empleados?.nombre||''} ${a.empleados?.apellido||''}</td>
-    <td class="td-mono" style="font-size:11px">${a.item_type==='bien_unidad'?'Bien':a.item_type==='insumo_stock'?'Insumo (cant.)':'Insumo (unidad)'} #${a.item_id}</td>
+    <td class="td-mono" style="font-size:11px">${a.item_type==='bien_unidad'?'Bien':a.item_type==='insumo_stock'?'Insumo (cant.)':'Insumo (unidad)'} #${a.item_id}${a.item_type==='insumo_stock'&&a.cantidad>1?' ×'+a.cantidad:''}</td>
     <td>${a.tipo_entrega==='transferencia_definitiva'?'<span class="badge sin">Transferencia</span>':'<span class="badge uid">Uso interno</span>'}</td>
     <td>${a.tipo_asignacion==='cesion'?'Cesión':'Descuento sueldo'}</td>
     <td class="td-num">${a.valor_total?('$'+Number(a.valor_total).toLocaleString('es-AR')):'—'}</td>
@@ -1107,16 +1113,50 @@ async function loadItemsParaAsigPersonal(){
     api('stock?cantidad=gt.0&select=id,cantidad,skus(codigo,nombre,asignable_personal),variantes(valor)').catch(()=>[])
   ]);
 
+  stockRowsAsigPersonal = (stockRows||[]).filter(s=>s.skus?.asignable_personal);
+
   const bienOpts = bienesDisp.map(u=>`<option value="bien:${u.id}">${u.bienes?.codigo} · ${u.uid||'s/UID'}</option>`);
   const uidOpts = (uidRows||[]).filter(u=>u.skus?.asignable_personal)
     .map(u=>`<option value="uid:${u.id}">${u.skus?.codigo} · ${u.uid||'s/UID'}</option>`);
-  const stockOpts = (stockRows||[]).filter(s=>s.skus?.asignable_personal)
+  const stockOpts = stockRowsAsigPersonal
     .map(s=>`<option value="stock:${s.id}">${s.skus?.codigo}${s.variantes?.valor?' · '+s.variantes.valor:''} · ${s.cantidad} disp.</option>`);
 
   let html = '';
   html += `<optgroup label="Bienes">${bienOpts.join('') || '<option disabled>— sin unidades disponibles —</option>'}</optgroup>`;
   html += `<optgroup label="Insumos de Stock">${[...uidOpts, ...stockOpts].join('') || '<option disabled>— ninguno marcado como asignable —</option>'}</optgroup>`;
   sel.innerHTML = html;
+  toggleCantidadAsigPersonal();
+}
+
+function toggleCantidadAsigPersonal(){
+  const raw = document.getElementById('apx-item-sel').value;
+  const [kind, idStr] = (raw||'').split(':');
+  const row = document.getElementById('apx-cantidad-row');
+  if(kind==='stock'){
+    const stockRow = stockRowsAsigPersonal.find(s=>String(s.id)===idStr);
+    const max = stockRow?.cantidad || 1;
+    const input = document.getElementById('apx-cantidad');
+    input.max = max;
+    input.value = 1;
+    document.getElementById('apx-cantidad-hint').textContent = `Máximo disponible: ${max}`;
+    row.style.display = 'block';
+  } else {
+    row.style.display = 'none';
+    document.getElementById('apx-cantidad').value = 1;
+  }
+}
+
+function validarCantidadAsigPersonal(){
+  const raw = document.getElementById('apx-item-sel').value;
+  const [kind, idStr] = (raw||'').split(':');
+  if(kind!=='stock') return;
+  const stockRow = stockRowsAsigPersonal.find(s=>String(s.id)===idStr);
+  const max = stockRow?.cantidad || 1;
+  const input = document.getElementById('apx-cantidad');
+  let val = parseInt(input.value)||1;
+  if(val<1) val=1;
+  if(val>max) val=max;
+  input.value = val;
 }
 
 function openModalAsigPersonal(){
@@ -1125,6 +1165,8 @@ function openModalAsigPersonal(){
   document.getElementById('apx-valor').value='';
   document.getElementById('apx-cuotas').value=1;
   document.getElementById('apx-notas').value='';
+  document.getElementById('apx-cantidad').value=1;
+  document.getElementById('apx-cantidad-row').style.display='none';
   toggleValorAsigPersonal();
   loadItemsParaAsigPersonal();
   openModal('modal-asig-personal');
@@ -1139,18 +1181,23 @@ async function saveAsigPersonal(){
   const [kind, idStr] = raw.split(':');
   const item_id = Number(idStr);
   const item_type = kind==='bien' ? 'bien_unidad' : kind==='uid' ? 'insumo_unidad' : 'insumo_stock';
+  const cantidad = item_type==='insumo_stock' ? (parseInt(document.getElementById('apx-cantidad').value)||1) : 1;
   try{
+    let stockActual = null;
+    if(item_type==='insumo_stock'){
+      const rows = await api(`stock?id=eq.${item_id}&select=cantidad`).catch(()=>[]);
+      stockActual = rows?.[0]?.cantidad ?? 0;
+      if(cantidad > stockActual){ toast(`Solo hay ${stockActual} disponibles`); return; }
+    }
     await api('asignaciones_personal','POST',{
-      empleado_id: Number(empleado_id), item_type, item_id, tipo_entrega, tipo_asignacion,
+      empleado_id: Number(empleado_id), item_type, item_id, tipo_entrega, tipo_asignacion, cantidad,
       valor_total: tipo_asignacion==='descuento_sueldo' ? (parseFloat(document.getElementById('apx-valor').value)||0) : 0,
       cuotas: tipo_asignacion==='descuento_sueldo' ? (parseInt(document.getElementById('apx-cuotas').value)||1) : 1,
       notas: document.getElementById('apx-notas').value.trim()||null
     });
     if(item_type==='insumo_stock'){
-      // Insumo por cantidad: se descuenta 1 unidad del stock general
-      const rows = await api(`stock?id=eq.${item_id}&select=cantidad`).catch(()=>[]);
-      const actual = rows?.[0]?.cantidad ?? 0;
-      await api(`stock?id=eq.${item_id}`,'PATCH',{cantidad: Math.max(0, actual - 1)});
+      // Insumo por cantidad: se descuenta la cantidad elegida del stock general
+      await api(`stock?id=eq.${item_id}`,'PATCH',{cantidad: Math.max(0, stockActual - cantidad)});
     } else {
       const tabla = item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
       await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado: tipo_entrega==='transferencia_definitiva' ? 'transferido_personal' : 'asignado_personal'});
@@ -1170,7 +1217,7 @@ async function devolverAsigPersonal(id){
       if(a.item_type==='insumo_stock'){
         const rows = await api(`stock?id=eq.${a.item_id}&select=cantidad`).catch(()=>[]);
         const actual = rows?.[0]?.cantidad ?? 0;
-        await api(`stock?id=eq.${a.item_id}`,'PATCH',{cantidad: actual + 1});
+        await api(`stock?id=eq.${a.item_id}`,'PATCH',{cantidad: actual + (a.cantidad||1)});
       } else {
         const tabla = a.item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
         await api(`${tabla}?id=eq.${a.item_id}`,'PATCH',{estado: a.item_type==='bien_unidad' ? 'disponible' : 'stock'});
