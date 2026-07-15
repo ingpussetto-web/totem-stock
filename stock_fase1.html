@@ -450,6 +450,12 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <input class="form-input" type="number" id="sku-minimo" value="0" min="0">
       </div>
     </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer;">
+        <input type="checkbox" id="sku-asignable-personal" style="width:15px;height:15px;cursor:pointer;">
+        Asignable a personal (aparece en "Bienes y Personal" para dárselo a un empleado)
+      </label>
+    </div>
     <!-- Variantes -->
     <div class="form-group" id="variantes-section">
       <label class="form-label">Variantes (ej: colores)</label>
@@ -688,7 +694,7 @@ function renderCatalogo(){
       <td class="td-mono td-main">${s.codigo}</td>
       <td>${s.nombre}</td>
       <td style="font-size:11px;color:var(--text3)">${s.categorias?.nombre||'—'}</td>
-      <td>${s.tracking==='uid'?'<span class="badge uid">UID</span>':'<span class="badge qty">Cantidad</span>'}</td>
+      <td>${s.tracking==='uid'?'<span class="badge uid">UID</span>':'<span class="badge qty">Cantidad</span>'}${s.asignable_personal?' <span class="badge ok" title="Asignable a personal">👤</span>':''}</td>
       <td>${varChips||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
@@ -1285,6 +1291,7 @@ function openModalSku(id=null){
       document.getElementById('sku-desc').value = s.descripcion||'';
       document.getElementById('sku-tracking').value = s.tracking;
       document.getElementById('sku-minimo').value = s.stock_minimo;
+      document.getElementById('sku-asignable-personal').checked = !!s.asignable_personal;
       catSel.value = s.categoria_id;
       variantesTemp = (s.variantes||[]).map(v=>({...v}));
     }
@@ -1294,6 +1301,7 @@ function openModalSku(id=null){
     document.getElementById('sku-desc').value='';
     document.getElementById('sku-tracking').value='uid';
     document.getElementById('sku-minimo').value='0';
+    document.getElementById('sku-asignable-personal').checked = true;
   }
   renderVariantesTemp();
   toggleVariantes();
@@ -1335,6 +1343,7 @@ async function saveSku(){
     categoria_id: parseInt(document.getElementById('sku-cat').value),
     tracking: document.getElementById('sku-tracking').value,
     stock_minimo: parseInt(document.getElementById('sku-minimo').value)||0,
+    asignable_personal: document.getElementById('sku-asignable-personal').checked,
     activo: true
   };
   try {
