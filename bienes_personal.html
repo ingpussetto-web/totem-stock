@@ -181,6 +181,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <div class="metric blue"><div class="metric-label">Asignados (área/personal)</div><div class="metric-value" id="m-asig">—</div></div>
         <div class="metric amber"><div class="metric-label">En service</div><div class="metric-value" id="m-service">—</div></div>
         <div class="metric red"><div class="metric-label">Dados de baja</div><div class="metric-value" id="m-baja">—</div></div>
+        <div class="metric red"><div class="metric-label">Transferidos a personal</div><div class="metric-value" id="m-transf">—</div></div>
       </div>
       <div class="card">
         <div class="card-title">Fallas abiertas</div>
@@ -232,6 +233,7 @@ tr:hover td{background:rgba(255,255,255,0.015);}
             <option value="disponible">Disponible</option>
             <option value="asignado_area">Asignado a área</option>
             <option value="asignado_personal">Asignado a personal</option>
+            <option value="transferido_personal">Transferido a personal</option>
             <option value="en_reparacion">En reparación</option>
             <option value="baja">Baja</option>
           </select>
@@ -344,8 +346,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <div class="card">
           <div class="tbl-wrap">
             <table>
-              <thead><tr><th>Empleado</th><th>Ítem</th><th>Tipo</th><th>Valor</th><th>Cuotas</th><th>Estado</th><th></th></tr></thead>
-              <tbody id="ap-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+              <thead><tr><th>Empleado</th><th>Ítem</th><th>Entrega</th><th>Modalidad</th><th>Valor</th><th>Cuotas</th><th>Estado</th><th></th></tr></thead>
+              <tbody id="ap-tbody"><tr><td colspan="8"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
             </table>
           </div>
         </div>
@@ -485,11 +487,18 @@ tr:hover td{background:rgba(255,255,255,0.015);}
     <div class="form-group">
       <label class="form-label">Tipo de ítem *</label>
       <select class="form-select" id="apx-tipo" onchange="loadItemsParaAsigPersonal()">
-        <option value="bien_unidad">Bien (activo no consumible)</option>
-        <option value="insumo_unidad">Insumo (unidad de stock)</option>
+        <option value="bien_unidad">Bien (Mini PC, EPP, zapatillas, cámaras, etc. — cargados en Catálogo de Bienes)</option>
+        <option value="insumo_unidad">Insumo puntual de producción con N° de serie (caso excepcional)</option>
       </select>
     </div>
     <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="apx-item-sel"></select></div>
+    <div class="form-group">
+      <label class="form-label">Tipo de entrega *</label>
+      <select class="form-select" id="apx-entrega">
+        <option value="uso_interno">Uso interno — sigue siendo de la empresa (se puede devolver)</option>
+        <option value="transferencia_definitiva">Transferencia definitiva — se lo lleva (sale del inventario)</option>
+      </select>
+    </div>
     <div class="form-group">
       <label class="form-label">Modalidad *</label>
       <select class="form-select" id="apx-modalidad" onchange="toggleValorAsigPersonal()">
@@ -647,11 +656,13 @@ async function loadDashboard(){
   const asig = bienesUnidadesData.filter(b=>b.estado==='asignado_area'||b.estado==='asignado_personal').length;
   const service = bienesUnidadesData.filter(b=>b.estado==='en_reparacion').length + fallasData.filter(f=>f.estado==='en_service').length;
   const baja = bienesUnidadesData.filter(b=>b.estado==='baja').length;
+  const transf = bienesUnidadesData.filter(b=>b.estado==='transferido_personal').length;
   document.getElementById('m-bienes').textContent = total;
   document.getElementById('m-disp').textContent = disp;
   document.getElementById('m-asig').textContent = asig;
   document.getElementById('m-service').textContent = service;
   document.getElementById('m-baja').textContent = baja;
+  document.getElementById('m-transf').textContent = transf;
 
   const abiertas = fallasData.filter(f=>f.estado==='detectada'||f.estado==='en_service');
   const elF = document.getElementById('dash-fallas');
@@ -689,7 +700,7 @@ function badgeEstadoUnidad(estado){
   const map = {
     disponible:['ok','Disponible'], asignado_area:['uid','Asignado a área'],
     asignado_personal:['purple','Asignado a personal'], en_reparacion:['bajo','En reparación'],
-    baja:['sin','Baja']
+    baja:['sin','Baja'], transferido_personal:['sin','Transferido a personal']
   };
   const [cls,label] = map[estado]||['qty',estado];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -918,7 +929,7 @@ async function loadItemsParaFalla(){
     const disponibles = bienesUnidadesData.filter(u=>['disponible','asignado_area','asignado_personal'].includes(u.estado));
     sel.innerHTML = disponibles.map(u=>`<option value="${u.id}">${u.bienes?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades</option>';
   } else {
-    unidadesInsumoDisponibles = await api('unidades?estado=in.(stock,reservado)&select=id,uid,skus(codigo,nombre)').catch(()=>[]);
+    unidadesInsumoDisponibles = await api('unidades?estado=in.(stock,reservado,asignado_personal)&select=id,uid,skus(codigo,nombre)').catch(()=>[]);
     sel.innerHTML = unidadesInsumoDisponibles.map(u=>`<option value="${u.id}">${u.skus?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades</option>';
   }
 }
@@ -1075,15 +1086,16 @@ function renderAsignacionesPersonal(){
   const estFil = document.getElementById('ap-estado')?.value||'';
   let rows = asignacionesPersonalData.filter(a=> !estFil || a.estado===estFil);
   const tbody = document.getElementById('ap-tbody');
-  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">📋</div>No hay asignaciones</div></td></tr>`; return; }
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📋</div>No hay asignaciones</div></td></tr>`; return; }
   tbody.innerHTML = rows.map(a=>`<tr>
     <td class="td-main">${a.empleados?.nombre||''} ${a.empleados?.apellido||''}</td>
     <td class="td-mono" style="font-size:11px">${a.item_type==='bien_unidad'?'Bien':'Insumo'} #${a.item_id}</td>
+    <td>${a.tipo_entrega==='transferencia_definitiva'?'<span class="badge sin">Transferencia</span>':'<span class="badge uid">Uso interno</span>'}</td>
     <td>${a.tipo_asignacion==='cesion'?'Cesión':'Descuento sueldo'}</td>
     <td class="td-num">${a.valor_total?('$'+Number(a.valor_total).toLocaleString('es-AR')):'—'}</td>
     <td class="td-num">${a.cuotas||1}</td>
     <td>${badgeAsigPersonal(a.estado)}</td>
-    <td class="td-actions">${a.estado==='activa'?`<button class="btn sm amber" onclick="devolverAsigPersonal(${a.id})">Devolver</button>`:''}</td>
+    <td class="td-actions">${a.estado==='activa'&&a.tipo_entrega==='uso_interno'?`<button class="btn sm amber" onclick="devolverAsigPersonal(${a.id})">Devolver</button>`:''}</td>
   </tr>`).join('');
 }
 
@@ -1106,6 +1118,7 @@ async function loadItemsParaAsigPersonal(){
 
 function openModalAsigPersonal(){
   document.getElementById('apx-tipo').value='bien_unidad';
+  document.getElementById('apx-entrega').value='uso_interno';
   document.getElementById('apx-modalidad').value='cesion';
   document.getElementById('apx-valor').value='';
   document.getElementById('apx-cuotas').value=1;
@@ -1119,18 +1132,19 @@ async function saveAsigPersonal(){
   const empleado_id = document.getElementById('apx-empleado-sel').value;
   const item_type = document.getElementById('apx-tipo').value;
   const item_id = document.getElementById('apx-item-sel').value;
+  const tipo_entrega = document.getElementById('apx-entrega').value;
   const tipo_asignacion = document.getElementById('apx-modalidad').value;
   if(!empleado_id || !item_id){ toast('Completá empleado e ítem'); return; }
   try{
     await api('asignaciones_personal','POST',{
-      empleado_id: Number(empleado_id), item_type, item_id: Number(item_id), tipo_asignacion,
+      empleado_id: Number(empleado_id), item_type, item_id: Number(item_id), tipo_entrega, tipo_asignacion,
       valor_total: tipo_asignacion==='descuento_sueldo' ? (parseFloat(document.getElementById('apx-valor').value)||0) : 0,
       cuotas: tipo_asignacion==='descuento_sueldo' ? (parseInt(document.getElementById('apx-cuotas').value)||1) : 1,
       notas: document.getElementById('apx-notas').value.trim()||null
     });
     const tabla = item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
-    await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado: item_type==='bien_unidad' ? 'asignado_personal' : 'reservado'});
-    toast('Asignación registrada');
+    await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado: tipo_entrega==='transferencia_definitiva' ? 'transferido_personal' : 'asignado_personal'});
+    toast(tipo_entrega==='transferencia_definitiva' ? 'Transferencia registrada — descontado del inventario' : 'Asignación registrada');
     closeModal('modal-asig-personal');
     await loadPersonalPage();
   }catch(e){ toast('Error: '+e.message); }

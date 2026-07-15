@@ -351,7 +351,8 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <select class="filter" id="uid-estado" onchange="renderUnidades()">
           <option value="">Todos los estados</option>
           <option value="stock">En stock</option>
-          <option value="reservado">Asignado</option>
+          <option value="reservado">Asignado a OP</option>
+          <option value="asignado_personal">Asignado a personal</option>
           <option value="producido">Producido</option>
           <option value="baja">Baja</option>
         </select>
@@ -744,18 +745,19 @@ async function loadStock(){
     // También cargar SKUs con tracking=uid para mostrar conteo de unidades
     const uidSkus = await api('skus?select=id,codigo,nombre,stock_minimo,categorias(nombre)&tracking=eq.uid&activo=eq.true');
     // Para UIDs, contar unidades en stock
-    const uidCounts = await api('unidades?select=sku_id,estado&estado=in.(stock,reservado)');
-    
+    const uidCounts = await api('unidades?select=sku_id,estado&estado=in.(stock,reservado,asignado_personal)');
+
     // Merge UID skus into display
     const uidRows = uidSkus.map(s=>{
       const enStock = uidCounts.filter(u=>u.sku_id===s.id && u.estado==='stock').length;
       const reservado = uidCounts.filter(u=>u.sku_id===s.id && u.estado==='reservado').length;
-      const total = enStock + reservado;
+      const asignadoPersonal = uidCounts.filter(u=>u.sku_id===s.id && u.estado==='asignado_personal').length;
+      const total = enStock + reservado + asignadoPersonal;
       const disponible = enStock;
       let alerta = 'ok';
       if(disponible<=0) alerta='sin_stock';
       else if(disponible<=s.stock_minimo) alerta='bajo';
-      return {codigo:s.codigo,nombre:s.nombre,variante:null,categoria:s.categorias?.nombre||'—',cantidad:total,cantidad_reservada:reservado,disponible,stock_minimo:s.stock_minimo,alerta,tracking:'uid',sku_id:s.id};
+      return {codigo:s.codigo,nombre:s.nombre,variante:null,categoria:s.categorias?.nombre||'—',cantidad:total,cantidad_reservada:reservado+asignadoPersonal,disponible,stock_minimo:s.stock_minimo,alerta,tracking:'uid',sku_id:s.id};
     });
 
     uidRowsData = uidRows;
@@ -1087,7 +1089,7 @@ async function toggleStockDetalle(rowId, skuId){
     // Traer unidades en stock agrupadas por variante
     const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variantes(valor)&order=variantes(valor).asc`);
     const enStock = (unidades||[]).filter(u=>u.estado==='stock');
-    const reservadas = (unidades||[]).filter(u=>u.estado==='reservado');
+    const reservadas = (unidades||[]).filter(u=>u.estado==='reservado' || u.estado==='asignado_personal');
 
     if(!enStock.length && !reservadas.length){
       content.innerHTML = '<span style="color:var(--text3);">Sin unidades registradas</span>';
@@ -1476,8 +1478,8 @@ function badgeAlerta(a){
   return '<span class="badge sin">✕ Sin stock</span>';
 }
 function badgeEstado(e){
-  const map={stock:'ok',reservado:'bajo',producido:'qty',baja:'sin'};
-  const label={stock:'En stock',reservado:'Asignado',producido:'Producido',baja:'Baja'};
+  const map={stock:'ok',reservado:'bajo',producido:'qty',baja:'sin',asignado_personal:'uid'};
+  const label={stock:'En stock',reservado:'Asignado a OP',producido:'Producido',baja:'Baja',asignado_personal:'Asignado a personal'};
   return `<span class="badge ${map[e]||'qty'}">${label[e]||e}</span>`;
 }
 function formatDate(iso){
