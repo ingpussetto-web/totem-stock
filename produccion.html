@@ -1860,6 +1860,7 @@ async function publicarNota(){
     const nota = await apiNotas('op_notas', 'POST', { op_id: _notasOpId, autor, texto, etiqueta: etiqueta||null });
     const notaId = nota?.[0]?.id;
     const files = document.getElementById('nota-archivos').files;
+    const erroresAdjuntos = [];
     if(notaId && files.length){
       for(const file of Array.from(files)){
         try{
@@ -1873,9 +1874,19 @@ async function publicarNota(){
           if(upRes.ok){
             const pubUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${fpath}`;
             await apiNotas('op_notas_archivos','POST',{nota_id:notaId,op_id:_notasOpId,nombre_archivo:file.name,url:pubUrl});
+          } else {
+            const errTxt = await upRes.text().catch(()=>upRes.statusText);
+            erroresAdjuntos.push(`${file.name}: ${upRes.status} ${errTxt}`);
+            console.warn('Error subiendo archivo:', file.name, upRes.status, errTxt);
           }
-        }catch(fe){ console.warn('Error subiendo archivo:', fe.message); }
+        }catch(fe){
+          erroresAdjuntos.push(`${file.name}: ${fe.message}`);
+          console.warn('Error subiendo archivo:', file.name, fe.message);
+        }
       }
+    }
+    if(erroresAdjuntos.length){
+      alert('La nota se publicó, pero falló la subida de estos archivos:\n\n' + erroresAdjuntos.join('\n'));
     }
     document.getElementById('nota-texto').value = '';
     document.getElementById('nota-etiqueta').value = '';
