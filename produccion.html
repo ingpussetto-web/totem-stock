@@ -1873,7 +1873,7 @@ async function publicarNota(){
           });
           if(upRes.ok){
             const pubUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${fpath}`;
-            await apiNotas('op_notas_archivos','POST',{nota_id:notaId,op_id:_notasOpId,nombre_archivo:file.name,url:pubUrl});
+            await apiNotas('op_notas_archivos','POST',{nota_id:notaId,nombre_archivo:file.name,url:pubUrl});
           } else {
             const errTxt = await upRes.text().catch(()=>upRes.statusText);
             erroresAdjuntos.push(`${file.name}: ${upRes.status} ${errTxt}`);
