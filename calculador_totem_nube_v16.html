@@ -7220,6 +7220,9 @@ async function cargarInfoOP(proyId, orden){
     const op = ops[0];
     const color = op.color_gabinete || '';
     const opUrl = 'https://ingpussetto-web.github.io/totem-stock/produccion.html'+(op.estado==='completada'?'?vista=terminadas&area=gerencia':'?op='+encodeURIComponent(op.op_numero)+'&area=gerencia');
+    // Mientras la OP está en BOM pendiente/confirmada todavía no aparece en Producción —
+    // hay que mandar a Ops_ventas a armar/revisar la BOM, no a Producción.
+    const opUrlBOM = 'https://ingpussetto-web.github.io/totem-stock/ops_ventas.html?op='+encodeURIComponent(op.op_numero)+'&area=gerencia';
 
     // Sincronizar estado del proyecto con el estado real de la OP
     if(op.estado === 'en_produccion' && estadoProy !== 'produccion' && estadoProy !== 'listo_despacho' && estadoProy !== 'despachado'){
@@ -7277,7 +7280,7 @@ async function cargarInfoOP(proyId, orden){
         +'<span style="font-size:14px;">📋</span>'
         +'<span style="color:var(--amber);font-size:12px;">'+estadoLabel+' · '+op.op_numero+'</span>'
         +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
-        +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--amber);text-decoration:none;font-size:10px;">→ Ver OP</a>'
+        +'<a href="'+opUrlBOM+'" target="_blank" style="margin-left:auto;color:var(--amber);text-decoration:none;font-size:10px;">→ Armar/revisar BOM</a>'
       +'</div>';
     }
 

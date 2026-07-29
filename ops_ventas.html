@@ -1482,10 +1482,23 @@ function toast(msg){
 // ─── INIT ────────────────────────────────────────────────────
 async function init(){
   const ok=await checkConnection();
-  if(ok) loadOPs();
+  if(ok){
+    await loadOPs();
+    abrirOPDesdeURL();
+  }
   else if(!SUPA_URL||!SUPA_KEY) showPage('config');
 }
 init();
+
+// Si se entra con ?op=OPXXXX (ej: link "Armar/revisar BOM" desde el Cotizador),
+// abrir directo la BOM de esa OP en vez de dejar al usuario buscándola en la lista.
+function abrirOPDesdeURL(){
+  const params = new URLSearchParams(window.location.search);
+  const opNumero = params.get('op');
+  if(!opNumero) return;
+  const op = (ops||[]).find(o=>o.op_numero===opNumero);
+  if(op) abrirBOM(op.id);
+}
 
 // ─── BOM MAESTRA ──────────────────────────────────────────────────────────────
 
