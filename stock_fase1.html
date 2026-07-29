@@ -456,6 +456,18 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         Asignable a personal (aparece en "Bienes y Personal" para dárselo a un empleado)
       </label>
     </div>
+    <div class="form-group">
+      <label class="form-label">Familia de insumo (opcional)</label>
+      <div style="display:flex;gap:6px;">
+        <select class="form-select" id="sku-familia" style="flex:1;">
+          <option value="">— Sin familia (insumo fijo, como hoy) —</option>
+        </select>
+        <button class="btn" type="button" onclick="crearFamiliaInsumo()" style="white-space:nowrap;">+ Nueva</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace;">
+        Marcá una familia solo si este insumo puede reemplazarse por otro modelo equivalente (ej: impresora Vyse ↔ Xprinter). En producción, cualquier SKU de la misma familia va a poder usarse para cubrir un pedido de este insumo.
+      </div>
+    </div>
     <!-- Variantes -->
     <div class="form-group" id="variantes-section">
       <label class="form-label">Variantes (ej: colores)</label>
@@ -542,6 +554,7 @@ let SUPA_KEY = localStorage.getItem('supa_key') || '';
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let categorias = [];
+let familias = [];
 let skus = [];
 let stockData = [];
 let uidRowsData = [];
@@ -647,7 +660,8 @@ async function loadDashboard(){
 async function loadCatalogo(){
   try {
     categorias = await api('categorias?select=*&order=orden.asc');
-    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc');
+    familias = await api('familias_insumo?select=*&activo=eq.true&order=nombre.asc').catch(()=>[]);
+    skus = await api('skus?select=*,categorias(nombre),familias_insumo(nombre),variantes(id,atributo,valor)&order=codigo.asc');
     // Conteo de unidades en stock por SKU (para botón etiquetas UID)
     const uidConteo = await api('unidades?estado=eq.stock&select=sku_id').catch(()=>[]);
     const uidCountMap = {};
@@ -670,6 +684,30 @@ function fillCatFilters(){
   if(skuSel) skuSel.innerHTML = opts;
   // SKU select in uid modal
   fillUidSkuSelect();
+  fillFamiliaSelect();
+}
+
+function fillFamiliaSelect(){
+  const sel = document.getElementById('sku-familia');
+  if(!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">— Sin familia (insumo fijo, como hoy) —</option>'
+    + familias.map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
+  sel.value = actual;
+}
+
+async function crearFamiliaInsumo(){
+  const nombre = prompt('Nombre de la familia (ej: "Impresora térmica"):');
+  if(!nombre || !nombre.trim()) return;
+  try{
+    const res = await api('familias_insumo', 'POST', {nombre: nombre.trim()});
+    const nueva = res[0];
+    familias.push(nueva);
+    familias.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+    fillFamiliaSelect();
+    document.getElementById('sku-familia').value = nueva.id;
+    toast('Familia creada ✓');
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 function renderCatalogo(){
@@ -694,7 +732,7 @@ function renderCatalogo(){
       <td class="td-mono td-main">${s.codigo}</td>
       <td>${s.nombre}</td>
       <td style="font-size:11px;color:var(--text3)">${s.categorias?.nombre||'—'}</td>
-      <td>${s.tracking==='uid'?'<span class="badge uid">UID</span>':'<span class="badge qty">Cantidad</span>'}${s.asignable_personal?' <span class="badge ok" title="Asignable a personal">👤</span>':''}</td>
+      <td>${s.tracking==='uid'?'<span class="badge uid">UID</span>':'<span class="badge qty">Cantidad</span>'}${s.asignable_personal?' <span class="badge ok" title="Asignable a personal">👤</span>':''}${s.familia_id?` <span class="badge qty" title="Familia: ${s.familias_insumo?.nombre||''} — cualquier SKU de esta familia puede sustituirlo en producción">🔗 ${s.familias_insumo?.nombre||''}</span>`:''}</td>
       <td>${varChips||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
       <td class="td-num">${s.stock_minimo}</td>
       <td class="td-actions">
@@ -1294,6 +1332,8 @@ function openModalSku(id=null){
       document.getElementById('sku-asignable-personal').checked = !!s.asignable_personal;
       catSel.value = s.categoria_id;
       variantesTemp = (s.variantes||[]).map(v=>({...v}));
+      fillFamiliaSelect();
+      document.getElementById('sku-familia').value = s.familia_id || '';
     }
   } else {
     document.getElementById('sku-codigo').value='';
@@ -1302,6 +1342,8 @@ function openModalSku(id=null){
     document.getElementById('sku-tracking').value='uid';
     document.getElementById('sku-minimo').value='0';
     document.getElementById('sku-asignable-personal').checked = true;
+    fillFamiliaSelect();
+    document.getElementById('sku-familia').value = '';
   }
   renderVariantesTemp();
   toggleVariantes();
@@ -1344,6 +1386,7 @@ async function saveSku(){
     tracking: document.getElementById('sku-tracking').value,
     stock_minimo: parseInt(document.getElementById('sku-minimo').value)||0,
     asignable_personal: document.getElementById('sku-asignable-personal').checked,
+    familia_id: document.getElementById('sku-familia').value || null,
     activo: true
   };
   try {

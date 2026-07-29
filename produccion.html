@@ -512,7 +512,7 @@ async function abrirOP(opId){
     if(!currentOP) return;
 
     // Cargar BOM items (solo incluidos)
-    bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&sku_id=not.is.null&select=*,skus(codigo,nombre,tracking,categorias(nombre)),variantes(valor)&order=id.asc`);
+    bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&sku_id=not.is.null&select=*,skus(codigo,nombre,tracking,familia_id,categorias(nombre)),variantes(valor)&order=id.asc`);
 
     // Cargar alertas activas de faltantes para esta OP
     // Mapa de stock UID por sku_id (para detectar faltantes sin alerta)
@@ -625,12 +625,26 @@ async function procesarCaja(sku){
   // Buscar item en BOM que corresponda a este SKU
   const equipoNums = [...new Set(bomItems.map(i=>i.equipo_num||1))];
   const esMultiEquipo = equipoNums.length > 1;
-  const itemsCompatibles = bomItems.filter(i=>
+  let itemsCompatibles = bomItems.filter(i=>
     i.sku_id === sku.id &&
     i.estado === 'pendiente' &&
     i.incluido !== false &&
     (!esMultiEquipo || (i.equipo_num||1) === equipoActivo)
   );
+  // Si no matchea directo pero el SKU escaneado pertenece a una familia de insumos
+  // intercambiables, buscar un pendiente de la misma familia (modelo alternativo).
+  let viaFamilia = false;
+  if(!itemsCompatibles.length && sku.familia_id){
+    itemsCompatibles = bomItems.filter(i=>
+      i.sku_id !== sku.id &&
+      i.variante_id == null &&
+      i.skus?.familia_id === sku.familia_id &&
+      i.estado === 'pendiente' &&
+      i.incluido !== false &&
+      (!esMultiEquipo || (i.equipo_num||1) === equipoActivo)
+    );
+    viaFamilia = itemsCompatibles.length > 0;
+  }
   if(!itemsCompatibles.length){
     const yaAsignado = bomItems.find(i=>i.sku_id===sku.id && i.estado==='asignado');
     if(yaAsignado){
@@ -664,7 +678,7 @@ async function procesarCaja(sku){
   if(variantesEnItems.length > 1){
     const variantesData = await api(`variantes?id=in.(${variantesEnItems.join(',')})&select=id,valor`).catch(()=>[]);
     // Guardar contexto y mostrar modal — flujo continúa desde elegirVarianteCaja()
-    window._pendingCaja = { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal };
+    window._pendingCaja = { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal, viaFamilia };
     mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles);
     return;
   } else {
@@ -676,8 +690,10 @@ async function procesarCaja(sku){
     ? (stockRows||[]).find(r=>r.variante_id===item.variante_id) || stockRows?.[0]
     : (stockRows||[]).find(r=>r.variante_id==null) || stockRows?.[0];
 
-  // Asignar item en BOM
-  await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'});
+  // Asignar item en BOM — si vino por familia, registrar el modelo real usado (sku_id/nombre)
+  const patchCaja = {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'};
+  if(viaFamilia){ patchCaja.sku_id = sku.id; patchCaja.nombre = sku.nombre; }
+  await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patchCaja);
   // Incrementar cantidad_reservada en la fila de stock correspondiente
   if(stockRowEspecifico){
     const reservadoVariante = (asignadosRealesProd||[]).filter(i =>
@@ -689,9 +705,10 @@ async function procesarCaja(sku){
 
   item.estado = 'asignado';
   item.uid_asignado = sku.codigo+'-CAJA';
+  if(viaFamilia){ item.sku_id = sku.id; item.nombre = sku.nombre; }
 
   scanArea.className='scan-area success';
-  setFeedback(`✓ "${sku.nombre}" asignado desde caja — Stock restante: ${disponible - 1} ud.`, 'ok');
+  setFeedback(`✓ "${sku.nombre}" asignado desde caja${viaFamilia?' (modelo alternativo de la familia)':''} — Stock restante: ${disponible - 1} ud.`, 'ok');
   setTimeout(()=>{ scanArea.className='scan-area'; renderChecklist(); }, 1800);
   document.getElementById('scan-input').value = '';
   actualizarProgreso();
@@ -974,11 +991,11 @@ async function procesarScan(){
 
   try{
     // Buscar la unidad física por UID
-    const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre)`);
+    const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre,familia_id)`);
 
     if(!unidades || !unidades.length){
       // Intentar como código de SKU (caja de cantidad)
-      const skuPorCodigo = await api(`skus?codigo=eq.${encodeURIComponent(uid)}&select=id,nombre,codigo,tracking`).catch(()=>[]);
+      const skuPorCodigo = await api(`skus?codigo=eq.${encodeURIComponent(uid)}&select=id,nombre,codigo,tracking,familia_id`).catch(()=>[]);
       if(skuPorCodigo && skuPorCodigo.length && skuPorCodigo[0].tracking === 'cantidad'){
         await procesarCaja(skuPorCodigo[0]);
         return;
@@ -1001,12 +1018,25 @@ async function procesarScan(){
 
     // Buscar items en la BOM que correspondan a este SKU y estén pendientes
     // Si la unidad tiene variante_id, matchear solo items con esa variante (o sin variante especificada)
-    const itemsCompatibles = bomItems.filter(i=>
+    let itemsCompatibles = bomItems.filter(i=>
       i.sku_id === unidad.sku_id &&
       i.estado === 'pendiente' &&
       i.incluido !== false &&
       (unidad.variante_id == null || i.variante_id == null || i.variante_id === unidad.variante_id)
     );
+    // Si no matchea directo pero el SKU pertenece a una familia de insumos intercambiables,
+    // buscar un pendiente de la misma familia (modelo alternativo).
+    let viaFamilia = false;
+    if(!itemsCompatibles.length && unidad.skus?.familia_id){
+      itemsCompatibles = bomItems.filter(i=>
+        i.sku_id !== unidad.sku_id &&
+        i.variante_id == null &&
+        i.skus?.familia_id === unidad.skus.familia_id &&
+        i.estado === 'pendiente' &&
+        i.incluido !== false
+      );
+      viaFamilia = itemsCompatibles.length > 0;
+    }
 
     if(!itemsCompatibles.length){
       const yaAsignado = bomItems.find(i=>i.uid_asignado===uid);
@@ -1023,9 +1053,9 @@ async function procesarScan(){
     // Si hay un solo destino posible, asignar directo
     // Si hay múltiples (ej: Mini PC que puede ir al equipo o a un player), pedir destino
     if(itemsCompatibles.length === 1){
-      await asignarItemUID(itemsCompatibles[0], unidad, uid);
+      await asignarItemUID(itemsCompatibles[0], unidad, uid, viaFamilia);
     } else {
-      mostrarModalDestino(itemsCompatibles, unidad, uid);
+      mostrarModalDestino(itemsCompatibles, unidad, uid, viaFamilia);
     }
 
   }catch(e){
@@ -1424,22 +1454,22 @@ function labelDestino(item, items){
   return `Equipo ${eq} — Player ${numPlayer}`;
 }
 
-async function asignarItemUID(item, unidad, uid){
+async function asignarItemUID(item, unidad, uid, viaFamilia){
   const scanArea = document.getElementById('scan-area');
   try{
-    await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {
-      estado: 'asignado',
-      uid_asignado: uid
-    });
+    const patch = { estado: 'asignado', uid_asignado: uid };
+    if(viaFamilia){ patch.sku_id = unidad.sku_id; patch.nombre = unidad.skus?.nombre || item.nombre; }
+    await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
     await api(`unidades?id=eq.${unidad.id}`, 'PATCH', {
       estado: 'reservado',
       updated_at: new Date().toISOString()
     });
     item.estado = 'asignado';
     item.uid_asignado = uid;
+    if(viaFamilia){ item.sku_id = unidad.sku_id; item.nombre = unidad.skus?.nombre || item.nombre; }
 
     scanArea.className='scan-area active';
-    setFeedback(`✓ ${unidad.skus?.nombre} → ${labelDestino(item)}`, 'ok');
+    setFeedback(`✓ ${unidad.skus?.nombre} → ${labelDestino(item)}${viaFamilia?' (modelo alternativo de la familia)':''}`, 'ok');
     document.getElementById('scan-input').value='';
     scanBuffer='';
 
@@ -1455,7 +1485,7 @@ async function asignarItemUID(item, unidad, uid){
   }
 }
 
-function mostrarModalDestino(items, unidad, uid){
+function mostrarModalDestino(items, unidad, uid, viaFamilia){
   // Crear modal dinámico de selección de destino
   let existing = document.getElementById('modal-destino-uid');
   if(existing) existing.remove();
@@ -1491,17 +1521,17 @@ function mostrarModalDestino(items, unidad, uid){
   document.body.appendChild(modal);
 
   // Guardar contexto para cuando el usuario elija
-  window._pendingUID = { items, unidad, uid };
+  window._pendingUID = { items, unidad, uid, viaFamilia };
 }
 
 async function elegirDestino(itemId){
   const modal = document.getElementById('modal-destino-uid');
   if(modal) modal.remove();
-  const { items, unidad, uid } = window._pendingUID || {};
+  const { items, unidad, uid, viaFamilia } = window._pendingUID || {};
   if(!items) return;
   const item = items.find(i=>i.id===itemId);
   if(!item) return;
-  await asignarItemUID(item, unidad, uid);
+  await asignarItemUID(item, unidad, uid, viaFamilia);
   window._pendingUID = null;
 }
 
