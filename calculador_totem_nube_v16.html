@@ -792,6 +792,21 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
 
       </div>
 
+      <!-- Descuento -->
+      <div style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Descuento</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="cot-descuento-check" onchange="toggleDescuentoUI()" /> Aplicar descuento
+          </label>
+          <input type="number" id="cot-descuento-pct" placeholder="% ej: 10" min="0" max="100" step="0.1" style="width:100px;display:none;" oninput="renderDescuentoChecklist()" />
+        </div>
+        <div id="cot-descuento-panel" style="display:none;margin-top:8px;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">Aplicar sobre:</div>
+          <div id="cot-descuento-items"></div>
+        </div>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
         <div>
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;margin-bottom:8px;">Transporte</div>
@@ -3525,8 +3540,28 @@ function guardarBorrador(){
 }
 
 
+function restaurarPagoValores(c){
+  // Los inputs de seña/saldo/cuota se crean dinámicamente en renderPagoOpciones(),
+  // por eso se restauran después, con un pequeño delay para asegurar que ya existen en el DOM.
+  setTimeout(function(){
+    const set = function(id, val){ const el = document.getElementById(id); if(el && val!==undefined && val!==null && val!==''){ el.value = val; } };
+    set('pago-senia-pct', c.pagoSeniaPct);
+    set('pago-saldo-pct', c.pagoSaldoPct);
+    set('pago-saldo-forma', c.pagoForma||'transferencia');
+    set('pago-cuota-pct', c.pagoCuotaPct);
+    set('pago-cuota-dias', c.pagoCuotaDias);
+    set('pago-contado-pct', c.pagoContadoPct);
+    set('pago-echeq-pct', c.pagoEchequePct);
+    set('pago-echeq-dias', c.pagoEchequeDias);
+    set('pago-cuotas', c.pagoCuotas);
+    set('pago-interes', c.pagoInteres);
+    calcPagoMontos();
+  }, 60);
+}
+
 function abrirNuevaCotizacion(editId){
   cotItemsTemp = [];
+  let _cLoadedParaPago = null;
   const modal = document.getElementById('modal-cotizacion');
   if(!modal) return;
 
@@ -3644,6 +3679,15 @@ function abrirNuevaCotizacion(editId){
     }
     document.getElementById('cot-pago-tipo').value = c.pagoTipo||'senia_saldo';
     _pagoPersonalizadoTexto = (c.pagoTipo==='personalizado') ? (c.pagoTexto||'') : '';
+    _cLoadedParaPago = c;
+    // Descuento
+    cotDescuentoSel = c.descuentoSel ? {...c.descuentoSel} : {};
+    const descChk = document.getElementById('cot-descuento-check');
+    if(descChk) descChk.checked = !!c.descuentoActivo;
+    const descPct = document.getElementById('cot-descuento-pct');
+    if(descPct){ descPct.value = c.descuentoPct||''; descPct.style.display = c.descuentoActivo?'inline-block':'none'; }
+    const descPanel = document.getElementById('cot-descuento-panel');
+    if(descPanel) descPanel.style.display = c.descuentoActivo?'block':'none';
   } else {
     document.getElementById('cot-edit-id').value = '';
     ['cot-empresa','cot-cuit','cot-contacto','cot-tel','cot-email','cot-sistema','cot-notas','cot-lic-desc'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
@@ -3658,9 +3702,16 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-lic-cantidad').value = 1;
     document.getElementById('cot-pago-tipo').value = 'senia_saldo';
     _pagoPersonalizadoTexto = '';
+    // Descuento
+    cotDescuentoSel = {};
+    document.getElementById('cot-descuento-check').checked = false;
+    document.getElementById('cot-descuento-pct').value = '';
+    document.getElementById('cot-descuento-pct').style.display = 'none';
+    document.getElementById('cot-descuento-panel').style.display = 'none';
   }
 
   renderPagoOpciones();
+  if(_cLoadedParaPago) restaurarPagoValores(_cLoadedParaPago);
   renderCotItemsTemp();
   modal.style.display = 'flex';
 }
@@ -3669,6 +3720,7 @@ function cerrarModalCotizacion(){
   const modal = document.getElementById('modal-cotizacion');
   if(modal) modal.style.display = 'none';
   cotItemsTemp = [];
+  cotDescuentoSel = {};
 }
 
 function agregarItemCotizacion(){
@@ -3706,10 +3758,65 @@ function actualizarItemCot(idx, campo, valor){
   renderCotItemsTemp();
 }
 
+let cotDescuentoSel = {}; // key de línea → tildado (true = incluido en el descuento)
+
+function obtenerLineasDescontables(items){
+  const resultado = [];
+  (items||[]).forEach(function(it, idx){
+    resultado.push({key:'i'+idx, desc: it.nombre, cant: it.cant||1, precio: it.precio||0});
+    if(it.minipc && it.minipc.precio){
+      resultado.push({key:'i'+idx+'-minipc', desc: '↳ '+it.minipc.nombre, cant: it.cant||1, precio: it.minipc.precio});
+    }
+    if(it.otrosPerifericos){
+      const NOMBRES = {impresora_termica:'Impresora Térmica (XPrinter)', camara_web:'Cámara Web HD Logitech C505', lector_qr:'Lector QR inalámbrico'};
+      Object.entries(it.otrosPerifericos).forEach(function(e){
+        const key = e[0]; const p = e[1];
+        if(p.activo) resultado.push({key:'i'+idx+'-per-'+key, desc:'↳ '+(NOMBRES[key]||key), cant: p.cant||1, precio: p.precio||0});
+      });
+    }
+  });
+  return resultado;
+}
+
+function toggleDescuentoUI(){
+  const chk = document.getElementById('cot-descuento-check');
+  const pct = document.getElementById('cot-descuento-pct');
+  const panel = document.getElementById('cot-descuento-panel');
+  const on = chk.checked;
+  if(pct) pct.style.display = on ? 'inline-block' : 'none';
+  if(panel) panel.style.display = on ? 'block' : 'none';
+  if(on) renderDescuentoChecklist();
+}
+
+function renderDescuentoChecklist(){
+  const el = document.getElementById('cot-descuento-items');
+  if(!el) return;
+  const lineas = obtenerLineasDescontables(cotItemsTemp);
+  if(!lineas.length){ el.innerHTML = '<div style="font-size:12px;color:var(--text3);">— Agregá ítems primero —</div>'; return; }
+  el.innerHTML = lineas.map(function(l){
+    const checked = cotDescuentoSel[l.key] !== undefined ? cotDescuentoSel[l.key] : true;
+    cotDescuentoSel[l.key] = checked;
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:4px;cursor:pointer;">'
+      +'<input type="checkbox" '+(checked?'checked':'')+' onchange="cotDescuentoSel[\''+l.key+'\']=this.checked" style="width:13px;height:13px;" />'
+      + l.desc + (l.cant>1?' (x'+l.cant+')':'')
+    +'</label>';
+  }).join('');
+}
+
+function calcularDescuentoCot(c){
+  if(!c.descuentoActivo || !c.descuentoPct) return {activo:false, monto:0, pct:0, lineas:[]};
+  const sel = c.descuentoSel||{};
+  const lineas = obtenerLineasDescontables(c.items).filter(function(l){ return sel[l.key]; });
+  if(!lineas.length) return {activo:false, monto:0, pct:0, lineas:[]};
+  const baseNeto = lineas.reduce(function(s,l){ return s + l.precio*l.cant; },0);
+  const monto = Math.round(baseNeto * 1.105 * c.descuentoPct/100);
+  return {activo:true, monto, pct:c.descuentoPct, lineas};
+}
+
 function renderCotItemsTemp(){
   const el = document.getElementById('cot-items-lista');
   if(!el) return;
-  if(cotItemsTemp.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">— Sin ítems.</div>'; return; }
+  if(cotItemsTemp.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">— Sin ítems.</div>'; renderDescuentoChecklist(); return; }
   el.innerHTML = '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:4px;">'
     +'<thead><tr>'
     +'<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">#</th>'
@@ -3786,6 +3893,7 @@ function renderCotItemsTemp(){
         return eqRow + minipcRow + otrosRows;
       }).join('')
     +'</tbody></table>';
+  renderDescuentoChecklist();
 }
 
 function toggleMiniPC(idx){
@@ -3930,7 +4038,16 @@ function calcPagoMontos(){
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
   if(c.param && c.paramMonto) subtotal += c.paramMonto;
   if(c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') subtotal += c.licMonto;
-  const totalConIva = subtotal + Math.round(subtotal * 0.105);
+  let totalConIva = subtotal + Math.round(subtotal * 0.105);
+  // Descuento en vivo (según lo tildado ahora en el modal, no lo guardado)
+  const descActivo = !!document.getElementById('cot-descuento-check')?.checked;
+  const descPct = parseFloat(document.getElementById('cot-descuento-pct')?.value)||0;
+  if(descActivo && descPct){
+    const lineasDesc = obtenerLineasDescontables(itemsBase).filter(function(l){ return cotDescuentoSel[l.key]; });
+    const baseDescNeto = lineasDesc.reduce(function(s,l){ return s + l.precio*l.cant; },0);
+    const montoDescuento = Math.round(baseDescNeto * 1.105 * descPct/100);
+    totalConIva -= montoDescuento;
+  }
   const pctSenia = parseFloat(document.getElementById('pago-senia-pct')?.value) || 0;
   const pctSaldo = parseFloat(document.getElementById('pago-saldo-pct')?.value) || 0;
   const fmt = function(n){ return '$'+Math.round(n).toLocaleString('es-AR'); };
@@ -4001,6 +4118,17 @@ function getCotizacionData(estado){
     pagoSeniaPct: parseFloat(document.getElementById('pago-senia-pct')?.value)||0,
     pagoSaldoPct: parseFloat(document.getElementById('pago-saldo-pct')?.value)||0,
     pagoForma: document.getElementById('pago-saldo-forma')?.value||'transferencia',
+    pagoCuotaPct: parseFloat(document.getElementById('pago-cuota-pct')?.value)||0,
+    pagoCuotaDias: document.getElementById('pago-cuota-dias')?.value||'',
+    pagoContadoPct: parseFloat(document.getElementById('pago-contado-pct')?.value)||0,
+    pagoEchequePct: parseFloat(document.getElementById('pago-echeq-pct')?.value)||0,
+    pagoEchequeDias: document.getElementById('pago-echeq-dias')?.value||'',
+    pagoCuotas: document.getElementById('pago-cuotas')?.value||'',
+    pagoInteres: parseFloat(document.getElementById('pago-interes')?.value)||0,
+
+    descuentoActivo: !!document.getElementById('cot-descuento-check')?.checked,
+    descuentoPct: parseFloat(document.getElementById('cot-descuento-pct')?.value)||0,
+    descuentoSel: {...cotDescuentoSel},
   };
 }
 
@@ -4057,6 +4185,8 @@ function generarPreviewHTML(c){
   if(c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') subtotalNeto += c.licMonto;
   const totalIva = Math.round(subtotalNeto*0.105);
   const totalConIva = subtotalNeto + totalIva;
+  const desc = calcularDescuentoCot(c);
+  const totalConIvaFinal = totalConIva - desc.monto;
 
   // Items rows
   const itemsHTML = c.items.map(function(it,i){
@@ -4210,8 +4340,9 @@ function generarPreviewHTML(c){
     +'<div class="cot-total-box">'
       +'<div style="font-size:11px;opacity:0.85;margin-bottom:3px;">Subtotal neto: '+fmt2(subtotalNeto)+'</div>'
       +'<div style="font-size:11px;opacity:0.85;margin-bottom:8px;">IVA (10,5%): '+fmt2(totalIva)+'</div>'
+      +(desc.activo && desc.monto>0 ? '<div style="font-size:11px;opacity:0.9;margin-bottom:8px;color:#e08a00;">Descuento ('+desc.pct+'%) sobre: '+desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,'')+' ('+fmt2(l.precio)+' x '+l.cant+' = '+fmt2(l.precio*l.cant)+')'; }).join(', ')+' &rarr; -'+fmt2(desc.monto)+'</div>' : '')
       +'<div class="cot-total-label">Total proyecto</div>'
-      +'<div class="cot-total-val">'+fmt2(totalConIva)+'</div>'
+      +'<div class="cot-total-val">'+fmt2(totalConIvaFinal)+'</div>'
     +'</div>'
   +'</div>'
   + transpNotice
@@ -4220,9 +4351,9 @@ function generarPreviewHTML(c){
     +'<div class="cot-pago-label">Condiciones de pago</div>'
     +'<div>'+c.pagoTexto+'</div>'
     +(c.pagoSeniaPct > 0 ? '<div style="margin-top:8px;display:flex;gap:24px;font-size:12px;">'
-      +(c.pagoSeniaPct > 0 ? '<span>💰 <strong>Seña:</strong> '+fmt2(totalConIva * c.pagoSeniaPct / 100)+'</span>' : '')
-      +(c.pagoSaldoPct > 0 ? '<span>💳 <strong>Saldo:</strong> '+fmt2(totalConIva * c.pagoSaldoPct / 100)+'</span>' : '')
-      +'<span style="color:#888;">Total c/IVA: '+fmt2(totalConIva)+'</span>'
+      +(c.pagoSeniaPct > 0 ? '<span>💰 <strong>Seña:</strong> '+fmt2(totalConIvaFinal * c.pagoSeniaPct / 100)+'</span>' : '')
+      +(c.pagoSaldoPct > 0 ? '<span>💳 <strong>Saldo:</strong> '+fmt2(totalConIvaFinal * c.pagoSaldoPct / 100)+'</span>' : '')
+      +'<span style="color:#888;">Total c/IVA: '+fmt2(totalConIvaFinal)+'</span>'
     +'</div>' : '')
   +'</div>'
   +(c.notas?'<div style="font-size:12px;color:#555;margin-top:10px;padding:10px;background:#f9f9f9;border-radius:4px;border-left:3px solid #1a3a8f;">'+c.notas+'</div>':'')
@@ -5360,10 +5491,18 @@ function enviarWhatsApp(){
   if(tel.startsWith('0')) tel = tel.slice(1);
   if(!tel.startsWith('54')) tel = '54' + tel;
 
-  // Calculate totals
-  const totalNeto = c.items.reduce(function(s,i){ return s+i.precio*i.cant; },0);
+  // Calculate totals (incluye Mini PC y otros periféricos anidados, igual que el PDF)
+  const totalNeto = c.items.reduce(function(s,i){
+    let base = (i.precio*i.cant) + (i.minipc ? i.minipc.precio*i.cant : 0);
+    if(i.otrosPerifericos){
+      Object.values(i.otrosPerifericos).forEach(function(p){ if(p.activo) base += (p.precio||0)*(p.cant||1); });
+    }
+    return s + base;
+  },0);
   const transporteNeto = (c.transporte && c.transporteMonto) ? c.transporteMonto : 0;
   const totalConIva = Math.round((totalNeto + transporteNeto) * 1.105);
+  const desc = calcularDescuentoCot(c);
+  const totalConIvaFinal = totalConIva - desc.monto;
 
   // Build message
   const fecha = new Date(c.fecha||Date.now()).toLocaleDateString('es-AR');
@@ -5380,11 +5519,29 @@ function enviarWhatsApp(){
   if(c.sistema) msg += '🔹 *' + c.sistema.toUpperCase() + '*\n\n';
 
   msg += '*Detalle:*\n';
+  const NOMBRES_PERIFERICOS_WA = {
+    impresora_termica: 'Impresora Térmica (XPrinter)',
+    camara_web:        'Cámara Web HD Logitech C505',
+    lector_qr:         'Lector QR inalámbrico'
+  };
   c.items.forEach(function(it, i){
     const total = Math.round(it.precio * it.cant * 1.105);
     msg += (i+1) + '. ' + it.nombre;
     if(it.cant > 1) msg += ' (x' + it.cant + ')';
     msg += ' → $' + total.toLocaleString('es-AR') + ' c/IVA\n';
+    if(it.minipc && it.minipc.precio){
+      const totalPC = Math.round(it.minipc.precio * it.cant * 1.105);
+      msg += '   ↳ ' + it.minipc.nombre + ' → $' + totalPC.toLocaleString('es-AR') + ' c/IVA\n';
+    }
+    if(it.otrosPerifericos){
+      Object.entries(it.otrosPerifericos).forEach(function(entry){
+        const key = entry[0]; const p = entry[1];
+        if(!p.activo) return;
+        const nombre = NOMBRES_PERIFERICOS_WA[key] || key;
+        const totalPer = Math.round((p.precio||0) * (p.cant||1) * 1.105);
+        msg += '   ↳ ' + nombre + ' → $' + totalPer.toLocaleString('es-AR') + ' c/IVA\n';
+      });
+    }
   });
 
   if(c.transporte && c.transporteMonto){
@@ -5393,7 +5550,10 @@ function enviarWhatsApp(){
     msg += '• Transporte a cargo del cliente\n';
   }
 
-  msg += '\n💰 *TOTAL: $' + totalConIva.toLocaleString('es-AR') + '* (IVA 10,5% incluido)\n\n';
+  if(desc.activo && desc.monto>0){
+    msg += '\n🏷️ *Descuento (' + desc.pct + '%)* sobre: ' + desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,'') + ' ($' + Math.round(l.precio).toLocaleString('es-AR') + ' x ' + l.cant + ' = $' + Math.round(l.precio*l.cant).toLocaleString('es-AR') + ')'; }).join(', ') + ' → -$' + Math.round(desc.monto).toLocaleString('es-AR') + '\n';
+  }
+  msg += '\n💰 *TOTAL: $' + totalConIvaFinal.toLocaleString('es-AR') + '* (IVA 10,5% incluido)\n\n';
 
   if(c.licencia && c.licDesc){
     msg += '🔑 *Licencia de software:*\n';
@@ -5411,7 +5571,13 @@ function enviarWhatsApp(){
   }
 
   msg += '💳 *Condiciones de pago:*\n';
-  msg += c.pagoTexto + '\n\n';
+  msg += c.pagoTexto + '\n';
+  if(c.pagoSeniaPct > 0){
+    msg += '💰 Seña: $' + Math.round(totalConIvaFinal * c.pagoSeniaPct / 100).toLocaleString('es-AR');
+    if(c.pagoSaldoPct > 0) msg += ' · 💳 Saldo: $' + Math.round(totalConIvaFinal * c.pagoSaldoPct / 100).toLocaleString('es-AR');
+    msg += '\n';
+  }
+  msg += '\n';
 
   if(c.notas){
     msg += '📝 ' + c.notas + '\n\n';
