@@ -561,15 +561,17 @@ async function abrirBOM(opId){
           }
         }
       } else {
-        // Cantidad tracking: cargar variantes y leer tabla stock
+        // Cantidad tracking: cargar variantes y leer tabla stock (por sku + variante puntual)
         item._variantes = await api(`variantes?sku_id=eq.${item.sku_id}&select=*`).catch(()=>[]);
-        if(item.variante_id){
-          const st = await api(`stock?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
-          item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
-        } else {
-          const st = await api(`stock?sku_id=eq.${item.sku_id}&select=cantidad,cantidad_reservada`).catch(()=>[]);
-          item._stock = st?.[0] ? (st[0].cantidad - (st[0].cantidad_reservada||0)) : 0;
-        }
+        const stFiltro = item.variante_id ? `&variante_id=eq.${item.variante_id}` : '&variante_id=is.null';
+        const st = await api(`stock?sku_id=eq.${item.sku_id}${stFiltro}&select=cantidad`).catch(()=>[]);
+        const cantidadBruta = st?.[0]?.cantidad || 0;
+        // Reservado real (mismo método que Stock y Producción, no la columna cantidad_reservada
+        // que puede quedar desactualizada)
+        const _estadosActivosItem = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+        const asigItem = await api(`op_bom_items?sku_id=eq.${item.sku_id}&uid_asignado=not.is.null&estado=eq.asignado&select=id,variante_id,ordenes_produccion(estado)`).catch(()=>[]);
+        const reservadoItem = (asigItem||[]).filter(a => _estadosActivosItem.includes(a.ordenes_produccion?.estado) && (item.variante_id==null ? a.variante_id==null : a.variante_id===item.variante_id)).length;
+        item._stock = cantidadBruta - reservadoItem;
       }
     }
 
@@ -952,10 +954,21 @@ async function cargarDesdeBOMMaestra(){
     const skusData = skuIdsUnicos.length ? await api('skus?id=in.('+skuIdsUnicos.join(',')+')'+'&select=id,tracking,categoria_id').catch(()=>[]) : [];
     const skusMap = {};
     (skusData||[]).forEach(s=>{ skusMap[s.id] = s; });
-    // Traer stock de cantidad de una vez
-    const stockData2 = skuIdsUnicos.length ? await api('stock?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&variante_id=is.null&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]) : [];
-    const stockMap2 = {};
-    (stockData2||[]).forEach(s=>{ stockMap2[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
+    // Traer stock de cantidad de una vez — por SKU Y por variante (antes ignoraba la variante
+    // y solo miraba la fila "sin color", por eso un insumo con color definido mostraba "Sin stock"
+    // aunque hubiera unidades reales de ese color).
+    const stockData2 = skuIdsUnicos.length ? await api('stock?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&select=sku_id,variante_id,cantidad').catch(()=>[]) : [];
+    const stockMap2 = {}; // key: sku_id+'_'+(variante_id||'null') → cantidad bruta
+    (stockData2||[]).forEach(s=>{ stockMap2[s.sku_id+'_'+(s.variante_id||'null')] = s.cantidad||0; });
+    // Reservado real: contar asignaciones vigentes en op_bom_items (mismo método que Stock y Producción),
+    // en vez de confiar en la columna cantidad_reservada que puede quedar desactualizada.
+    const _estadosActivosBOM = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+    const asignadosCant = skuIdsUnicos.length ? await api('op_bom_items?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id,ordenes_produccion(estado)').catch(()=>[]) : [];
+    const asigCantMap = {};
+    (asignadosCant||[]).filter(a=>_estadosActivosBOM.includes(a.ordenes_produccion?.estado)).forEach(a=>{
+      const key = a.sku_id+'_'+(a.variante_id||'null');
+      asigCantMap[key] = (asigCantMap[key]||0)+1;
+    });
     // Traer conteo de unidades UID de una vez
     const uidsData = skuIdsUnicos.length ? await api('unidades?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&estado=eq.stock&select=sku_id,variante_id').catch(()=>[]) : [];
     const uidCountMap = {};
@@ -992,7 +1005,8 @@ async function cargarDesdeBOMMaestra(){
           item._stock = uidCountMap[skuId] || 0;
         }
       } else {
-        item._stock = stockMap2[skuId] || 0;
+        const keyStock = skuId+'_'+(item.variante_id||'null');
+        item._stock = (stockMap2[keyStock]||0) - (asigCantMap[keyStock]||0);
       }
     }
 
