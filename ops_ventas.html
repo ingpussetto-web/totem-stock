@@ -1255,7 +1255,9 @@ async function confirmarBOM(){
     if(!confirm('El color del gabinete está como "A definir". ¿Confirmás igual?')) return;
   }
 
-  // Validar items incluidos con variantes sin seleccionar
+  // Avisar (sin bloquear) items incluidos con variantes sin seleccionar — si se deja así,
+  // producción va a poder usar cualquiera de los modelos/marcas disponibles al momento de asignar,
+  // y va a quedar registrado cuál se usó realmente.
   const sinVariante = currentBOMItems.filter(item =>
     item.incluido !== false && item.sku_id &&
     item._variantes && item._variantes.length > 0 &&
@@ -1265,8 +1267,8 @@ async function confirmarBOM(){
   );
   if(sinVariante.length){
     const lista = sinVariante.map(i => '• ' + i.nombre).join('\n');
-    alert("⚠ Los siguientes ítems requieren que selecciones un modelo antes de confirmar:\n\n" + lista + "\n\nSeleccioná el modelo en la BOM y volvé a confirmar.");
-    return;
+    const ok = confirm("Los siguientes ítems no tienen un modelo/marca definido:\n\n" + lista + "\n\nSi confirmás así, producción va a poder usar cualquiera de las opciones disponibles al momento de asignarlo (no se fija ahora).\n\n¿Confirmar de todas formas?");
+    if(!ok) return;
   }
   // Verificar items sin stock suficiente
   const cantEquiposVerif = currentOP.cantidad || 1;

@@ -672,16 +672,29 @@ async function procesarCaja(sku){
     return;
   }
 
-  // Si hay múltiples variantes pendientes, mostrar modal de selección
+  // Si hay múltiples variantes pendientes (pedidas puntualmente por distintas líneas de la BOM),
+  // mostrar modal para elegir cuál de esas líneas se está cubriendo.
   let item;
   const variantesEnItems = [...new Set(itemsCompatibles.map(i=>i.variante_id).filter(v=>v!=null))];
   if(variantesEnItems.length > 1){
     const variantesData = await api(`variantes?id=in.(${variantesEnItems.join(',')})&select=id,valor`).catch(()=>[]);
     // Guardar contexto y mostrar modal — flujo continúa desde elegirVarianteCaja()
     window._pendingCaja = { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal, viaFamilia };
-    mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles);
+    mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles, false);
     return;
+  } else if(variantesEnItems.length === 1){
+    item = itemsCompatibles.find(i=>i.variante_id===variantesEnItems[0]) || itemsCompatibles[0];
   } else {
+    // Ningún pendiente exige una variante puntual (la BOM se confirmó sin definir modelo/marca).
+    // Si hay más de una variante con stock disponible, que el operador elija cuál está usando
+    // — y eso queda registrado en la OP.
+    const variantesConStock = [...new Set((stockRows||[]).filter(r=>r.variante_id!=null && (r.cantidad||0)>0).map(r=>r.variante_id))];
+    if(variantesConStock.length > 1){
+      const variantesData = await api(`variantes?id=in.(${variantesConStock.join(',')})&select=id,valor`).catch(()=>[]);
+      window._pendingCaja = { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal, viaFamilia, modoLibre:true };
+      mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles, true);
+      return;
+    }
     item = itemsCompatibles[0];
   }
 
@@ -1457,8 +1470,12 @@ function labelDestino(item, items){
 async function asignarItemUID(item, unidad, uid, viaFamilia){
   const scanArea = document.getElementById('scan-area');
   try{
+    // Si la línea de la BOM no exigía una variante puntual pero la unidad escaneada sí tiene una
+    // (ej: marca de impresora), registrar cuál se usó realmente.
+    const registrarVariante = item.variante_id == null && unidad.variante_id != null;
     const patch = { estado: 'asignado', uid_asignado: uid };
     if(viaFamilia){ patch.sku_id = unidad.sku_id; patch.nombre = unidad.skus?.nombre || item.nombre; }
+    if(registrarVariante){ patch.variante_id = unidad.variante_id; }
     await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
     await api(`unidades?id=eq.${unidad.id}`, 'PATCH', {
       estado: 'reservado',
@@ -1467,6 +1484,7 @@ async function asignarItemUID(item, unidad, uid, viaFamilia){
     item.estado = 'asignado';
     item.uid_asignado = uid;
     if(viaFamilia){ item.sku_id = unidad.sku_id; item.nombre = unidad.skus?.nombre || item.nombre; }
+    if(registrarVariante){ item.variante_id = unidad.variante_id; }
 
     scanArea.className='scan-area active';
     setFeedback(`✓ ${unidad.skus?.nombre} → ${labelDestino(item)}${viaFamilia?' (modelo alternativo de la familia)':''}`, 'ok');
@@ -1536,12 +1554,12 @@ async function elegirDestino(itemId){
 }
 
 // ─── MODAL VARIANTE CAJA ─────────────────────────────────────
-function mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles){
+function mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles, modoLibre){
   let existing = document.getElementById('modal-variante-caja');
   if(existing) existing.remove();
 
   const botones = (variantesData||[]).map(v => {
-    const hayItem = itemsCompatibles.some(i=>i.variante_id===v.id);
+    const hayItem = modoLibre || itemsCompatibles.some(i=>i.variante_id===v.id);
     if(!hayItem) return '';
     return `<button onclick="elegirVarianteCaja(${v.id})" style="
       display:block;width:100%;text-align:left;padding:12px 16px;margin-bottom:8px;
@@ -1557,7 +1575,7 @@ function mostrarModalVarianteCaja(sku, variantesData, itemsCompatibles){
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
   modal.innerHTML = `
     <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;width:320px;max-width:90vw;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">¿Qué color vas a asignar?</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${modoLibre ? '¿Qué modelo/marca vas a usar?' : '¿Qué color vas a asignar?'}</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:14px;">${sku.nombre}</div>
       ${botones}
       <button onclick="cancelarVarianteCaja()" style="
@@ -1577,12 +1595,15 @@ async function elegirVarianteCaja(varianteId){
   if(!ctx) return;
   window._pendingCaja = null;
 
-  const { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal } = ctx;
-  const item = itemsCompatibles.find(i=>i.variante_id===varianteId);
+  const { sku, itemsCompatibles, stockRows, asignadosRealesProd, _estadosActivos, reservadoReal, viaFamilia, modoLibre } = ctx;
+  const item = modoLibre ? itemsCompatibles[0] : itemsCompatibles.find(i=>i.variante_id===varianteId);
   if(!item){ setFeedback('✕ Variante no encontrada en BOM', 'err'); return; }
 
   const stockRowEspecifico = (stockRows||[]).find(r=>r.variante_id===varianteId) || stockRows?.[0];
-  await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'});
+  const patch = {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'};
+  if(viaFamilia){ patch.sku_id = sku.id; patch.nombre = sku.nombre; }
+  if(modoLibre){ patch.variante_id = varianteId; } // la BOM no exigía modelo — queda registrado el usado
+  await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
   if(stockRowEspecifico){
     const reservadoVariante = (asignadosRealesProd||[]).filter(i =>
       _estadosActivos.includes(i.ordenes_produccion?.estado) && i.variante_id === varianteId
@@ -1591,6 +1612,8 @@ async function elegirVarianteCaja(varianteId){
   }
   item.estado = 'asignado';
   item.uid_asignado = sku.codigo+'-CAJA';
+  if(viaFamilia){ item.sku_id = sku.id; item.nombre = sku.nombre; }
+  if(modoLibre){ item.variante_id = varianteId; }
   document.getElementById('scan-area').className='scan-area success';
   setFeedback(`✓ "${sku.nombre}" asignado desde caja`, 'ok');
   setTimeout(()=>{ document.getElementById('scan-area').className='scan-area'; renderChecklist(); }, 1800);
