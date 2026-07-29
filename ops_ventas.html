@@ -970,13 +970,19 @@ async function cargarDesdeBOMMaestra(){
         (varData||[]).forEach(v=>{ colorVarianteMap[v.sku_id] = v.id; });
       }
     }
-    
+
+    // Traer variantes de todos los SKUs de una vez (para poder mostrar/elegir color por línea)
+    const variantesTodas = skuIdsUnicos.length ? await api('variantes?sku_id=in.('+skuIdsUnicos.join(',')+')'+'&select=id,sku_id,valor').catch(()=>[]) : [];
+    const variantesMap = {};
+    (variantesTodas||[]).forEach(v=>{ (variantesMap[v.sku_id] = variantesMap[v.sku_id]||[]).push(v); });
+
     for(let item of todosItems){
       if(!item.sku_id) continue;
       const skuId = Number(item.sku_id);
       const sku = skusMap[skuId];
       if(!sku) continue;
       item.skus = {...(item.skus||{}), tracking: sku.tracking, categoria_id: sku.categoria_id};
+      item._variantes = variantesMap[skuId] || [];
       if(sku.tracking === 'uid'){
         const esGab = sku.categoria_id === 8;
         if(esGab && colorVarianteMap[skuId]){
