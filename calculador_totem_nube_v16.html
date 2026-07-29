@@ -7614,7 +7614,8 @@ async function crearOP(proyId){
             nombre: r.skus ? r.skus.nombre : r.nombre,
             qty: r.qty || 1,
             incluido: true,
-            notas: null
+            notas: null,
+            variante_id: r.variante_id || null
           });
         });
       }
@@ -7683,7 +7684,8 @@ async function crearOP(proyId){
             incluido: b.incluido,
             estado: 'pendiente',
             notas: b.notas,
-            equipo_num: eq
+            equipo_num: eq,
+            variante_id: b.variante_id || null
           });
         });
       }

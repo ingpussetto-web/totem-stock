@@ -917,6 +917,7 @@ async function cargarDesdeBOMMaestra(){
       estado: 'pendiente',
       notas: null,
       skus: r.skus || {},
+      variante_id: r.variante_id || null,
       _variantes: [],
       _stock: 0,
       _stockDefinir: 0,
@@ -1663,7 +1664,8 @@ async function seleccionarModeloBOM(productoId){
   panel.innerHTML = '<div style="color:var(--text3);font-size:12px;">Cargando...</div>';
   const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(nombre)&order=nombre.asc').catch(()=>[]);
   if(rows && rows.length > 0){
-    bomMaestraItems = rows.map(r=>({ id:r.id, v14_key:r.v14_key, sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+    bomMaestraItems = rows.map(r=>({ id:r.id, v14_key:r.v14_key, sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1, variante_id:r.variante_id||null, _variantes:[] }));
+    await cargarVariantesBOMMaestra();
     renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===productoId), false);
   } else {
     const ops = await api('ordenes_produccion?producto_v14=eq.'+encodeURIComponent(productoId)+'&estado=not.eq.completada&select=id&limit=1').catch(()=>[]);
@@ -1676,12 +1678,22 @@ async function seleccionarModeloBOM(productoId){
         if((item.equipo_num||1)!==1) continue;
         if(vistos.has(item.sku_id)) continue;
         vistos.add(item.sku_id);
-        bomMaestraItems.push({ id:null, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.skus?.nombre||item.nombre, qty:item.qty||1 });
+        bomMaestraItems.push({ id:null, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.skus?.nombre||item.nombre, qty:item.qty||1, variante_id:item.variante_id||null, _variantes:[] });
       }
       if(bomMaestraItems.length) desdOP = true;
     }
+    await cargarVariantesBOMMaestra();
     renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===productoId), desdOP);
   }
+}
+
+async function cargarVariantesBOMMaestra(){
+  const skuIds = [...new Set(bomMaestraItems.map(i=>i.sku_id).filter(Boolean))];
+  if(!skuIds.length) return;
+  const variantes = await api('variantes?sku_id=in.('+skuIds.join(',')+')&select=id,sku_id,valor').catch(()=>[]);
+  bomMaestraItems.forEach(item=>{
+    item._variantes = (variantes||[]).filter(v=>v.sku_id===item.sku_id);
+  });
 }
 
 function renderEditorBOM(prod, desdOP){
@@ -1690,18 +1702,27 @@ function renderEditorBOM(prod, desdOP){
   const advertencia = desdOP
     ? '<div style="background:rgba(255,179,64,0.08);border:1px solid rgba(255,179,64,0.3);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--amber);">⚠ Sin BOM maestra guardada. Cargada desde OP activa como base. Revisá y guardá.</div>'
     : '';
-  const filas = bomMaestraItems.map((item,idx)=>
-    '<div style="display:grid;grid-template-columns:1fr 60px 36px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:8px;">'
-    +'<div style="font-size:13px;">'+esc(item.nombre)+'</div>'
-    +'<input type="number" value="'+item.qty+'" min="1" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:12px;text-align:center;" onchange="bomMaestraItems['+idx+'].qty=parseInt(this.value)||1">'
-    +'<button onclick="quitarItemBOMMaestra('+idx+')" style="background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:4px;padding:4px;font-size:11px;cursor:pointer;">X</button>'
-    +'</div>'
-  ).join('');
+  const filas = bomMaestraItems.map((item,idx)=>{
+    const tieneVariantes = item._variantes && item._variantes.length > 0;
+    const colorHTML = tieneVariantes
+      ? '<select style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:11px;" onchange="bomMaestraItems['+idx+'].variante_id=this.value?parseInt(this.value):null">'
+        +'<option value="">Sin definir</option>'
+        +item._variantes.filter(v=>v.valor!=='A definir'&&v.valor!=='a definir').map(v=>'<option value="'+v.id+'" '+(item.variante_id===v.id?'selected':'')+'>'+esc(v.valor)+'</option>').join('')
+        +'</select>'
+      : '<span style="font-size:11px;color:var(--text3);">—</span>';
+    return '<div style="display:grid;grid-template-columns:1fr 110px 60px 36px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:8px;">'
+      +'<div style="font-size:13px;">'+esc(item.nombre)+'</div>'
+      +colorHTML
+      +'<input type="number" value="'+item.qty+'" min="1" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:12px;text-align:center;" onchange="bomMaestraItems['+idx+'].qty=parseInt(this.value)||1">'
+      +'<button onclick="quitarItemBOMMaestra('+idx+')" style="background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:4px;padding:4px;font-size:11px;cursor:pointer;">X</button>'
+      +'</div>';
+  }).join('');
   const listaHTML = bomMaestraItems.length === 0
     ? '<div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center;">Sin insumos. Agrega items desde el selector abajo.</div>'
     : '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">'
-      +'<div style="display:grid;grid-template-columns:1fr 60px 36px;background:var(--surface2);padding:8px 12px;border-bottom:1px solid var(--border);">'
+      +'<div style="display:grid;grid-template-columns:1fr 110px 60px 36px;background:var(--surface2);padding:8px 12px;border-bottom:1px solid var(--border);">'
       +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Insumo</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Color</div>'
       +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;text-align:center;">Qty</div>'
       +'<div></div></div>'+filas+'</div>';
   const opsCopy = PRODUCTOS_BOM.filter(p=>p.id!==bomMaestraProducto).map(p=>'<option value="'+p.id+'">'+p.nombre+'</option>').join('');
@@ -1727,15 +1748,17 @@ function quitarItemBOMMaestra(idx){
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
-function agregarItemBOMMaestra(){
+async function agregarItemBOMMaestra(){
   const sel = document.getElementById('bm-nuevo-sku');
   const qty = parseInt(document.getElementById('bm-nuevo-qty').value)||1;
   if(!sel.value) return;
   const pipeIdx = sel.value.indexOf('|');
   const skuId = parseInt(sel.value.substring(0, pipeIdx));
   const nombre = sel.value.substring(pipeIdx+1);
-  if(bomMaestraItems.find(i=>i.sku_id===skuId)){ alert('Ese insumo ya está en la BOM.'); return; }
-  bomMaestraItems.push({ id:null, v14_key:'manual_'+Date.now(), sku_id:skuId, nombre, qty });
+  // Se permite repetir el mismo insumo más de una vez (ej: 2 pulsadores, uno Rojo y uno Verde) —
+  // cada línea es independiente y puede llevar su propio color.
+  const variantes = await api('variantes?sku_id=eq.'+skuId+'&select=id,sku_id,valor').catch(()=>[]);
+  bomMaestraItems.push({ id:null, v14_key:'manual_'+skuId+'_'+Date.now(), sku_id:skuId, nombre, qty, variante_id:null, _variantes: variantes||[] });
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
@@ -1745,7 +1768,8 @@ async function copiarBOMMaestra(){
   if(!confirm('Esto reemplaza los insumos actuales con los del modelo seleccionado. ¿Continuar?')) return;
   const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
   if(!rows||!rows.length){ alert('El modelo seleccionado no tiene BOM maestra cargada.'); return; }
-  bomMaestraItems = rows.map((r,idx)=>({ id:null, v14_key: r.v14_key||('manual_'+idx+'_'+Date.now()), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1 }));
+  bomMaestraItems = rows.map((r,idx)=>({ id:null, v14_key: r.v14_key||('manual_'+idx+'_'+Date.now()), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1, variante_id:r.variante_id||null, _variantes:[] }));
+  await cargarVariantesBOMMaestra();
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
@@ -1757,7 +1781,7 @@ async function guardarBOMMaestra(){
     // Borrar primero TODOS los registros viejos del producto (sin filtrar activo)
     await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE').catch(()=>{});
     // POST con los nuevos ítems
-    const payload = bomMaestraItems.map(item=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, activo:true }));
+    const payload = bomMaestraItems.map((item,idx)=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id+'_'+idx), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, variante_id:item.variante_id||null, activo:true }));
     await api('bom_maestra','POST',payload);
     document.querySelectorAll('.bm-modelo-item').forEach(el=>{
       if(el.dataset.id===bomMaestraProducto){
