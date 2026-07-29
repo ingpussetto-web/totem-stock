@@ -4243,7 +4243,10 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.transporteMonto)+'</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.transporteMonto*0.105))+'</td>'
     +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.transporteMonto+Math.round(c.transporteMonto*0.105))+'</td>'
-    +'</tr>' : '';
+    +'</tr>' : (c.transporte ? '<tr style="background:#f5f7fa;">'
+    +'<td style="padding:7px 10px;font-style:italic;" colspan="4">Servicio de transporte — Incluido, sin cargo</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">$0</td>'
+    +'</tr>' : '');
   // Parametrización row
   const paramRow = c.param && c.paramMonto ? '<tr style="background:#f5f7fa;">'
     +'<td style="padding:7px 10px;font-style:italic;">Parametrización de software</td>'
@@ -4300,6 +4303,13 @@ function generarPreviewHTML(c){
   // Transporte no incluido notice
   const transpNotice = !c.transporte ? '<div style="font-size:11px;color:#666;margin-bottom:10px;font-style:italic;">* Transporte de equipos a cargo del cliente.</div>' : '';
 
+  // Fila de descuento en la tabla (item + monto, prolijo y compacto)
+  const descRow = (desc.activo && desc.monto>0) ? '<tr style="background:#fff8ec;">'
+    +'<td style="padding:7px 10px;color:#b35c00;font-size:12px;">Descuento ('+desc.pct+'%) — '+desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,''); }).join(', ')+'</td>'
+    +'<td></td><td></td><td></td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;color:#b35c00;">-'+fmt2(desc.monto)+'</td>'
+  +'</tr>' : '';
+
   const html = '<div class="cot-header">'
     +'<img src="'+LOGO_B64+'" class="cot-logo" alt="Totem Nube" style="background:#fff;border-radius:8px;" />'
     +'<div class="cot-empresa">'
@@ -4334,13 +4344,13 @@ function generarPreviewHTML(c){
       +'<th style="text-align:right;">Neto Unit.</th><th style="text-align:right;">IVA 10,5%</th>'
       +'<th style="text-align:right;">Total</th>'
     +'</tr></thead>'
-    +'<tbody>'+itemsHTML+transpRow+paramRow+ploteoRow+licRow+'</tbody>'
+    +'<tbody>'+itemsHTML+transpRow+paramRow+ploteoRow+licRow+descRow+'</tbody>'
   +'</table>'
   +'<div class="cot-total-row">'
     +'<div class="cot-total-box">'
       +'<div style="font-size:11px;opacity:0.85;margin-bottom:3px;">Subtotal neto: '+fmt2(subtotalNeto)+'</div>'
       +'<div style="font-size:11px;opacity:0.85;margin-bottom:8px;">IVA (10,5%): '+fmt2(totalIva)+'</div>'
-      +(desc.activo && desc.monto>0 ? '<div style="font-size:11px;opacity:0.9;margin-bottom:8px;color:#e08a00;">Descuento ('+desc.pct+'%) sobre: '+desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,'')+' ('+fmt2(l.precio)+' x '+l.cant+' = '+fmt2(l.precio*l.cant)+')'; }).join(', ')+' &rarr; -'+fmt2(desc.monto)+'</div>' : '')
+      +(desc.activo && desc.monto>0 ? '<div style="font-size:11px;opacity:0.9;margin-bottom:8px;">Descuento ('+desc.pct+'%): -'+fmt2(desc.monto)+'</div>' : '')
       +'<div class="cot-total-label">Total proyecto</div>'
       +'<div class="cot-total-val">'+fmt2(totalConIvaFinal)+'</div>'
     +'</div>'
@@ -5546,12 +5556,14 @@ function enviarWhatsApp(){
 
   if(c.transporte && c.transporteMonto){
     msg += '• Transporte → $' + Math.round(c.transporteMonto*1.105).toLocaleString('es-AR') + '\n';
+  } else if(c.transporte){
+    msg += '• Transporte incluido. Sin cargo\n';
   } else {
     msg += '• Transporte a cargo del cliente\n';
   }
 
   if(desc.activo && desc.monto>0){
-    msg += '\n🏷️ *Descuento (' + desc.pct + '%)* sobre: ' + desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,'') + ' ($' + Math.round(l.precio).toLocaleString('es-AR') + ' x ' + l.cant + ' = $' + Math.round(l.precio*l.cant).toLocaleString('es-AR') + ')'; }).join(', ') + ' → -$' + Math.round(desc.monto).toLocaleString('es-AR') + '\n';
+    msg += '\n🏷️ *Descuento (' + desc.pct + '%)* — ' + desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,''); }).join(', ') + ' → -$' + Math.round(desc.monto).toLocaleString('es-AR') + '\n';
   }
   msg += '\n💰 *TOTAL: $' + totalConIvaFinal.toLocaleString('es-AR') + '* (IVA 10,5% incluido)\n\n';
 
