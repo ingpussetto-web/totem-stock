@@ -956,7 +956,7 @@ async function loadDesvios(){
       // necesario para los proyectos Y además dejar el stock mínimo de reposición intacto.
       // Ej: necesito 10 para proyectos, tengo 0 disponible, mínimo 1 → hay que comprar 11, no 10.
       const aComprar = Math.max(0, data.qty_total + stockMin - disponible);
-      return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, ops: data.ops };
+      return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, faltanteOPs, ops: data.ops };
     }).filter(f => f.aComprar > 0)
       .sort((a,b) => a.sku.nombre?.localeCompare(b.sku.nombre));
 
@@ -1011,11 +1011,15 @@ async function loadDesvios(){
           minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
             +'📦 Stock mínimo: '+f.stockMin+' · Stock por color: '+coloresStock+'</div>';
         } else {
+          // Porción del total "a comprar" que corresponde a reponer el stock mínimo
+          // (no solo lo que falta hoy contra el mínimo, sino lo que hace falta comprar de más
+          // para que, después de cubrir los proyectos, quede el mínimo intacto).
+          const deStock = Math.max(0, f.aComprar - f.faltanteOPs);
           minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
             +'📦 Stock mínimo: '+f.stockMin
             +' · Disponible: '+f.disponible
-            +' → <span style="color:'+(f.disponible>=f.stockMin?'var(--green)':'#ff5e5e')+';">'
-            +(f.disponible>=f.stockMin?'OK':'faltan '+(f.stockMin-f.disponible))+'</span></div>';
+            +' → <span style="color:'+(deStock>0?'#ff5e5e':'var(--green)')+';">'
+            +(deStock>0?'faltan '+f.aComprar+' ('+deStock+' de stock)':'OK')+'</span></div>';
         }
       }
 
