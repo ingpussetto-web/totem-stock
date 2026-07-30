@@ -952,7 +952,10 @@ async function loadDesvios(){
       const stockMin = sku.stock_minimo || 0;
       const faltanteOPs = Math.max(0, data.qty_total - disponible);
       const faltanteMin = Math.max(0, stockMin - disponible);
-      const aComprar = Math.max(faltanteOPs, faltanteMin);
+      // No alcanza con cubrir el mayor de los dos faltantes por separado: hay que comprar lo
+      // necesario para los proyectos Y además dejar el stock mínimo de reposición intacto.
+      // Ej: necesito 10 para proyectos, tengo 0 disponible, mínimo 1 → hay que comprar 11, no 10.
+      const aComprar = Math.max(0, data.qty_total + stockMin - disponible);
       return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, ops: data.ops };
     }).filter(f => f.aComprar > 0)
       .sort((a,b) => a.sku.nombre?.localeCompare(b.sku.nombre));
