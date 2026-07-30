@@ -1466,8 +1466,57 @@ async function cambiarEstado(opId, nuevoEstado){
 async function cancelarOP(opId, opNumero){
   if(!confirm(`¿Cancelar la OP ${opNumero}? Esta acción no se puede deshacer.`)) return;
   try{
+    // ─── Revertir insumos ya asignados antes de cancelar ─────────────────────
+    // Si no se revierte, el stock queda descontado (o reservado) para siempre
+    // por una OP que nunca se produjo.
+    const items = await api(`op_bom_items?op_id=eq.${opId}&estado=eq.asignado&uid_asignado=not.is.null&select=id,sku_id,variante_id,uid_asignado,qty`).catch(()=>[]);
+
+    // 1) Insumos por cantidad descontados directo (asignación manual, sin escaneo):
+    //    devolver la cantidad real al stock.
+    const cantidadItems = (items||[]).filter(i => i.uid_asignado === 'CANTIDAD-DESCONTADA');
+    for(const item of cantidadItems){
+      const q = item.variante_id
+        ? `stock?sku_id=eq.${item.sku_id}&variante_id=eq.${item.variante_id}&select=id,cantidad`
+        : `stock?sku_id=eq.${item.sku_id}&variante_id=is.null&select=id,cantidad`;
+      const rows = await api(q).catch(()=>[]);
+      if(rows?.length){
+        await api(`stock?id=eq.${rows[0].id}`, 'PATCH', {
+          cantidad: (rows[0].cantidad||0) + (item.qty||1),
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
+    // 2) Insumos por cantidad reservados "por caja" (nunca se descontó cantidad real,
+    //    solo se incrementó cantidad_reservada): liberar esa reserva.
+    const cajaItems = (items||[]).filter(i => i.uid_asignado && i.uid_asignado.endsWith('-CAJA'));
+    const cajaGroups = {};
+    cajaItems.forEach(i=>{
+      const key = i.sku_id+'_'+(i.variante_id||'null');
+      if(!cajaGroups[key]) cajaGroups[key] = {sku_id:i.sku_id, variante_id:i.variante_id||null, count:0};
+      cajaGroups[key].count++;
+    });
+    for(const g of Object.values(cajaGroups)){
+      const q = g.variante_id
+        ? `stock?sku_id=eq.${g.sku_id}&variante_id=eq.${g.variante_id}&select=id,cantidad_reservada`
+        : `stock?sku_id=eq.${g.sku_id}&variante_id=is.null&select=id,cantidad_reservada`;
+      const rows = await api(q).catch(()=>[]);
+      if(rows?.length){
+        await api(`stock?id=eq.${rows[0].id}`, 'PATCH', {
+          cantidad_reservada: Math.max(0, (rows[0].cantidad_reservada||0) - g.count)
+        });
+      }
+    }
+
+    // 3) Unidades UID reales asignadas a esta OP: liberar de vuelta a stock.
+    const uidItems = (items||[]).filter(i => i.uid_asignado && i.uid_asignado !== 'CANTIDAD-DESCONTADA' && !i.uid_asignado.endsWith('-CAJA'));
+    for(const item of uidItems){
+      await api(`unidades?uid=eq.${encodeURIComponent(item.uid_asignado)}`, 'PATCH', {estado:'stock', op_id:null});
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', {estado:'cancelada', updated_at:new Date().toISOString()});
-    toast('OP cancelada');
+    toast(items?.length ? 'OP cancelada — stock revertido ✓' : 'OP cancelada');
     loadOPs();
   }catch(e){toast('Error: '+e.message);}
 }

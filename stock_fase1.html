@@ -523,27 +523,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   </div>
 </div>
 
-<!-- MODAL AJUSTE STOCK -->
-<div class="modal-bg" id="modal-stock-adj">
-  <div class="modal">
-    <div class="modal-title">
-      <span id="modal-adj-title">Ajustar stock</span>
-      <button class="modal-close" onclick="closeModal('modal-stock-adj')">×</button>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Cantidad actual</label>
-      <input class="form-input" type="number" id="adj-cantidad" min="0">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Motivo del ajuste</label>
-      <input class="form-input" type="text" id="adj-motivo" placeholder="Inventario inicial, corrección, etc.">
-    </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal('modal-stock-adj')">Cancelar</button>
-      <button class="btn green" onclick="saveAdj()">Guardar</button>
-    </div>
-  </div>
-</div>
+<!-- Ajuste manual de stock eliminado: los ajustes se hacen desde conteo_fisico.html,
+     que deja historial en stock_conteos/stock_ajustes con una única lógica. Este modal
+     ("Ajustar stock") no estaba conectado a ningún botón del catálogo (código muerto). -->
 
 <div id="toast"></div>
 
@@ -561,7 +543,6 @@ let uidRowsData = [];
 let unidades = [];
 let variantesTemp = [];
 let editingSkuId = null;
-let adjStockId = null;
 
 // ─── API ───────────────────────────────────────────────────────────────────
 async function api(path, method='GET', body=null){
@@ -1482,25 +1463,9 @@ async function deleteUid(id){
   } catch(e){ toast('Error: '+e.message); }
 }
 
-// ─── STOCK AJUSTE ───────────────────────────────────────────────────────────
-function openAdj(stockId, label, current){
-  adjStockId = stockId;
-  document.getElementById('modal-adj-title').textContent = 'Ajustar: ' + label;
-  document.getElementById('adj-cantidad').value = current;
-  document.getElementById('adj-motivo').value = '';
-  openModal('modal-stock-adj');
-}
-
-async function saveAdj(){
-  const qty = parseInt(document.getElementById('adj-cantidad').value);
-  if(isNaN(qty)||qty<0){ toast('Cantidad inválida'); return; }
-  try {
-    await api(`stock?id=eq.${adjStockId}`, 'PATCH', {cantidad:qty, updated_at:new Date().toISOString()});
-    closeModal('modal-stock-adj');
-    toast('Stock actualizado ✓');
-    loadStock();
-  } catch(e){ toast('Error: '+e.message); }
-}
+// Ajuste manual de stock eliminado (openAdj/saveAdj): no estaba conectado a ningún
+// botón del catálogo (código muerto) y duplicaba, con otra lógica, lo que ya hace
+// conteo_fisico.html. Los ajustes de stock se hacen desde ese módulo.
 
 // ─── CONFIG ─────────────────────────────────────────────────────────────────
 function loadConfig(){
