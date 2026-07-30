@@ -5355,12 +5355,22 @@ async function guardarDocOP(){
 }
 
 async function _autoGenerarCodigoOP(){
+  // Fuente única: mira tanto los docs guardados (doc_op_config) como las OPs ya
+  // creadas (ordenes_produccion.codigo_op_interno) para no repetir/atrasar el
+  // correlativo, sea cual sea el camino por el que se generó cada número.
   try {
-    const todos = await stockAPI('doc_op_config?select=datos');
-    let maxNum = 529;
+    let maxNum = 529; // piso histórico, antes de esto no se usaba este formato
+    const [todos, ops] = await Promise.all([
+      stockAPI('doc_op_config?select=datos').catch(function(){ return []; }),
+      stockAPI('ordenes_produccion?codigo_op_interno=not.is.null&select=codigo_op_interno').catch(function(){ return []; })
+    ]);
     (todos||[]).forEach(function(row){
       const cod = ((row.datos||{}).codigo_op_interno||'');
       const m = cod.match(/^OP(\d+)\/\d+$/);
+      if(m){ const n = parseInt(m[1]); if(n > maxNum) maxNum = n; }
+    });
+    (ops||[]).forEach(function(row){
+      const m = (row.codigo_op_interno||'').match(/^OP(\d+)\/\d+$/);
       if(m){ const n = parseInt(m[1]); if(n > maxNum) maxNum = n; }
     });
     const anio = new Date().getFullYear().toString().slice(-2);
@@ -7654,8 +7664,13 @@ async function crearOP(proyId){
 
   // Crear la OP en Supabase
   try {
+    // Número interno correlativo (ej: OP535/26) — antes había que tipearlo a mano
+    // en el Tablero; ahora se asigna solo al crear la OP.
+    const codigoOPInterno = await _autoGenerarCodigoOP();
+
     const opRes = await stockAPI('ordenes_produccion', 'POST', {
       op_numero: opNumero,
+      codigo_op_interno: codigoOPInterno || null,
       v14_orden: p.orden,
       cliente: p.cliente,
       producto_v14: prodDef ? prodDef.id : 'custom',
