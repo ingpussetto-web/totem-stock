@@ -932,6 +932,19 @@ async function loadDesvios(){
       }
     });
 
+    // 5b. Cantidades pendientes de arribo (OCs aprobadas o recibidas parcialmente)
+    const ocItemsRaw = await api('oc_items?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_recibida,ordenes_compra(estado)').catch(()=>[]);
+    const estadosOCPendientes = ['aprobada','recibida_parcial','color_pendiente'];
+    const pendienteArriboMap = {};
+    (ocItemsRaw||[]).forEach(oi=>{
+      const estadoOC = oi.ordenes_compra?.estado;
+      if(!estadosOCPendientes.includes(estadoOC)) return;
+      const pend = Math.max(0, (oi.cantidad||0) - (oi.cantidad_recibida||0));
+      if(pend<=0) return;
+      const sid = String(oi.sku_id);
+      pendienteArriboMap[sid] = (pendienteArriboMap[sid]||0) + pend;
+    });
+
     // 6. Agrupar demanda por SKU → por OP (incluyendo color_gabinete de la OP)
     const demanda = {}; // sid → { sku, qty_total, ops: {opId → {op, qty, color}} }
     activos.forEach(item => {
@@ -952,11 +965,13 @@ async function loadDesvios(){
       const stockMin = sku.stock_minimo || 0;
       const faltanteOPs = Math.max(0, data.qty_total - disponible);
       const faltanteMin = Math.max(0, stockMin - disponible);
+      const pendienteArribo = pendienteArriboMap[sid] || 0;
       // No alcanza con cubrir el mayor de los dos faltantes por separado: hay que comprar lo
-      // necesario para los proyectos Y además dejar el stock mínimo de reposición intacto.
-      // Ej: necesito 10 para proyectos, tengo 0 disponible, mínimo 1 → hay que comprar 11, no 10.
-      const aComprar = Math.max(0, data.qty_total + stockMin - disponible);
-      return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, faltanteOPs, ops: data.ops };
+      // necesario para los proyectos Y además dejar el stock mínimo de reposición intacto,
+      // descontando lo que ya está en camino por OCs aprobadas o parcialmente recibidas.
+      // Ej: necesito 10 para proyectos, tengo 0 disponible, mínimo 1, 3 en camino → comprar 8, no 11.
+      const aComprar = Math.max(0, data.qty_total + stockMin - disponible - pendienteArribo);
+      return { sid, sku, disponible, qty_total: data.qty_total, stockMin, aComprar, faltanteOPs, pendienteArribo, ops: data.ops };
     }).filter(f => f.aComprar > 0)
       .sort((a,b) => a.sku.nombre?.localeCompare(b.sku.nombre));
 
@@ -1003,7 +1018,7 @@ async function loadDesvios(){
 
       // Fila stock mínimo — para gabinetes mostrar por color
       let minRow = '';
-      if(f.stockMin > 0){
+      if(f.stockMin > 0 || f.pendienteArribo > 0){
         if(esGabinete && stockUidColorMap[f.sid]){
           const coloresStock = Object.entries(stockUidColorMap[f.sid])
             .map(([c,n])=>'<span style="margin-right:8px;"><span style="background:rgba(255,255,255,0.08);border-radius:3px;padding:1px 6px;">'+c+'</span> <span style="color:var(--amber);">'+n+'</span></span>')
@@ -1012,14 +1027,19 @@ async function loadDesvios(){
             +'📦 Stock mínimo: '+f.stockMin+' · Stock por color: '+coloresStock+'</div>';
         } else {
           // Porción del total "a comprar" que corresponde a reponer el stock mínimo
-          // (no solo lo que falta hoy contra el mínimo, sino lo que hace falta comprar de más
-          // para que, después de cubrir los proyectos, quede el mínimo intacto).
-          const deStock = Math.max(0, f.aComprar - f.faltanteOPs);
+          // (independiente de lo que ya esté en camino por OC): cuánto del mínimo no
+          // queda cubierto por el disponible actual una vez descontado lo demandado.
+          const deStock = Math.max(0, f.stockMin - Math.max(0, f.disponible - f.qty_total));
+          const partes = [];
+          if(deStock>0) partes.push(deStock+' de stock');
+          if(f.pendienteArribo>0) partes.push(f.pendienteArribo+' pendiente de arribo');
+          const detalle = partes.length ? ' ('+partes.join(', ')+')' : '';
           minRow = '<div style="padding:6px 0;border-top:1px solid rgba(255,179,64,0.15);font-size:11px;color:var(--text3);">'
             +'📦 Stock mínimo: '+f.stockMin
             +' · Disponible: '+f.disponible
-            +' → <span style="color:'+(deStock>0?'#ff5e5e':'var(--green)')+';">'
-            +(deStock>0?'faltan '+f.aComprar+' ('+deStock+' de stock)':'OK')+'</span></div>';
+            +'. Demandados '+f.qty_total
+            +' → <span style="color:'+(f.aComprar>0?'#ff5e5e':'var(--green)')+';">'
+            +(f.aComprar>0?'faltan '+f.aComprar+detalle:'OK')+'</span></div>';
         }
       }
 
@@ -1038,6 +1058,7 @@ async function loadDesvios(){
           +'<div style="text-align:center;min-width:80px;">'
             +'<div style="font-size:10px;color:var(--text3);margin-bottom:2px;">A COMPRAR</div>'
             +'<div style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:#ffb340;">'+f.aComprar+'</div>'
+            +(f.pendienteArribo>0?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">('+f.pendienteArribo+' en camino)</div>':'')
           +'</div>'
           +'<button class="btn" data-skuid="'+f.sid+'" data-nombre="'+encodeURIComponent(nombre)+'" data-variante="" onclick="event.stopPropagation();generarOCDesdeDesvioBtn(this)" style="font-size:11px;padding:4px 12px;border-color:#ffb340;color:#ffb340;white-space:nowrap;">🛒 Comprar</button>'
         +'</div>'
