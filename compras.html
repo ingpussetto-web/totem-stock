@@ -1961,6 +1961,7 @@ async function previsualizarOC(ocId){
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:6px;">Condiciones</div>
             <div style="font-size:13px;">${o.condicion_pago||'—'}</div>
             <div style="font-size:11px;color:var(--text2);margin-top:4px;">Moneda: ${o.moneda}</div>
+            ${o.moneda==='USD' && o.tipo_cambio ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">Tipo de cambio: $${Number(o.tipo_cambio).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
           </div>
         </div>
         <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
