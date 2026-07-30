@@ -603,6 +603,7 @@ textarea.form-input{resize:vertical;min-height:70px;}
     <div id="oc-preview-content" style="margin-bottom:16px;"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal('modal-preview')">Cerrar</button>
+      <button class="btn" id="btn-volver-edicion-oc" onclick="volverAEdicionOC()">✏ Volver a edición</button>
       <button class="btn" onclick="imprimirOC()">🖨 Imprimir / PDF</button>
       <button class="btn blue" onclick="compartirOCActual()">📱 Compartir por WA/Mail</button>
       <button class="btn solid-green" id="btn-aprobar-oc" onclick="aprobarOC()">✓ Aprobar OC</button>
@@ -1931,9 +1932,13 @@ async function previsualizarOC(ocId){
     const sym=o.moneda==='USD'?'USD ':'$';
 
     ocAprobandoId=ocId;
-    // Mostrar botón aprobar solo si está en borrador
+    // Mostrar botón aprobar y volver a edición solo si está en borrador
+    // (una OC ya aprobada puede tener recepciones parciales — editarla desde
+    // acá borraría y reinsertaría oc_items, perdiendo cantidad_recibida).
     const btnAprobar = document.getElementById('btn-aprobar-oc');
     if(btnAprobar) btnAprobar.style.display = o.estado==='borrador' ? '' : 'none';
+    const btnVolverEdicion = document.getElementById('btn-volver-edicion-oc');
+    if(btnVolverEdicion) btnVolverEdicion.style.display = o.estado==='borrador' ? '' : 'none';
 
     document.getElementById('oc-preview-content').innerHTML=`
       <div style="border:1px solid var(--border2);border-radius:var(--radius-lg);padding:20px;">
@@ -2112,6 +2117,13 @@ async function editarOC(ocId){
   }catch(e){toast('Error: '+e.message);}
 }
 
+
+function volverAEdicionOC(){
+  const id = window._previewOcId || ocAprobandoId;
+  if(!id){ toast('No se pudo identificar la OC'); return; }
+  closeModal('modal-preview');
+  editarOC(id);
+}
 
 function imprimirOC(){
   // Copiar contenido al print zone y disparar impresión
