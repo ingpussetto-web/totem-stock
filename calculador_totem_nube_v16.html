@@ -5731,7 +5731,7 @@ function renderItemsTemp(){
     +'</tbody></table>';
 }
 
-function guardarProyecto(){
+async function guardarProyecto(){
   const orden = document.getElementById('proy-orden').value.trim();
   const cliente = document.getElementById('proy-cliente').value.trim();
   const contacto = document.getElementById('proy-contacto')?.value.trim()||'';
@@ -5763,6 +5763,29 @@ function guardarProyecto(){
       const itemsNuevosPer = itemsTemp.filter(function(i){ return i.cat==='periferico'; });
       const cambioPer = JSON.stringify(itemsAntPer.map(function(i){ return {desc:i.desc,cant:i.cant}; }))
                      !== JSON.stringify(itemsNuevosPer.map(function(i){ return {desc:i.desc,cant:i.cant}; }));
+
+      // Si cambió el equipo (producto) y este proyecto ya tiene una OP generada,
+      // avisar antes de guardar: la OP ya creada no se actualiza sola, y quedan
+      // desalineados en silencio (el Cotizador muestra un producto distinto al
+      // que realmente se armó y se cargó en la Orden de Producción).
+      if(cambioEquipos && orden){
+        try{
+          const opsExist = await stockAPI('ordenes_produccion?v14_orden=eq.'+encodeURIComponent(orden)+'&select=op_numero,estado,producto_nombre&limit=1');
+          if(opsExist && opsExist.length){
+            const opEx = opsExist[0];
+            const sigue = confirm(
+              '⚠ Este proyecto ya tiene una Orden de Producción generada:\n'
+              +'· '+opEx.op_numero+' ('+opEx.estado+') — producto guardado ahí: "'+opEx.producto_nombre+'"\n\n'
+              +'Si guardás este cambio de equipo, la OP ya creada NO se actualiza sola: van a quedar '
+              +'desalineados (el Cotizador va a mostrar un producto distinto al que realmente se armó).\n\n'
+              +'¿Confirmás guardar igual?'
+            );
+            if(!sigue) return;
+          }
+        }catch(e){
+          if(!confirm('⚠ No se pudo verificar si este proyecto tiene una OP asociada ('+e.message+').\n\n¿Guardás igual bajo tu responsabilidad?')) return;
+        }
+      }
 
       if(cambioEquipos || cambioPer){
         // Guardar versión anterior
