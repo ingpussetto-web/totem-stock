@@ -374,16 +374,19 @@ async function loadPendientes(){
   try{
     // OCs aprobadas o con recepción parcial — SIN datos de proveedor ni precio
     // OCs con entrega pendiente
-    const ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago,proveedores(razon_social)&order=created_at.asc');
+    let ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago,proveedores(razon_social)&order=created_at.asc');
     // Recepciones pendientes de conteo
     const recsPendientes = await api('recepciones?estado=eq.pendiente_conteo&select=id,recepcion_numero,oc_id,created_at,ordenes_compra(oc_numero,proveedores(razon_social))').catch(()=>[]);
 
     // Contar items por OC
     for(let oc of ocs){
-      const items = await api(`oc_items?oc_id=eq.${oc.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
+      const items = await api(`oc_items?oc_id=eq.${oc.id}&select=id,nombre,cantidad,cantidad_recibida,color,skus(categorias(nombre))`);
       oc._items = items||[];
       oc._pendientes = items?.reduce((s,i)=>s+(i.cantidad-(i.cantidad_recibida||0)),0)||0;
+      // Las OCs de Servicios (honorarios, viáticos, etc.) no se inventarían — no esperan recepción física
+      oc._esServicio = items?.length>0 && items.every(i=>i.skus?.categorias?.nombre==='Servicios');
     }
+    ocs = ocs.filter(o=>!o._esServicio);
 
     // Métricas
     document.getElementById('m-pendientes').textContent = ocs.filter(o=>o.estado==='aprobada').length;

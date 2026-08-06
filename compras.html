@@ -689,6 +689,7 @@ let ocs = [];
 let proveedores = [];
 let categorias = [];
 let skus = [];
+let proyectosAsignables = []; // proyectos_cotizador, para asignar gastos de Servicios
 let lineas = []; // líneas de la OC en edición
 let provSeleccionado = null;
 let pagoSeleccionado = 'transferencia_total';
@@ -1127,10 +1128,11 @@ async function checkConnection(){
 // ─── LOAD DATA ──────────────────────────────────────────────
 async function loadData(){
   try{
-    [categorias, skus, proveedores] = await Promise.all([
+    [categorias, skus, proveedores, proyectosAsignables] = await Promise.all([
       api('categorias?select=*&order=orden.asc'),
       api('skus?select=*,categorias(nombre)&activo=eq.true&order=nombre.asc'),
-      api('proveedores?select=*&order=razon_social.asc').catch(()=>[])
+      api('proveedores?select=*&order=razon_social.asc').catch(()=>[]),
+      api('proyectos_cotizador?estado=neq.cancelado&select=id,orden,cliente,anio,mes&order=anio.desc,mes.desc').catch(()=>[])
     ]);
   }catch(e){console.error(e);}
 }
@@ -1144,9 +1146,11 @@ async function loadOCs(){
     // Cargar items para todas las OCs (resumen en card)
     for(const o of ocs){
       try{
-        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color`);
+        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,asignacion_proyecto_orden,asignacion_proyecto_cliente,skus(categorias(nombre))`);
         o._itemsTodos = items||[];
-      }catch(e){ o._itemsTodos=[]; }
+        // Es una OC de Servicios si TODOS sus ítems son de esa categoría (no se inventaría, no pasa por Recepción)
+        o._esServicio = o._itemsTodos.length>0 && o._itemsTodos.every(i=>i.skus?.categorias?.nombre==='Servicios');
+      }catch(e){ o._itemsTodos=[]; o._esServicio=false; }
     }
     // Cargar pagos para todas las OCs
     try{
@@ -1268,12 +1272,17 @@ function renderOCs(){
     const insumosResumen = o._itemsTodos?.length
       ? o._itemsTodos.map(i=>`${i.nombre}${i.color?' ('+i.color+')':''} x${i.cantidad}`).join(', ')
       : '';
+    // Asignación (solo Servicios): a qué proyecto(s) o "toda la empresa" corresponde el gasto
+    const asignacionResumen = o._esServicio && o._itemsTodos?.length
+      ? [...new Set(o._itemsTodos.map(i=>i.asignacion_proyecto_cliente ? i.asignacion_proyecto_orden+' — '+i.asignacion_proyecto_cliente : 'Toda la empresa'))].join(', ')
+      : '';
     return `<div class="oc-card ${o.estado}">
       <div class="oc-header">
         <div>
-          <div class="oc-numero">${o.oc_numero} · ${fecha}</div>
+          <div class="oc-numero">${o.oc_numero} · ${fecha} ${o._esServicio?'<span class="badge" style="background:rgba(120,120,255,0.15);color:#8f8fff;border-color:rgba(120,120,255,0.35);">🧾 Servicio</span>':''}</div>
           <div class="oc-proveedor">${o.proveedores?.razon_social||'—'}</div>
           <div class="oc-meta">${insumosResumen||o.proveedores?.contacto||''} ${o.condicion_pago?'· '+o.condicion_pago:''}</div>
+          ${asignacionResumen?`<div class="oc-meta" style="color:var(--text3);">📌 Asignado a: ${asignacionResumen}</div>`:''}
         </div>
         <div style="text-align:right;">
           <span class="badge ${o.estado}">${estadoLabel[o.estado]||o.estado}</span>
@@ -1304,7 +1313,8 @@ function renderOCs(){
         ${o.estado==='borrador'?`<button class="btn sm amber" onclick="editarOC(${o.id})">✏ Editar</button>`:''}
         <button class="btn sm" onclick="previsualizarOC(${o.id})">👁 Ver OC</button>
         ${o.estado==='borrador'?`<button class="btn sm solid-green" onclick="aprobarOCDirecto(${o.id})">✓ Aprobar</button>`:''}
-        ${o.estado==='aprobada'||o.estado==='recibida_parcial'?`<button class="btn sm blue" onclick="compartirOCId(${o.id})">📱 Compartir</button>`:''}
+        ${o._esServicio&&o.estado==='aprobada'?`<button class="btn sm solid-green" onclick="cerrarOCServicio(${o.id})" title="No requiere recepción física">✓ Cerrar (gasto registrado)</button>`:''}
+        ${!o._esServicio&&(o.estado==='aprobada'||o.estado==='recibida_parcial')?`<button class="btn sm blue" onclick="compartirOCId(${o.id})">📱 Compartir</button>`:''}
         ${(o.estado==='cerrada'||o.estado==='recibida_parcial')?`<button class="btn sm amber" onclick="verDesvios(${o.id})">⚠ Ver desvíos</button>`:''}        ${o.estado==='recibida_parcial'?`<button class="btn sm amber" onclick="cerrarConDesvio(${o.id})">⚠ Cerrar con desvío</button>`:''}
         ${o.estado!=='cancelada'&&o.estado!=='cerrada'?`<button class="btn sm red" onclick="cancelarOC(${o.id})">✕ Cancelar</button>`:''}
       </div>
@@ -1706,6 +1716,8 @@ async function agregarLinea(){
     iva_pct:21,
     precio_unitario_neto:0,
     color:'',
+    asignacion_proyecto_orden: null,
+    asignacion_proyecto_cliente: null,
     _variantes: variantes,
     _nuevo:true
   });
@@ -1714,6 +1726,22 @@ async function agregarLinea(){
   document.getElementById('add-sku-sel').disabled=true;
   renderLineas();
   calcularTotales();
+}
+
+function esLineaServicio(l){
+  const sku = skus.find(s=>s.id===l.sku_id);
+  return sku?.categorias?.nombre === 'Servicios';
+}
+
+function asignarLineaProyecto(i, orden){
+  if(!orden){
+    lineas[i].asignacion_proyecto_orden = null;
+    lineas[i].asignacion_proyecto_cliente = null;
+    return;
+  }
+  const p = proyectosAsignables.find(p=>p.orden===orden);
+  lineas[i].asignacion_proyecto_orden = orden;
+  lineas[i].asignacion_proyecto_cliente = p?.cliente || null;
 }
 
 function renderLineas(){
@@ -1751,6 +1779,14 @@ function renderLineas(){
       </select>
       <div class="linea-total" id="lt-${i}">$${formatNum((l.precio_unitario_neto||0)*l.cantidad)}</div>
       <button class="linea-del" onclick="quitarLinea(${i})">×</button>
+      ${esLineaServicio(l) ? `
+      <div style="grid-column:1/-1;margin-top:2px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">🧾 Asignar a:</span>
+        <select class="linea-input" style="max-width:320px;" onchange="asignarLineaProyecto(${i},this.value)">
+          <option value="" ${!l.asignacion_proyecto_orden?'selected':''}>Toda la empresa</option>
+          ${proyectosAsignables.map(p=>`<option value="${p.orden}" ${l.asignacion_proyecto_orden===p.orden?'selected':''}>${p.orden} — ${p.cliente}</option>`).join('')}
+        </select>
+      </div>` : ''}
       ${l._variantes && l._variantes.length > 0
         ? `<button onclick="agregarVariante(${i})" title="Agregar otra variante de este insumo"
             style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;margin-left:2px;">+var</button>`
@@ -1911,7 +1947,9 @@ async function guardarOC(estado, previsualizar=false){
       precio_unitario_neto:l.precio_unitario_neto||0,
       precio_unitario_bruto:l.precio_unitario_bruto||0,
       iva_pct:l.iva_pct,
-      total_neto:(l.precio_unitario_neto||0)*l.cantidad
+      total_neto:(l.precio_unitario_neto||0)*l.cantidad,
+      asignacion_proyecto_orden:l.asignacion_proyecto_orden||null,
+      asignacion_proyecto_cliente:l.asignacion_proyecto_cliente||null
     })));
 
     closeModal('modal-oc');
@@ -2087,6 +2125,15 @@ async function aprobarOCDirecto(ocId){
     await api(`ordenes_compra?id=eq.${ocId}`,'PATCH', patch);
     await registrarHistorialPrecios(ocId);
     toast('OC aprobada ✓');
+    loadOCs();
+  }catch(e){toast('Error: '+e.message);}
+}
+
+async function cerrarOCServicio(ocId){
+  if(!confirm('¿Cerrar esta OC de Servicios? Se registra como gasto cerrado — no pasa por Recepción, no genera stock.')) return;
+  try{
+    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{estado:'cerrada', updated_at:new Date().toISOString()});
+    toast('OC de Servicios cerrada ✓');
     loadOCs();
   }catch(e){toast('Error: '+e.message);}
 }
