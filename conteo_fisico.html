@@ -391,7 +391,7 @@ async function iniciarConteo(){
 // ─── TRACKING UID ──────────────────────────────────────────────────────────
 async function renderUID(skuId, nombre, content){
   // Todas las unidades físicas del SKU
-  const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variante_id,variantes(valor)&order=uid.asc`).catch(()=>[]);
+  const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variante_id,notas,variantes(valor)&order=uid.asc`).catch(()=>[]);
 
   const emitidas   = (unidades||[]).length;
   const enStock    = (unidades||[]).filter(u=>u.estado==='stock').length;
@@ -417,6 +417,10 @@ async function renderUID(skuId, nombre, content){
     variantesUIDArray = Object.values(porVariante).sort((a,b)=>a.nombre.localeCompare(b.nombre));
     _uidsEnStockPorVariante = {};
     variantesUIDArray.forEach(v=>{ _uidsEnStockPorVariante[v.id ?? 'null'] = v.uidsEnStock; });
+  } else {
+    // SKU sin variantes (ej: Mini PC) — igual guardamos la lista de UID en stock,
+    // para poder ofrecer el mismo picker de "marcar como baja" en el modo agregado.
+    _uidsEnStockPorVariante = { 'null': (unidades||[]).filter(u=>u.estado==='stock').map(u=>u.uid) };
   }
 
   // Salidas: op_bom_items con uid_asignado
@@ -518,7 +522,7 @@ async function renderUID(skuId, nombre, content){
                   <td style="font-family:'DM Mono',monospace;font-size:11px;">${u.uid}</td>
                   <td style="font-size:11px;color:var(--text3);">${u.variantes?.valor||'—'}</td>
                   <td><span style="color:${estadoColor};font-size:11px;font-weight:600;">${estadoLabel}</span></td>
-                  <td style="font-size:11px;">${op ? `${op.op_numero} · ${op.cliente||'—'} <span class="badge ${op.estado}">${op.estado}</span>` : '—'}</td>
+                  <td style="font-size:11px;">${op ? `${op.op_numero} · ${op.cliente||'—'} <span class="badge ${op.estado}">${op.estado}</span>` : (u.estado==='baja' && u.notas ? `<span style="color:var(--text3);font-style:italic;" title="${u.notas.replace(/"/g,'&quot;')}">${u.notas.length>40?u.notas.slice(0,40)+'…':u.notas}</span>` : '—')}</td>
                 </tr>`;
               }).join('')
           }
@@ -993,6 +997,7 @@ function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockU
                data-teorico="${enStockUID !== undefined ? enStockUID : teorico}" data-tracking="${tracking}">
       </div>
       <div id="conclusion-box"></div>
+      <div id="baja-picker-agregado"></div>
       <div id="ajuste-section" class="ajuste-section">
         <div id="motivo-wrap">
           <label class="motivo-label" id="motivo-label">Motivo del ajuste (obligatorio):</label>
@@ -1027,6 +1032,8 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
   const box = document.getElementById('conclusion-box');
   const ajusteSection = document.getElementById('ajuste-section');
   const diferencia = conteo - teorico;
+  const bajaPickerReset = document.getElementById('baja-picker-agregado');
+  if(bajaPickerReset) bajaPickerReset.innerHTML = '';
 
   let tipo, icon, titulo, detalle;
 
@@ -1061,14 +1068,29 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
     // Cargar selector de variante si el SKU las tiene
     setTimeout(() => cargarSelectorVarianteUID(skuId, diferencia), 50);
   } else if(esUID && diferencia < 0){
-    // UID con unidades de menos: UIDs registrados que no se encontraron físicamente
+    // UID con unidades de menos: pedimos elegir cuáles UID puntuales no aparecieron
+    const faltan = Math.abs(diferencia);
     tipo = 'critico';
     icon = '🔴';
-    titulo = `Faltan ${Math.abs(diferencia)} unidad(es) físicas`;
+    titulo = `Faltan ${faltan} unidad(es) físicas`;
     detalle = `El sistema registra ${teorico} unidades pero solo contaste ${conteo}. `
-      + `Hay ${Math.abs(diferencia)} UID(s) que no se encontraron físicamente. `
-      + `Revisá el detalle de unidades arriba para identificar cuáles faltan.`;
+      + `Marcá abajo cuáles UID no aparecieron para darlas de baja con trazabilidad.`;
     ajusteSection.style.display = 'block';
+    const disponibles = _uidsEnStockPorVariante?.['null'] || [];
+    const bajaPicker = document.getElementById('baja-picker-agregado');
+    if(bajaPicker){
+      bajaPicker.innerHTML = `
+        <div style="margin-top:10px;padding:8px;background:rgba(255,90,90,0.08);border:1px solid rgba(255,90,90,0.3);border-radius:6px;">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:4px;">Elegí los ${faltan} UID que no aparecieron (marcá exactamente ${faltan}):</div>
+          ${disponibles.length ? disponibles.map(uid=>`
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0;cursor:pointer;">
+              <input type="checkbox" class="chk-uid-baja" data-variante-id="null" value="${uid}">
+              <span style="font-family:'DM Mono',monospace;">${uid}</span>
+            </label>
+          `).join('') : '<span style="font-size:11px;color:var(--text3);">No hay UID en stock registrados para este insumo.</span>'}
+        </div>
+      `;
+    }
   } else if(Math.abs(diferencia) <= 2){
     tipo = 'alerta';
     icon = '⚠️';
@@ -1116,7 +1138,9 @@ function mostrarConclusion(conteo, teorico, nombre, skuId){
 function limpiarConclusion(){
   const box = document.getElementById('conclusion-box');
   const ajusteSection = document.getElementById('ajuste-section');
+  const bajaPicker = document.getElementById('baja-picker-agregado');
   if(box) box.innerHTML = '';
+  if(bajaPicker) bajaPicker.innerHTML = '';
   if(ajusteSection) ajusteSection.style.display = 'none';
 }
 
@@ -1177,6 +1201,18 @@ async function confirmarAjuste(){
 
   const input = document.getElementById('input-conteo');
   const tracking = conclusion.dataset.tracking || input?.dataset?.tracking || '';
+
+  // Si es UID con diferencia negativa, exigir que se hayan marcado exactamente
+  // los UID puntuales que no aparecieron (misma lógica que el modo por variante).
+  let uidsBaja = [];
+  if(tracking === 'uid' && diferencia < 0){
+    const marcados = [...document.querySelectorAll('.chk-uid-baja[data-variante-id="null"]:checked')];
+    if(marcados.length !== Math.abs(diferencia)){
+      alert(`Tenés que marcar exactamente ${Math.abs(diferencia)} UID como no encontrados (marcaste ${marcados.length}).`);
+      return;
+    }
+    uidsBaja = marcados.map(c=>c.value);
+  }
 
   try {
     const usuario = localStorage.getItem('tn_usuario') || 'Gerencia';
@@ -1244,6 +1280,14 @@ async function confirmarAjuste(){
     // varianteUIDId puede ser null para SKUs sin variantes (ej: Mini PC)
     if(tracking === 'uid' && diferencia > 0){
       await generarEtiquetasDesdeConteo(skuId, nombre, varianteUIDId, diferencia);
+    } else if(tracking === 'uid' && diferencia < 0 && uidsBaja.length){
+      // Dar de baja los UID puntuales elegidos, con el motivo escrito en la propia unidad
+      const fechaBaja = new Date().toLocaleDateString('es-AR');
+      const notaBaja = `Baja por conteo físico — ${fechaBaja} — ${motivo}`;
+      for(const uid of uidsBaja){
+        await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', { estado: 'baja', notas: notaBaja });
+      }
+      setTimeout(() => iniciarConteo(), 800);
     } else {
       setTimeout(() => iniciarConteo(), 800);
     }
@@ -1441,9 +1485,13 @@ async function confirmarAjusteVariantesUID(skuId, nombre){
         // Unidades sin etiqueta encontradas → generar UID nuevos para esa variante
         await generarEtiquetasDesdeConteo(skuId, nombre, op.varianteId, op.dif);
       } else {
-        // Unidades que no aparecieron → dar de baja los UID puntuales elegidos
+        // Unidades que no aparecieron → dar de baja los UID puntuales elegidos,
+        // dejando el motivo escrito en la propia unidad (trazabilidad por etiqueta,
+        // no solo en el log agregado de stock_ajustes).
+        const fechaBaja = new Date().toLocaleDateString('es-AR');
+        const notaBaja = `Baja por conteo físico (${op.varianteNombre}) — ${fechaBaja} — ${motivo}`;
         for(const uid of op.uidsBaja){
-          await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', { estado: 'baja' });
+          await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', { estado: 'baja', notas: notaBaja });
         }
       }
     }
