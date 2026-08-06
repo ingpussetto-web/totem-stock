@@ -4945,6 +4945,13 @@ async function abrirModalOP(cotId){
     return (i.nombre||'').toLowerCase().includes('impresora') || (i.desc||'').toLowerCase().includes('impresora') || (i.nombre||'').toLowerCase().includes('impr.');
   }) || (cfg.impresora === 'SI' && c.items.some(function(i){ return (i.cat||'')==='equipo'; }));
 
+  // Pre-selección de Accesorio 1/2/3 según lo que sugiere la categoría (el usuario puede cambiarlo)
+  const ACCESORIOS_OPCIONES = ['N/A','Impresora térmica','Lector QR','Lector banda magnética','Cámara Web','Pen Drive','Parlantes','Smart Point'];
+  const accesoriosDefault = [];
+  if(tieneImpresora) accesoriosDefault.push('Impresora térmica');
+  if(cfg.lectorQR==='SI') accesoriosDefault.push('Lector QR');
+  if(cfg.camara==='SI') accesoriosDefault.push('Cámara Web');
+
   // Detectar software desde licencia
   const tieneГП = c.licencia && (c.licDesc||'').toLowerCase().includes('gesti');
   const tieneCUOS = c.licencia && (c.licDesc||'').toLowerCase().includes('cuos');
@@ -5037,9 +5044,9 @@ async function abrirModalOP(cotId){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         ${opCampo('Mini PC','op-minipc','select',['Beelink N95 8GB 256SSD','Vyse N95 8GB 256SSD','Beelink N5095 8GB 256SSD','Sin Mini PC'],minipcVal)}
         ${opCampo('Sistema Operativo','op-so','select',['Windows 11','SO-Totem Nube','No aplica'],tieneMiniPC?'Windows 11':'No aplica')}
-        ${opCampo('Impresora térmica','op-impresora','select',['SI','NO'],tieneImpresora?'SI':cfg.impresora||'NO')}
-        ${opCampo('Lector QR','op-qr','select',['NO','SI'],'NO')}
-        ${opCampo('Cámara web','op-camara','select',['SI','NO'],cfg.camara)}
+        ${opCampo('Accesorio 1','op-acc1','select',ACCESORIOS_OPCIONES,accesoriosDefault[0]||'N/A')}
+        ${opCampo('Accesorio 2','op-acc2','select',ACCESORIOS_OPCIONES,accesoriosDefault[1]||'N/A')}
+        ${opCampo('Accesorio 3','op-acc3','select',ACCESORIOS_OPCIONES,accesoriosDefault[2]||'N/A')}
       </div>
       ${cfg.playerVisible ? `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
@@ -5322,9 +5329,9 @@ async function guardarDocOP(){
     obs_estructura: document.getElementById('op-obs-estructura')?.value || '',
     mini_pc: document.getElementById('op-minipc')?.value || '',
     sistema_operativo: document.getElementById('op-so')?.value || '',
-    impresora: document.getElementById('op-impresora')?.value || '',
-    camara: document.getElementById('op-camara')?.value || '',
-    lector_qr: document.getElementById('op-qr')?.value || '',
+    accesorio1: document.getElementById('op-acc1')?.value || '',
+    accesorio2: document.getElementById('op-acc2')?.value || '',
+    accesorio3: document.getElementById('op-acc3')?.value || '',
     player: document.getElementById('op-player')?.value || '',
     cantidad_players: document.getElementById('op-qty-player')?.value || '',
     tipo_pantalla: document.getElementById('op-tipo-pantalla')?.value || '',
@@ -5391,13 +5398,13 @@ async function cargarDocOP(cotNumero){
     if(!rows || rows.length === 0) return;
     const campos = ['op-cliente','op-contacto','op-fecha-apro','op-fecha-comp','op-producto','op-cantidad',
       'op-material','op-forma','op-pantalla','op-tactil','op-color','op-plano','op-obs-estructura',
-      'op-minipc','op-so','op-impresora','op-camara','op-qr','op-player','op-qty-player',
+      'op-minipc','op-so','op-acc1','op-acc2','op-acc3','op-player','op-qty-player',
       'op-tipo-pantalla','op-otros','op-ploteo-vidrio','op-ploteo-totem','op-obs-ploteo',
       'op-obs-accesorios','op-obs-software',
       'op-sw','op-ajustes','op-obs-adicionales'];
     const keys = ['cliente','contacto','fecha_aprobacion','fecha_compromiso','producto','cantidad',
       'material','forma','pantalla','tactil','color','plano','obs_estructura',
-      'mini_pc','sistema_operativo','impresora','camara','lector_qr','player','cantidad_players',
+      'mini_pc','sistema_operativo','accesorio1','accesorio2','accesorio3','player','cantidad_players',
       'tipo_pantalla','otros_accesorios','ploteo_vidrio','ploteo_totem','obs_ploteo',
       'obs_accesorios','obs_software',
       'config_software','ajustes_medida','obs_adicionales'];
