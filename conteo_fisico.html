@@ -245,6 +245,7 @@ function fmt_fecha(str){
 // ─── Cargar lista de SKUs ───────────────────────────────────────────────────
 let _todosLosSkus = [];
 let _ultimosConteos = {};
+let _uidsEnStockPorVariante = {}; // varianteId('null' si no tiene) -> [uid,...] en stock, para el picker de "marcar como baja"
 
 async function cargarSkus(){
   try {
@@ -390,7 +391,7 @@ async function iniciarConteo(){
 // ─── TRACKING UID ──────────────────────────────────────────────────────────
 async function renderUID(skuId, nombre, content){
   // Todas las unidades físicas del SKU
-  const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variantes(valor)&order=uid.asc`).catch(()=>[]);
+  const unidades = await api(`unidades?sku_id=eq.${skuId}&select=uid,estado,variante_id,variantes(valor)&order=uid.asc`).catch(()=>[]);
 
   const emitidas   = (unidades||[]).length;
   const enStock    = (unidades||[]).filter(u=>u.estado==='stock').length;
@@ -398,6 +399,25 @@ async function renderUID(skuId, nombre, content){
   const producidas = (unidades||[]).filter(u=>u.estado==='producido').length;
   const baja       = (unidades||[]).filter(u=>u.estado==='baja').length;
   const teorico    = enStock + asignadas;
+
+  // Desglose por variante (ej: Vyse / XPrinter) — solo si el SKU maneja variantes
+  const tieneVariantesUID = (unidades||[]).some(u=>u.variante_id!=null);
+  let variantesUIDArray = [];
+  if(tieneVariantesUID){
+    const porVariante = {};
+    (unidades||[]).forEach(u=>{
+      const key = u.variante_id ?? 'null';
+      if(!porVariante[key]) porVariante[key] = { id: u.variante_id, nombre: u.variantes?.valor || 'Sin variante', enStock:0, asignadas:0, producidas:0, baja:0, uidsEnStock:[] };
+      const g = porVariante[key];
+      if(u.estado==='stock'){ g.enStock++; g.uidsEnStock.push(u.uid); }
+      else if(u.estado==='reservado') g.asignadas++;
+      else if(u.estado==='producido') g.producidas++;
+      else if(u.estado==='baja') g.baja++;
+    });
+    variantesUIDArray = Object.values(porVariante).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+    _uidsEnStockPorVariante = {};
+    variantesUIDArray.forEach(v=>{ _uidsEnStockPorVariante[v.id ?? 'null'] = v.uidsEnStock; });
+  }
 
   // Salidas: op_bom_items con uid_asignado
   const bomItems = await api(
@@ -457,9 +477,28 @@ async function renderUID(skuId, nombre, content){
         ${baja>0?`<div class="metric red"><div class="metric-label">Baja</div><div class="metric-value">${baja}</div></div>`:''}
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">
-        <strong style="color:var(--text);">Teórico en depósito: ${teorico}</strong> 
+        <strong style="color:var(--text);">Teórico en depósito: ${teorico}</strong>
         <span style="color:var(--text3);">(stock ${enStock} + asignadas ${asignadas})</span>
       </div>
+
+      ${tieneVariantesUID ? `
+      <div class="panel-title">🎨 Desglose por variante</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:18px;">
+        ${variantesUIDArray.map(v=>`
+          <div class="variante-card" style="margin-bottom:0;">
+            <div class="variante-header" style="margin-bottom:6px;">
+              <span class="variante-nombre">● ${v.nombre}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text2);line-height:1.7;">
+              En stock: <strong style="color:var(--green);">${v.enStock}</strong><br>
+              Asignadas a OPs: <strong style="color:var(--amber);">${v.asignadas}</strong><br>
+              Producidas/salidas: <strong style="color:var(--text2);">${v.producidas}</strong>
+              ${v.baja>0?`<br>Baja: <strong style="color:var(--red);">${v.baja}</strong>`:''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      ` : ''}
 
       <!-- Tabla de unidades -->
       <div class="panel-title">📋 Detalle de unidades emitidas</div>
@@ -500,12 +539,12 @@ async function renderUID(skuId, nombre, content){
       </table>` : ''}
 
       <!-- Conteo físico -->
-      ${renderConteoInput(skuId, nombre, teorico, 'uid', null, enStock, asignadas)}
+      ${renderConteoInput(skuId, nombre, teorico, 'uid', null, enStock, asignadas, null, variantesUIDArray)}
     </div>
   `;
 
-  // Bind input
-  if(!READONLY) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(enStock, nombre, skuId));
+  // Bind input (solo en modo agregado — en modo por variante cada input tiene su propio oninput)
+  if(!READONLY && !tieneVariantesUID) document.getElementById('input-conteo').addEventListener('input', ()=>calcularConclusionUID(enStock, nombre, skuId));
 }
 
 // ─── TRACKING CANTIDAD ─────────────────────────────────────────────────────
@@ -850,11 +889,51 @@ async function renderCantidad(skuId, nombre, content){
 }
 
 // ─── HTML del input de conteo ──────────────────────────────────────────────
-function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockUID, asignadasUID, disponiblePorVariante){
+function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockUID, asignadasUID, disponiblePorVariante, variantesUID){
   if(READONLY){
     return `
       <div class="conteo-section" style="opacity:0.5;pointer-events:none;">
         <div class="conteo-title">🔒 Solo consulta — saldo teórico en sistema: ${teorico}</div>
+      </div>
+    `;
+  }
+  // UID con variantes (ej: impresoras Vyse / XPrinter) → un conteo por variante
+  if(tracking==='uid' && variantesUID && variantesUID.length){
+    const variantesHtmlUID = variantesUID.map(v=>{
+      const varKey = v.id ?? 'null';
+      return `
+      <div class="variante-card">
+        <div class="variante-header">
+          <span class="variante-nombre">● ${v.nombre}</span>
+          <span class="variante-stock">En stock: ${v.enStock}</span>
+        </div>
+        <div class="conteo-row">
+          <span class="conteo-label">Conteo físico:</span>
+          <input type="number" class="conteo-input input-variante-uid" min="0" placeholder="0"
+                 data-variante-id="${varKey}" data-variante-nombre="${(v.nombre||'').replace(/"/g,'&quot;')}"
+                 data-teorico="${v.enStock}"
+                 oninput="calcularConclusionVariantesUID(${skuId},'${nombre.replace(/'/g,"\\'")}')">
+        </div>
+        <div class="variante-conclusion" id="concl-var-uid-${varKey}"></div>
+        <div id="baja-picker-${varKey}"></div>
+      </div>
+    `}).join('');
+    return `
+      <div class="conteo-section">
+        <div class="conteo-title">🔢 Conteo por variante</div>
+        <input type="hidden" id="input-conteo" data-sku-id="${skuId}" data-nombre="${nombre.replace(/"/g,'&quot;')}" data-teorico="${teorico}" data-tracking="${tracking}">
+        ${variantesHtmlUID}
+        <div id="conclusion-box"></div>
+        <div id="ajuste-section" class="ajuste-section">
+          <div id="motivo-wrap">
+            <label class="motivo-label" id="motivo-label">Motivo del ajuste (obligatorio si hay diferencias):</label>
+            <textarea id="input-motivo" class="motivo-input" placeholder="Ej: Unidades dañadas, robo, error de carga..."></textarea>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn green" id="btn-confirmar-ajuste" onclick="confirmarAjusteVariantesUID(${skuId},'${nombre.replace(/'/g,"\\'")}')">✓ Confirmar conteo</button>
+            <button class="btn" onclick="cancelarAjuste()">Cancelar</button>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -1256,6 +1335,132 @@ async function confirmarAjusteVariantes(skuId, nombre){
     inputs.forEach(i=>i.value='');
     // Recargar historial
     setTimeout(() => iniciarConteo(), 800);
+  } catch(e){ alert('Error: '+e.message); }
+}
+
+// ─── Conteo por variante — tracking UID (ej: impresoras Vyse / XPrinter) ────
+function calcularConclusionVariantesUID(skuId, nombre){
+  const inputs = document.querySelectorAll('.input-variante-uid');
+  let hayDiferencia = false;
+  inputs.forEach(inp=>{
+    const varKey = inp.dataset.varianteId || 'null';
+    const box = document.getElementById(`concl-var-uid-${varKey}`);
+    const bajaBox = document.getElementById(`baja-picker-${varKey}`);
+    const val = inp.value.trim();
+    if(bajaBox) bajaBox.innerHTML = '';
+    if(val === ''){ if(box) box.innerHTML=''; return; }
+    const contado = parseInt(val);
+    const teorico = parseInt(inp.dataset.teorico)||0;
+    const dif = contado - teorico;
+    if(!box) return;
+    if(dif === 0){
+      box.innerHTML = `<span style="font-size:11px;color:var(--green);">✓ Coincide</span>`;
+    } else if(dif > 0){
+      hayDiferencia = true;
+      box.innerHTML = `<span style="font-size:11px;color:var(--amber);">+${dif} sin etiqueta — al confirmar se generan ${dif} UID nuevo(s) de "${inp.dataset.varianteNombre}"</span>`;
+    } else {
+      hayDiferencia = true;
+      const faltan = Math.abs(dif);
+      const disponibles = _uidsEnStockPorVariante[varKey] || [];
+      box.innerHTML = `<span style="font-size:11px;color:var(--red);">Faltan ${faltan} — marcá cuáles abajo</span>`;
+      if(bajaBox){
+        bajaBox.innerHTML = `
+          <div style="margin-top:6px;padding:8px;background:rgba(255,90,90,0.08);border:1px solid rgba(255,90,90,0.3);border-radius:6px;">
+            <div style="font-size:10px;color:var(--text2);margin-bottom:4px;">Elegí los ${faltan} UID de "${inp.dataset.varianteNombre}" que no aparecieron:</div>
+            ${disponibles.length ? disponibles.map(uid=>`
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0;cursor:pointer;">
+                <input type="checkbox" class="chk-uid-baja" data-variante-id="${varKey}" value="${uid}" onchange="calcularConclusionVariantesUID(${skuId},'${nombre.replace(/'/g,"\\'")}')">
+                <span style="font-family:'DM Mono',monospace;">${uid}</span>
+              </label>
+            `).join('') : '<span style="font-size:11px;color:var(--text3);">No hay UID en stock registrados para esta variante.</span>'}
+          </div>
+        `;
+      }
+    }
+  });
+  const alguno = [...inputs].some(i=>i.value.trim()!=='');
+  const ajusteSection = document.getElementById('ajuste-section');
+  if(alguno && ajusteSection) ajusteSection.style.display='block';
+  const motivoWrap = document.getElementById('motivo-wrap');
+  if(motivoWrap) motivoWrap.style.display = hayDiferencia ? 'block' : 'none';
+  const btn = document.getElementById('btn-confirmar-ajuste');
+  if(btn) btn.textContent = hayDiferencia ? '✓ Confirmar ajuste' : '✓ Registrar conteo sin novedad';
+}
+
+async function confirmarAjusteVariantesUID(skuId, nombre){
+  const inputs = document.querySelectorAll('.input-variante-uid');
+  const motivo = document.getElementById('input-motivo')?.value.trim()||'';
+
+  // Armar la lista de operaciones y validar antes de escribir nada
+  const ops = [];
+  for(const inp of inputs){
+    const val = inp.value.trim();
+    if(val === '') continue;
+    const contado = parseInt(val);
+    const teorico = parseInt(inp.dataset.teorico)||0;
+    const dif = contado - teorico;
+    const varKey = inp.dataset.varianteId || 'null';
+    const varianteId = varKey==='null' ? null : parseInt(varKey);
+    const varianteNombre = inp.dataset.varianteNombre;
+    let uidsBaja = [];
+    if(dif < 0){
+      const marcados = [...document.querySelectorAll(`.chk-uid-baja[data-variante-id="${varKey}"]:checked`)];
+      if(marcados.length !== Math.abs(dif)){
+        alert(`Para "${varianteNombre}" tenés que marcar exactamente ${Math.abs(dif)} UID como no encontrados (marcaste ${marcados.length}).`);
+        return;
+      }
+      uidsBaja = marcados.map(c=>c.value);
+    }
+    if(dif !== 0 && !motivo){ alert('Ingresá un motivo para el ajuste.'); return; }
+    ops.push({ varianteId, varianteNombre, teorico, contado, dif, uidsBaja });
+  }
+  if(!ops.length){ alert('Ingresá el conteo de al menos una variante.'); return; }
+
+  const usuario = localStorage.getItem('tn_usuario')||'Gerencia';
+  const hayDiferencia = ops.some(o=>o.dif!==0);
+  try {
+    for(const op of ops){
+      await api('stock_conteos', 'POST', {
+        sku_id: skuId, cantidad_teorica: op.teorico, cantidad_contada: op.contado,
+        diferencia: op.dif, hubo_ajuste: op.dif!==0, usuario,
+        notas: op.dif!==0 ? `Conteo físico ${op.varianteNombre} — ${motivo}` : `Conteo sin novedad (${op.varianteNombre})`
+      });
+      if(op.dif === 0) continue;
+
+      await api('stock_ajustes', 'POST', {
+        sku_id: skuId,
+        cantidad_contada: op.contado,
+        cantidad_anterior: op.teorico,
+        diferencia: op.dif,
+        motivo: `Conteo físico ${op.varianteNombre} — ${motivo}`,
+        usuario: usuario,
+        ...(op.varianteId ? { variante_id: op.varianteId } : {})
+      });
+
+      if(op.dif > 0){
+        // Unidades sin etiqueta encontradas → generar UID nuevos para esa variante
+        await generarEtiquetasDesdeConteo(skuId, nombre, op.varianteId, op.dif);
+      } else {
+        // Unidades que no aparecieron → dar de baja los UID puntuales elegidos
+        for(const uid of op.uidsBaja){
+          await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', { estado: 'baja' });
+        }
+      }
+    }
+
+    _ultimosConteos[skuId] = { sku_id: skuId, fecha: new Date().toISOString(), diferencia: hayDiferencia?1:0 };
+    renderSemaforo();
+    const ajusteSection = document.getElementById('ajuste-section');
+    if(ajusteSection) ajusteSection.style.display='none';
+    const box = document.getElementById('conclusion-box');
+    if(box) box.innerHTML = `
+      <div class="conclusion ok">
+        <div class="conclusion-icon">✅</div>
+        <div class="conclusion-title">${hayDiferencia?'Ajuste registrado':'Conteo registrado sin diferencias'}</div>
+        <div class="conclusion-detail">${nombre} — conteo por variante completado.</div>
+      </div>`;
+    // Si alguna variante generó etiquetas nuevas, generarEtiquetasDesdeConteo ya abre el modal de impresión.
+    setTimeout(() => iniciarConteo(), 1200);
   } catch(e){ alert('Error: '+e.message); }
 }
 

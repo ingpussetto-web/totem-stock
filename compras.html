@@ -1138,7 +1138,7 @@ async function loadData(){
 // ─── OCs ────────────────────────────────────────────────────
 async function loadOCs(){
   try{
-    ocs = await api('ordenes_compra?select=*,proveedores(razon_social,contacto,telefono,mail)&order=created_at.desc').catch(()=>[]);
+    ocs = await api('ordenes_compra?select=*,proveedores(razon_social,contacto,telefono,mail),oc_facturas(id,url,nombre_archivo,created_at)&order=created_at.desc').catch(()=>[]);
     // Asegurar campos nuevos con defaults si vienen null
     ocs.forEach(o=>{ if(!o.pago_estado) o.pago_estado='pendiente'; });
     // Cargar items para todas las OCs (resumen en card)
@@ -1202,7 +1202,13 @@ function renderOCs(){
     const totalPag  = o._totalPagado ?? 0;
     const pagada=o.pago_estado==='pagada';
     const parcial=o.pago_estado==='pago_parcial';
-    const tieneFactura=!!o.factura_url;
+    const facturas=o.oc_facturas||[];
+    const facturasHtml = facturas.map((f,idx)=>`
+      <div style="display:inline-flex;align-items:center;gap:2px;">
+        <button class="btn sm" onclick="verFactura(${o.id},'${f.url}')">📄 ${f.nombre_archivo?f.nombre_archivo.length>18?f.nombre_archivo.slice(0,15)+'…':f.nombre_archivo:'Factura '+(idx+1)}</button>
+        <button class="btn sm green" onclick="enviarFacturaPagos(${o.id},${f.id})" title="Enviar esta factura a pagos">💬</button>
+        <button class="btn sm red" onclick="eliminarFactura(${o.id},${f.id})" title="Eliminar esta factura">✕</button>
+      </div>`).join('');
     // Panel pendientes
     const itemsADefinirPendientes = o._itemsPendientes?.filter(i=>i.color==='A definir' && (i.cantidad-(i.cantidad_recibida||0))>0)||[];
     const alertaColorHtml = itemsADefinirPendientes.length
@@ -1286,15 +1292,13 @@ function renderOCs(){
         <div class="pago-check ${pagada?'pagada':parcial?'pago_parcial':'pendiente'}" onclick="abrirModalPago(${o.id})" title="Gestionar pagos">
           <span>${pagada?'✓ Pagada':parcial?'⬤ Pago parcial':'○ Sin pagar'}</span>
         </div>
-        <!-- Subir factura -->
+        <!-- Subir factura (siempre agrega una más, no reemplaza) -->
         <label class="upload-label" id="upload-label-${o.id}" title="Adjuntar factura (PDF o imagen)">
           <input type="file" accept=".pdf,image/*" onchange="subirFactura(${o.id}, this)">
-          📎 ${tieneFactura?'Cambiar factura':'Adjuntar factura'}
+          📎 Adjuntar factura${facturas.length?' (+'+facturas.length+')':''}
         </label>
-        <!-- Ver factura (solo si hay) -->
-        ${tieneFactura?`<button class="btn sm" onclick="verFactura(${o.id},'${o.factura_url}')">📄 Ver factura</button>`:''}
-        <!-- WA encargado de pagos (solo si hay factura) -->
-        ${tieneFactura?`<button class="btn sm green" onclick="enviarFacturaPagos(${o.id})">💬 Enviar a pagos</button>`:''}
+        <!-- Facturas ya adjuntas -->
+        ${facturasHtml}
       </div>
       <div class="oc-actions">
         ${o.estado==='borrador'?`<button class="btn sm amber" onclick="editarOC(${o.id})">✏ Editar</button>`:''}
@@ -2388,11 +2392,14 @@ async function subirFactura(ocId, input){
     }
     // Construir URL pública
     const publicUrl = `${SUPA_URL}/storage/v1/object/public/facturas/${fileName}`;
-    // Guardar URL en la OC
-    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{factura_url: publicUrl});
+    // Guardar como una factura MÁS de la OC (no reemplaza las anteriores)
+    const nueva = await api('oc_facturas','POST',{oc_id: ocId, url: publicUrl, nombre_archivo: file.name});
     // Actualizar en memoria
     const oc = ocs.find(o=>o.id===ocId);
-    if(oc) oc.factura_url = publicUrl;
+    if(oc){
+      if(!oc.oc_facturas) oc.oc_facturas = [];
+      oc.oc_facturas.push(Array.isArray(nueva) ? nueva[0] : {id:null, oc_id:ocId, url:publicUrl, nombre_archivo:file.name, created_at:new Date().toISOString()});
+    }
     renderOCs();
     toast('Factura adjuntada ✓');
   }catch(e){
@@ -2419,9 +2426,13 @@ function verFactura(ocId, url){
   openModal('modal-factura-preview');
 }
 
-async function enviarFacturaPagos(ocId){
+async function enviarFacturaPagos(ocId, facturaId){
   const oc = ocs.find(o=>o.id===ocId);
-  if(!oc||!oc.factura_url){ toast('No hay factura adjunta'); return; }
+  const facturas = oc?.oc_facturas||[];
+  if(!oc||!facturas.length){ toast('No hay factura adjunta'); return; }
+  // Si se pasa un id puntual, envía solo esa; si no, envía todas las adjuntas
+  const aEnviar = facturaId!=null ? facturas.filter(f=>f.id===facturaId) : facturas;
+  if(!aEnviar.length){ toast('No se encontró esa factura'); return; }
   const sym = oc.moneda==='USD'?'USD ':'$';
   const total = sym + Number(oc.total_neto).toLocaleString('es-AR');
   // Buscar items de la OC para el detalle
@@ -2430,16 +2441,28 @@ async function enviarFacturaPagos(ocId){
     const items = await api(`oc_items?oc_id=eq.${ocId}&select=nombre,cantidad&order=id.asc`);
     detalle = (items||[]).map(i=>`• ${i.nombre} x${i.cantidad}`).join('\n');
   }catch(e){ detalle = '(ver OC adjunta)'; }
+  const facturasTxt = aEnviar.map(f=>`📄 Factura: ${f.url}`).join('\n');
   const msg = encodeURIComponent(
     `Hola! Te paso factura para gestionar el pago:\n\n`+
     `📋 *${oc.oc_numero}*\n`+
     `🏢 Proveedor: ${oc.proveedores?.razon_social||'—'}\n`+
     `📦 Insumos:\n${detalle}\n\n`+
     `💰 Total: ${total}\n`+
-    `📄 Factura: ${oc.factura_url}\n\n`+
+    `${facturasTxt}\n\n`+
     `Saludos, Totem Nube.`
   );
   window.open(`https://wa.me/549${WA_PAGOS}?text=${msg}`,'_blank');
+}
+
+async function eliminarFactura(ocId, facturaId){
+  if(!confirm('¿Eliminar esta factura de la OC? (el archivo queda en el storage, solo se quita el registro)')) return;
+  try{
+    await api(`oc_facturas?id=eq.${facturaId}`,'DELETE');
+    const oc = ocs.find(o=>o.id===ocId);
+    if(oc) oc.oc_facturas = (oc.oc_facturas||[]).filter(f=>f.id!==facturaId);
+    renderOCs();
+    toast('Factura eliminada');
+  }catch(e){ toast('Error al eliminar: '+e.message); }
 }
 
 // ─── CERRAR CON DESVÍO ───────────────────────────────────────
