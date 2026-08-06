@@ -1128,12 +1128,26 @@ async function checkConnection(){
 // ─── LOAD DATA ──────────────────────────────────────────────
 async function loadData(){
   try{
-    [categorias, skus, proveedores, proyectosAsignables] = await Promise.all([
+    let opsActivas = [];
+    [categorias, skus, proveedores, opsActivas] = await Promise.all([
       api('categorias?select=*&order=orden.asc'),
       api('skus?select=*,categorias(nombre)&activo=eq.true&order=nombre.asc'),
       api('proveedores?select=*&order=razon_social.asc').catch(()=>[]),
-      api('proyectos_cotizador?estado=neq.cancelado&select=id,orden,cliente,anio,mes&order=anio.desc,mes.desc').catch(()=>[])
+      // Solo OPs en curso (no completadas/canceladas) — para asignar gastos de Servicios
+      api('ordenes_produccion?estado=in.(iniciada,bom_pendiente,bom_confirmada,en_produccion)&select=v14_orden,cliente,codigo_op_interno,op_numero,producto_nombre,cantidad,created_at&order=created_at.desc').catch(()=>[])
     ]);
+    // orden = v14_orden (el mismo campo que ya usa todo el sistema para linkear
+    // la OP con el proyecto del Cotizador). label = lo que se muestra en el desplegable.
+    // detalle = texto para el tooltip (útil cuando hay varios proyectos del mismo cliente).
+    proyectosAsignables = (opsActivas||[]).filter(o=>o.v14_orden).map(o=>{
+      const fecha = o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '';
+      return {
+        orden: o.v14_orden,
+        cliente: o.cliente || '',
+        label: o.codigo_op_interno || o.op_numero || o.v14_orden,
+        detalle: [o.producto_nombre ? o.producto_nombre+(o.cantidad?' x'+o.cantidad:'') : '', fecha?'creada '+fecha:''].filter(Boolean).join(' · ')
+      };
+    });
   }catch(e){console.error(e);}
 }
 
@@ -1146,7 +1160,7 @@ async function loadOCs(){
     // Cargar items para todas las OCs (resumen en card)
     for(const o of ocs){
       try{
-        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,asignacion_proyecto_orden,asignacion_proyecto_cliente,skus(categorias(nombre))`);
+        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,asignacion_proyecto_orden,asignacion_proyecto_cliente,asignacion_op_codigo,skus(categorias(nombre))`);
         o._itemsTodos = items||[];
         // Es una OC de Servicios si TODOS sus ítems son de esa categoría (no se inventaría, no pasa por Recepción)
         o._esServicio = o._itemsTodos.length>0 && o._itemsTodos.every(i=>i.skus?.categorias?.nombre==='Servicios');
@@ -1274,7 +1288,7 @@ function renderOCs(){
       : '';
     // Asignación (solo Servicios): a qué proyecto(s) o "toda la empresa" corresponde el gasto
     const asignacionResumen = o._esServicio && o._itemsTodos?.length
-      ? [...new Set(o._itemsTodos.map(i=>i.asignacion_proyecto_cliente ? i.asignacion_proyecto_orden+' — '+i.asignacion_proyecto_cliente : 'Toda la empresa'))].join(', ')
+      ? [...new Set(o._itemsTodos.map(i=>i.asignacion_proyecto_cliente ? (i.asignacion_op_codigo||i.asignacion_proyecto_orden)+' — '+i.asignacion_proyecto_cliente : 'Toda la empresa'))].join(', ')
       : '';
     return `<div class="oc-card ${o.estado}">
       <div class="oc-header">
@@ -1718,6 +1732,7 @@ async function agregarLinea(){
     color:'',
     asignacion_proyecto_orden: null,
     asignacion_proyecto_cliente: null,
+    asignacion_op_codigo: null,
     _variantes: variantes,
     _nuevo:true
   });
@@ -1733,15 +1748,22 @@ function esLineaServicio(l){
   return sku?.categorias?.nombre === 'Servicios';
 }
 
+function actualizarTooltipAsignacion(selectEl){
+  const p = proyectosAsignables.find(p=>p.orden===selectEl.value);
+  selectEl.title = p?.detalle || '';
+}
+
 function asignarLineaProyecto(i, orden){
   if(!orden){
     lineas[i].asignacion_proyecto_orden = null;
     lineas[i].asignacion_proyecto_cliente = null;
+    lineas[i].asignacion_op_codigo = null;
     return;
   }
   const p = proyectosAsignables.find(p=>p.orden===orden);
   lineas[i].asignacion_proyecto_orden = orden;
   lineas[i].asignacion_proyecto_cliente = p?.cliente || null;
+  lineas[i].asignacion_op_codigo = p?.label || null;
 }
 
 function renderLineas(){
@@ -1782,9 +1804,10 @@ function renderLineas(){
       ${esLineaServicio(l) ? `
       <div style="grid-column:1/-1;margin-top:2px;display:flex;align-items:center;gap:8px;">
         <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">🧾 Asignar a:</span>
-        <select class="linea-input" style="max-width:320px;" onchange="asignarLineaProyecto(${i},this.value)">
+        <select class="linea-input" style="max-width:320px;" title="${(proyectosAsignables.find(p=>p.orden===l.asignacion_proyecto_orden)?.detalle||'').replace(/"/g,'&quot;')}"
+          onchange="asignarLineaProyecto(${i},this.value);actualizarTooltipAsignacion(this);">
           <option value="" ${!l.asignacion_proyecto_orden?'selected':''}>Toda la empresa</option>
-          ${proyectosAsignables.map(p=>`<option value="${p.orden}" ${l.asignacion_proyecto_orden===p.orden?'selected':''}>${p.orden} — ${p.cliente}</option>`).join('')}
+          ${proyectosAsignables.map(p=>`<option value="${p.orden}" title="${(p.detalle||'').replace(/"/g,'&quot;')}" ${l.asignacion_proyecto_orden===p.orden?'selected':''}>${p.label} — ${p.cliente}</option>`).join('')}
         </select>
       </div>` : ''}
       ${l._variantes && l._variantes.length > 0
@@ -1949,7 +1972,8 @@ async function guardarOC(estado, previsualizar=false){
       iva_pct:l.iva_pct,
       total_neto:(l.precio_unitario_neto||0)*l.cantidad,
       asignacion_proyecto_orden:l.asignacion_proyecto_orden||null,
-      asignacion_proyecto_cliente:l.asignacion_proyecto_cliente||null
+      asignacion_proyecto_cliente:l.asignacion_proyecto_cliente||null,
+      asignacion_op_codigo:l.asignacion_op_codigo||null
     })));
 
     closeModal('modal-oc');
