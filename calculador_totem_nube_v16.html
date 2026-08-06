@@ -5639,7 +5639,7 @@ let opsPorOrden = {}; // {v14_orden: {op_numero, estado}} — lookup rápido par
 
 function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
-function abrirModalProyecto(editId){
+async function abrirModalProyecto(editId){
   itemsTemp = [];
   const modal = document.getElementById('modal-proyecto');
   if(!modal) return;
@@ -5658,6 +5658,7 @@ function abrirModalProyecto(editId){
     document.getElementById('proy-estado').value = p.estado;
     document.getElementById('proy-notas').value = p.notas||'';
     itemsTemp = p.items ? [...p.items] : [];
+    await actualizarOpcionDespachado(p.orden, p.estado);
   } else {
     document.getElementById('modal-proy-title').textContent = 'Nuevo proyecto';
     document.getElementById('proy-edit-id').value = '';
@@ -5670,9 +5671,34 @@ function abrirModalProyecto(editId){
     document.getElementById('proy-anio').value = new Date().getFullYear();
     document.getElementById('proy-estado').value = 'produccion';
     document.getElementById('proy-notas').value = '';
+    await actualizarOpcionDespachado('', 'produccion');
   }
   renderItemsTemp();
   modal.style.display = 'flex';
+}
+
+// Deshabilita la opción "Despachado" del desplegable manual salvo que la OP
+// vinculada ya esté con estado 'completada' (mismo criterio que ya usa el
+// cartel "Lista para despacho!" / botón "Marcar despachado" en la tarjeta).
+// Si el proyecto ya estaba despachado/instalado, no lo bloqueamos retroactivamente.
+async function actualizarOpcionDespachado(orden, estadoActual){
+  const sel = document.getElementById('proy-estado');
+  const optDespachado = sel ? Array.prototype.find.call(sel.options, function(o){ return o.value==='despachado'; }) : null;
+  if(!optDespachado) return;
+  if(estadoActual === 'despachado' || estadoActual === 'instalado'){
+    optDespachado.disabled = false;
+    optDespachado.title = '';
+    return;
+  }
+  optDespachado.disabled = true;
+  optDespachado.title = 'Disponible recién cuando la OP esté completada (escaneo 100% en Producción)';
+  if(!orden) return;
+  try{
+    const ops = await stockAPI('ordenes_produccion?v14_orden=eq.'+encodeURIComponent(orden)+'&select=estado&order=created_at.desc&limit=1');
+    const completada = ops && ops.length && ops[0].estado === 'completada';
+    optDespachado.disabled = !completada;
+    optDespachado.title = completada ? '' : 'Disponible recién cuando la OP esté completada (escaneo 100% en Producción)';
+  }catch(e){ /* si falla la consulta, dejamos bloqueado por prudencia */ }
 }
 
 function cerrarModalProyecto(){

@@ -161,6 +161,11 @@ select:focus,input:focus{outline:none;border-color:var(--border2)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 18px;font-size:13px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 
+/* Banner de bloqueo — mensaje que impide avanzar (ej: mover a Terminadas sin escaneo completo) */
+.banner-bloqueo{position:fixed;top:0;left:0;right:0;background:#3a1414;border-bottom:2px solid #e05252;color:#ffb3b3;padding:14px 20px;font-size:14px;font-weight:600;z-index:2000;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 2px 14px rgba(0,0,0,0.5);text-align:center;}
+.banner-bloqueo .cerrar{cursor:pointer;opacity:0.7;font-weight:400;flex-shrink:0;}
+.banner-bloqueo .cerrar:hover{opacity:1;}
+
 /* Empty col */
 .col-empty{font-size:11px;color:var(--text3);text-align:center;padding:20px 10px;border:1px dashed var(--border);border-radius:10px}
 
@@ -321,6 +326,19 @@ function toast(msg, dur=2500){
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), dur);
+}
+
+function mostrarBannerBloqueo(msg, dur=7000){
+  let b = document.getElementById('banner-bloqueo');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'banner-bloqueo';
+    b.className = 'banner-bloqueo';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '🚫 <span>'+msg+'</span> <span class="cerrar" onclick="document.getElementById(\'banner-bloqueo\').remove()">✕</span>';
+  clearTimeout(window._bannerBloqueoTimeout);
+  window._bannerBloqueoTimeout = setTimeout(()=>{ const el=document.getElementById('banner-bloqueo'); if(el) el.remove(); }, dur);
 }
 
 function fmtFecha(iso){
@@ -766,8 +784,11 @@ async function sincronizarProyectoComercial(op){
 
 async function moverColumna(colKey){
   if(_opActual.etapa_tablero===colKey) return;
-  if(colKey==='terminadas' && !_insumosCompletos(_opActual) && _areaActual()!=='gerencia'){
-    toast('⚠ No se puede terminar: hay insumos sin asignar'); return;
+  if(colKey==='terminadas' && !_insumosCompletos(_opActual)){
+    const items = (_opActual.op_bom_items||[]).filter(i=>i.incluido!==false);
+    const pendientes = items.filter(i=>i.estado!=='asignado').length;
+    mostrarBannerBloqueo(`No se puede pasar a "Terminadas": faltan escanear ${pendientes} insumo(s) en el módulo de Producción.`);
+    return;
   }
   try{
     await api(`ordenes_produccion?id=eq.${_opActual.id}`, 'PATCH', {etapa_tablero: colKey});
@@ -919,8 +940,11 @@ async function dropOnCol(colKey){
   if(!_draggingId) return;
   const op = _ops.find(o=>o.id===_draggingId);
   if(!op || op.etapa_tablero===colKey){ _draggingId=null; return; }
-  if(colKey==='terminadas' && !_insumosCompletos(op) && _areaActual()!=='gerencia'){
-    toast('⚠ No se puede terminar: hay insumos sin asignar'); _draggingId=null; return;
+  if(colKey==='terminadas' && !_insumosCompletos(op)){
+    const items = (op.op_bom_items||[]).filter(i=>i.incluido!==false);
+    const pendientes = items.filter(i=>i.estado!=='asignado').length;
+    mostrarBannerBloqueo(`No se puede pasar a "Terminadas": faltan escanear ${pendientes} insumo(s) en el módulo de Producción.`);
+    _draggingId=null; return;
   }
   const colLabel = COLUMNAS.find(c=>c.key===colKey)?.label||colKey;
   try{
