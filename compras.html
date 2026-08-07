@@ -2163,10 +2163,55 @@ async function cerrarOCServicio(ocId){
 }
 
 async function cancelarOC(ocId){
+  try{
+    const items = await api(`oc_items?oc_id=eq.${ocId}&select=nombre,color,cantidad,cantidad_recibida`);
+    const recibidos = (items||[]).filter(i=>Number(i.cantidad_recibida)>0);
+    if(recibidos.length){
+      mostrarAvisoCancelacionOC(ocId, recibidos);
+      return;
+    }
+  }catch(e){ /* si falla la consulta, seguimos con confirm() normal */ }
   if(!confirm('¿Cancelar esta OC?')) return;
   try{
     await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{estado:'cancelada'});
     toast('OC cancelada');
+    loadOCs();
+  }catch(e){toast('Error: '+e.message);}
+}
+
+function mostrarAvisoCancelacionOC(ocId, recibidos){
+  document.getElementById('modal-aviso-cancel-oc')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-aviso-cancel-oc';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;backdrop-filter:blur(3px);';
+  const listaHtml = recibidos.map(i=>`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text);">• ${i.nombre}${i.color?' ('+i.color+')':''}: recibido <strong>${i.cantidad_recibida}</strong> de ${i.cantidad}</div>`).join('');
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--red-border);border-radius:var(--radius-lg,12px);max-width:480px;width:100%;padding:24px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="font-size:22px;">⚠️</span>
+        <div style="font-size:15px;font-weight:700;color:var(--red);">Esta OC ya tuvo entregas registradas</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+        Antes de cancelarla, revisá que ya entró a stock lo siguiente:
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:4px 12px;margin-bottom:14px;">${listaHtml}</div>
+      <div style="font-size:12px;color:var(--amber);margin-bottom:16px;line-height:1.5;">
+        Cancelar la OC <strong>no revierte</strong> automáticamente ese stock. Si esos insumos deben devolverse al proveedor, dalos de baja manualmente (Conteo Físico / Stock) con la trazabilidad correspondiente. Si se quedan en depósito, dejá una observación de que corresponden a una OC cancelada.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn" onclick="document.getElementById('modal-aviso-cancel-oc').remove()">Volver</button>
+        <button class="btn red" onclick="confirmarCancelacionOCConAviso(${ocId})">Cancelar la OC de todas formas</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+async function confirmarCancelacionOCConAviso(ocId){
+  try{
+    await api(`ordenes_compra?id=eq.${ocId}`,'PATCH',{estado:'cancelada'});
+    document.getElementById('modal-aviso-cancel-oc')?.remove();
+    toast('OC cancelada — revisá el stock ya ingresado');
     loadOCs();
   }catch(e){toast('Error: '+e.message);}
 }

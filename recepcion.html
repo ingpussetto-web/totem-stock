@@ -842,7 +842,7 @@ async function ingresarUIDs(ri, recId){
   const unidades = [];
   for(let i=1;i<=ri.cantidad_recibida;i++){
     const uid = prefijo+'-'+String(lastNum+i).padStart(4,'0');
-    unidades.push({uid, sku_id:ri.sku_id, variante_id:varianteId, estado:'stock'});
+    unidades.push({uid, sku_id:ri.sku_id, variante_id:varianteId, estado:'stock', oc_id:ocActual.id, recepcion_id:recId});
     etiquetasGeneradas.push({uid, nombre:ri.nombre, variante:ri.color_recibido, num:lastNum+i});
   }
 
