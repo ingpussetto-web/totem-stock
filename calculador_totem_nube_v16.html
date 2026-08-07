@@ -3857,7 +3857,7 @@ function renderCotItemsTemp(){
           const opciones = '<option value="">— Seleccionar modelo —</option>'+MINIPC_MODELOS.map(function(m){
             return '<option value="'+m.key+'" data-precio="'+m.precio+'" '+(mpc.key===m.key?'selected':'')+'>'+m.nombre+'</option>';
           }).join('');
-          const ivaPC = Math.round((mpc.precio||0)*it.cant*0.21);
+          const ivaPC = Math.round((mpc.precio||0)*it.cant*0.105);
           const totalPC = Math.round((mpc.precio||0)*it.cant + ivaPC);
           minipcRow = '<tr style="background:rgba(77,159,255,0.04);">'
             +'<td style="padding:4px 6px;color:var(--text3);font-size:10px;">↳</td>'
@@ -4201,7 +4201,7 @@ function generarPreviewHTML(c){
     +'</tr>';
     // Agregar fila de Mini PC si existe
     if(it.minipc && it.minipc.precio){
-      const ivaPC = Math.round(it.minipc.precio*it.cant*0.21);
+      const ivaPC = Math.round(it.minipc.precio*it.cant*0.105);
       const totalPC = it.minipc.precio*it.cant + ivaPC;
       rows += '<tr style="background:#f9f9fb;">'
         +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+it.minipc.nombre+'</td>'
@@ -4252,8 +4252,8 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;font-style:italic;">Parametrización de software</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.paramMonto)+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.paramMonto*0.21))+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.paramMonto+Math.round(c.paramMonto*0.21))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.paramMonto*0.105))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.paramMonto+Math.round(c.paramMonto*0.105))+'</td>'
     +'</tr>' : '';
   const ploteoRow = c.ploteo && c.ploteoMonto ? '<tr style="background:#f5f7fa;">'
     +'<td style="padding:7px 10px;">Ploteo personalizado</td>'
@@ -4269,8 +4269,8 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;">'+c.licDesc+'</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.licMonto)+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.licMonto*0.21))+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.licMonto+Math.round(c.licMonto*0.21))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.licMonto*0.105))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.licMonto+Math.round(c.licMonto*0.105))+'</td>'
     +'</tr>' : '';
 
   // Bloque informativo de licencia
@@ -5525,7 +5525,8 @@ function enviarWhatsApp(){
     return s + base;
   },0);
   const transporteNeto = (c.transporte && c.transporteMonto) ? c.transporteMonto : 0;
-  const totalConIva = Math.round((totalNeto + transporteNeto) * 1.105);
+  const paramNeto = (c.param && c.paramMonto) ? c.paramMonto : 0;
+  const totalConIva = Math.round((totalNeto + transporteNeto + paramNeto) * 1.105);
   const desc = calcularDescuentoCot(c);
   const totalConIvaFinal = totalConIva - desc.monto;
 
@@ -5568,6 +5569,10 @@ function enviarWhatsApp(){
       });
     }
   });
+
+  if(c.param && c.paramMonto){
+    msg += '• Parametrización de software → $' + Math.round(c.paramMonto*1.105).toLocaleString('es-AR') + ' c/IVA\n';
+  }
 
   if(c.transporte && c.transporteMonto){
     msg += '• Transporte → $' + Math.round(c.transporteMonto*1.105).toLocaleString('es-AR') + '\n';
