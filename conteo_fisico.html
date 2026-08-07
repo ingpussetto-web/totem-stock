@@ -583,7 +583,21 @@ async function renderCantidad(skuId, nombre, content){
   const bomItemsCompletados = (bomItemsTodos||[]).filter(b => b.ordenes_produccion?.estado === 'completada');
 
   // Stock actual desde tabla stock (fuente de verdad)
-  const stockRows = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
+  const stockRowsReal = await api(`stock?sku_id=eq.${skuId}&select=id,cantidad,variante_id,variantes(valor)`).catch(()=>[]);
+  // Variantes definidas para este SKU (independiente de si ya hay stock cargado) —
+  // así detectamos SKUs con color/variante aunque el stock actual sea 0 (nunca se recibió nada).
+  const variantesSku = await api(`variantes?sku_id=eq.${skuId}&activo=eq.true&select=id,valor`).catch(()=>[]);
+  let stockRows = stockRowsReal || [];
+  if(variantesSku && variantesSku.length){
+    const idsConStock = new Set((stockRows||[]).filter(r=>r.variante_id!=null).map(r=>r.variante_id));
+    const faltantes = variantesSku.filter(v=>!idsConStock.has(v.id));
+    if(faltantes.length){
+      stockRows = [
+        ...stockRows,
+        ...faltantes.map(v=>({id:'', cantidad:0, variante_id:v.id, variantes:{valor:v.valor}}))
+      ];
+    }
+  }
   const tieneVariantes = (stockRows||[]).some(r=>r.variante_id !== null);
 
   if(tieneVariantes){
@@ -657,12 +671,14 @@ async function renderCantidad(skuId, nombre, content){
             <thead><tr><th>Fecha</th><th>Proveedor</th><th>OC · Recepción</th><th style="text-align:right;">Cant.</th></tr></thead>
             <tbody>
               ${sinRecVar
-                ? `<tr>
-                    <td class="fecha">—</td>
-                    <td style="font-style:italic;color:var(--amber);">Stock inicial cargado manualmente</td>
-                    <td style="font-size:11px;color:var(--text3);">Sin recepción formal registrada</td>
-                    <td class="num pos">+${stockVar}</td>
-                  </tr>`
+                ? (stockVar>0
+                    ? `<tr>
+                        <td class="fecha">—</td>
+                        <td style="font-style:italic;color:var(--amber);">Stock inicial cargado manualmente</td>
+                        <td style="font-size:11px;color:var(--text3);">Sin recepción formal registrada</td>
+                        <td class="num pos">+${stockVar}</td>
+                      </tr>`
+                    : `<tr><td colspan="4" class="empty-row">Sin movimientos registrados — nunca se cargó stock de este color</td></tr>`)
                 : [
                     ...recVar.map(e=>{
                       const rec  = e.recepciones;
@@ -1360,9 +1376,11 @@ async function confirmarAjusteVariantes(skuId, nombre){
           motivo: `Conteo físico ${varianteNombre} — ${motivo}`,
           usuario: usuario
         });
-        // Actualizar stock de esa variante
+        // Actualizar stock de esa variante (o crearla si nunca existió, ej. SKU con stock 0)
         if(stockId){
           await api(`stock?id=eq.${stockId}`, 'PATCH', { cantidad: contado });
+        } else {
+          await api('stock', 'POST', [{ sku_id: skuId, variante_id: parseInt(varianteId), cantidad: contado }]);
         }
       }
     }
