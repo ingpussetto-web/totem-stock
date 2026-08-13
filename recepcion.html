@@ -377,6 +377,8 @@ async function loadPendientes(){
     let ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago,proveedores(razon_social)&order=created_at.asc');
     // Recepciones pendientes de conteo
     const recsPendientes = await api('recepciones?estado=eq.pendiente_conteo&select=id,recepcion_numero,oc_id,created_at,ordenes_compra(oc_numero,proveedores(razon_social))').catch(()=>[]);
+    // Devoluciones por falla — insumos que un cliente va a devolver, esperando llegada física
+    const devolucionesFalla = await api('fallas?estado=eq.pendiente_devolucion&select=id,descripcion_falla,created_at,item_type,item_id,skus(nombre),ordenes_produccion(op_numero,cliente,codigo_op_interno)').catch(()=>[]);
 
     // Contar items por OC
     for(let oc of ocs){
@@ -420,12 +422,35 @@ async function loadPendientes(){
       </div>`;
     }
 
-    if(!ocs.length && !recsPendientes?.length){
+    // Sección devoluciones por falla
+    let htmlDevoluciones = '';
+    if(devolucionesFalla && devolucionesFalla.length){
+      htmlDevoluciones = `<div style="margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:600;color:var(--red);letter-spacing:0.08em;margin-bottom:8px;">🛠 DEVOLUCIONES POR FALLA — esperando que llegue del cliente</div>
+        ${devolucionesFalla.map(f=>{
+          const fecha = new Date(f.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+          const op = f.ordenes_produccion;
+          const nombre = f.skus?.nombre || 'Insumo #'+f.item_id;
+          return `<div class="oc-card" style="border-color:rgba(255,94,94,0.3);cursor:pointer;" onclick="marcarRecibidaDevolucionRec(${f.id})">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div class="oc-numero">Falla #${f.id} · ${fecha}</div>
+                <div style="font-size:14px;font-weight:600;margin:2px 0;">${nombre}</div>
+                <div style="font-size:12px;color:var(--text2);">${op?(op.codigo_op_interno||op.op_numero)+' · '+op.cliente:'—'} — ${f.descripcion_falla}</div>
+              </div>
+              <span class="badge red">Toca "✓ Recibido"</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    if(!ocs.length && !recsPendientes?.length && !devolucionesFalla?.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Sin entregas pendientes</div>';
       return;
     }
 
-    el.innerHTML = htmlConteos + ocs.map(oc=>{
+    el.innerHTML = htmlDevoluciones + htmlConteos + ocs.map(oc=>{
       const fecha = new Date(oc.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
       const diasAtras = Math.floor((Date.now()-new Date(oc.created_at))/(1000*60*60*24));
       const esParcial = oc.estado==='recibida_parcial';
@@ -445,6 +470,22 @@ async function loadPendientes(){
   }catch(e){
     document.getElementById('pendientes-list').innerHTML='<div class="empty">Error cargando pendientes</div>';
   }
+}
+
+// ─── DEVOLUCIONES POR FALLA ──────────────────────────────────
+async function marcarRecibidaDevolucionRec(fallaId){
+  if(!confirm('¿Confirmar que el ítem llegó físicamente al depósito?')) return;
+  try{
+    const f = await api(`fallas?id=eq.${fallaId}&select=item_type,item_id`);
+    await api(`fallas?id=eq.${fallaId}`,'PATCH',{
+      estado:'detectada', fecha_recepcion_devolucion: new Date().toISOString().slice(0,10)
+    });
+    if(f?.[0]?.item_type==='insumo_unidad' && f[0].item_id){
+      await api(`unidades?id=eq.${f[0].item_id}`,'PATCH',{estado:'en_reparacion'}).catch(()=>{});
+    }
+    toast('Recepción confirmada — seguí la gestión desde Bienes y Personal › Fallas');
+    loadPendientes();
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 // ─── ABRIR CONTEO PENDIENTE ──────────────────────────────────

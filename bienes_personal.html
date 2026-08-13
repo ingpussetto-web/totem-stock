@@ -286,9 +286,11 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <select class="filter" id="f-estado" onchange="renderFallas()">
           <option value="">Todos los estados</option>
           <option value="detectada">Detectada</option>
+          <option value="pendiente_devolucion">Esperando devolución</option>
           <option value="en_service">En service</option>
           <option value="resuelta_reingreso">Resuelta · reingresó a stock</option>
           <option value="resuelta_baja">Resuelta · dada de baja</option>
+          <option value="resuelta_reposicion_cliente">Resuelta · reposición paga</option>
         </select>
         <div class="spacer"></div>
         <button class="btn green" onclick="openModalFalla()">+ Registrar falla</button>
@@ -437,12 +439,59 @@ tr:hover td{background:rgba(255,255,255,0.015);}
     <div class="modal-title"><span>Registrar falla</span><button class="modal-close" onclick="closeModal('modal-falla')">×</button></div>
     <div class="form-group">
       <label class="form-label">Tipo de ítem *</label>
-      <select class="form-select" id="fa-tipo" onchange="loadItemsParaFalla()">
+      <select class="form-select" id="fa-tipo" onchange="cambiarTipoFalla()">
         <option value="bien_unidad">Bien (activo no consumible)</option>
-        <option value="insumo_unidad">Insumo (unidad de stock)</option>
+        <option value="insumo_unidad">Insumo interno (stock genérico)</option>
+        <option value="insumo_proyecto">Insumo de un proyecto / cliente</option>
       </select>
     </div>
-    <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="fa-item-sel"></select></div>
+
+    <!-- Bloque simple: bien_unidad / insumo_unidad -->
+    <div id="fa-bloque-simple">
+      <div class="form-group"><label class="form-label">Ítem *</label><select class="form-select" id="fa-item-sel"></select></div>
+    </div>
+
+    <!-- Bloque insumo de proyecto -->
+    <div id="fa-bloque-proyecto" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">Proyecto — N° de orden o cliente *</label>
+        <input class="search-input" style="width:100%;" type="text" id="fa-proy-search" placeholder="Buscar por orden o cliente..." oninput="buscarProyectoFalla()">
+        <div id="fa-proy-results" style="margin-top:6px;max-height:180px;overflow-y:auto;"></div>
+      </div>
+      <div id="fa-proy-seleccionado" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:600;" id="fa-proy-nombre-sel">—</div>
+            <div style="font-size:11px;color:var(--text2);" id="fa-proy-meta-sel">—</div>
+          </div>
+          <button class="btn sm" onclick="deseleccionarProyectoFalla()">Cambiar</button>
+        </div>
+        <div id="fa-proy-garantia-banner" style="margin-top:8px;"></div>
+      </div>
+      <div class="form-group" id="fa-proy-insumo-wrap" style="display:none;">
+        <label class="form-label">Insumo con falla *</label>
+        <select class="form-select" id="fa-proy-item-sel"></select>
+      </div>
+      <div class="form-group" id="fa-resolucion-wrap" style="display:none;">
+        <label class="form-label">Resolución *</label>
+        <select class="form-select" id="fa-resolucion" onchange="toggleResolucionExtra()">
+          <option value="devolucion">Devolución — vuelve a nuestro depósito</option>
+          <option value="in_situ">Reparación in situ — no vuelve a depósito</option>
+          <option value="reposicion_pagada">Reposición paga — le vendemos un repuesto, cliente se queda con la unidad fallada</option>
+        </select>
+      </div>
+      <div class="form-group" id="fa-costo-reposicion-wrap" style="display:none;">
+        <label class="form-label">Costo de reposición (informativo)</label>
+        <input class="form-input" type="number" id="fa-costo-reposicion" min="0" step="0.01">
+      </div>
+      <div class="form-group" id="fa-sustitucion-wrap" style="display:none;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;">
+          <input type="checkbox" id="fa-sustitucion-check">
+          Enviar un insumo de sustitución al cliente ahora, sin cargo, mientras se resuelve la devolución (dentro de garantía)
+        </label>
+      </div>
+    </div>
+
     <div class="form-group"><label class="form-label">Descripción de la falla *</label><input class="form-input" id="fa-desc" placeholder="Ej: no enciende, pantalla rota..."></div>
     <div class="form-group"><label class="form-label">Detectado por</label><input class="form-input" id="fa-detectado" placeholder="Nombre"></div>
     <div class="modal-actions">
@@ -640,7 +689,7 @@ async function loadAsignacionesArea(){
 }
 
 async function loadFallas(){
-  fallasData = await api('fallas?select=*,service_tecnico(*)&order=id.desc').catch(()=>[]);
+  fallasData = await api('fallas?select=*,service_tecnico(*),skus(nombre),ordenes_produccion(op_numero,cliente,codigo_op_interno)&order=id.desc').catch(()=>[]);
 }
 
 async function loadAsignacionesPersonal(){
@@ -706,8 +755,9 @@ function badgeEstadoUnidad(estado){
 }
 function badgeFalla(estado){
   const map = {
-    detectada:['sin','Detectada'], en_service:['bajo','En service'],
-    resuelta_reingreso:['ok','Reingresó a stock'], resuelta_baja:['sin','Dada de baja']
+    detectada:['sin','Detectada'], pendiente_devolucion:['bajo','Esperando devolución'], en_service:['bajo','En service'],
+    resuelta_reingreso:['ok','Reingresó a stock'], resuelta_baja:['sin','Dada de baja'],
+    resuelta_reposicion_cliente:['uid','Reposición paga']
   };
   const [cls,label] = map[estado]||['qty',estado];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -908,13 +958,18 @@ function renderFallas(){
   if(!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">🛠</div>No hay fallas registradas</div></td></tr>`; return; }
   tbody.innerHTML = rows.map(f=>{
     const service = (f.service_tecnico||[])[0];
+    const tipoLabel = f.item_type==='bien_unidad' ? 'Bien' : (f.op_id ? 'Insumo · proyecto' : 'Insumo');
+    const op = f.ordenes_produccion;
+    const itemLabel = f.item_type==='bien_unidad'
+      ? `#${f.item_id}`
+      : (f.skus?.nombre || (f.item_id?`#${f.item_id}`:'—')) + (op ? ` <span style="color:var(--text3);font-size:10px;">(${op.codigo_op_interno||op.op_numero||''}${op.cliente?' · '+op.cliente:''})</span>` : '');
     return `<tr style="cursor:pointer" onclick="abrirDetalleFalla(${f.id})">
       <td class="td-mono">${f.fecha_deteccion||'—'}</td>
-      <td>${f.item_type==='bien_unidad'?'Bien':'Insumo'}</td>
-      <td class="td-mono" style="font-size:11px">#${f.item_id}</td>
+      <td>${tipoLabel}</td>
+      <td class="td-mono" style="font-size:11px">${itemLabel}</td>
       <td class="td-main">${f.descripcion_falla}</td>
       <td>${badgeFalla(f.estado)}</td>
-      <td class="td-num">${service?.costo?('$'+Number(service.costo).toLocaleString('es-AR')):'—'}</td>
+      <td class="td-num">${f.costo_reposicion?('$'+Number(f.costo_reposicion).toLocaleString('es-AR')+' (repo)'):(service?.costo?('$'+Number(service.costo).toLocaleString('es-AR')):'—')}</td>
       <td class="td-actions"><button class="btn sm" onclick="event.stopPropagation();abrirDetalleFalla(${f.id})">Gestionar</button></td>
     </tr>`;
   }).join('');
@@ -928,33 +983,294 @@ async function loadItemsParaFalla(){
     const disponibles = bienesUnidadesData.filter(u=>['disponible','asignado_area','asignado_personal'].includes(u.estado));
     sel.innerHTML = disponibles.map(u=>`<option value="${u.id}">${u.bienes?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades</option>';
   } else {
-    unidadesInsumoDisponibles = await api('unidades?estado=in.(stock,reservado,asignado_personal)&select=id,uid,skus(codigo,nombre)').catch(()=>[]);
+    unidadesInsumoDisponibles = await api('unidades?estado=in.(stock,reservado,asignado_personal)&select=id,uid,sku_id,skus(codigo,nombre)').catch(()=>[]);
     sel.innerHTML = unidadesInsumoDisponibles.map(u=>`<option value="${u.id}">${u.skus?.codigo} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades</option>';
   }
+}
+
+function cambiarTipoFalla(){
+  const tipo = document.getElementById('fa-tipo').value;
+  document.getElementById('fa-bloque-simple').style.display = tipo==='insumo_proyecto' ? 'none' : 'block';
+  document.getElementById('fa-bloque-proyecto').style.display = tipo==='insumo_proyecto' ? 'block' : 'none';
+  if(tipo==='insumo_proyecto'){ deseleccionarProyectoFalla(); }
+  else { loadItemsParaFalla(); }
 }
 
 function openModalFalla(){
   document.getElementById('fa-tipo').value = 'bien_unidad';
   document.getElementById('fa-desc').value='';
   document.getElementById('fa-detectado').value='';
-  loadItemsParaFalla();
+  document.getElementById('fa-proy-search').value='';
+  document.getElementById('fa-proy-results').innerHTML='';
+  deseleccionarProyectoFalla();
+  cambiarTipoFalla();
   openModal('modal-falla');
 }
 
+// ─── FALLAS: INSUMO DE PROYECTO ─────────────────────────────────────────────
+const FALLA_CATEGORIAS_COMPLETAS = [9,10]; // Pantallas y monitores, Mini PCs
+const FALLA_SKUS_EXTRA = [115,51,52,17]; // Microfono unidireccional, Lector QR Garnic, Lector QR Pistola, Camara Web
+let proyectosFallaData = [];
+let proyectoFallaSeleccionado = null;
+let bomFallaOptions = [];
+let garantiaFallaSnapshot = null;
+
+async function loadProyectosFalla(){
+  const ops = await api('ordenes_produccion?select=id,v14_orden,cliente,codigo_op_interno,op_numero,producto_nombre,cantidad,estado,created_at&order=created_at.desc').catch(()=>[]);
+  const proys = await api('proyectos_cotizador?select=orden,estado,fecha_despacho').catch(()=>[]);
+  const proyMap = {};
+  (proys||[]).forEach(p=>{ proyMap[p.orden] = p; });
+  proyectosFallaData = (ops||[]).filter(o=>o.v14_orden).map(o=>{
+    const pv = proyMap[o.v14_orden];
+    return {
+      op_id: o.id, orden: o.v14_orden, cliente: o.cliente||'',
+      codigo: o.codigo_op_interno || o.op_numero || o.v14_orden,
+      producto_nombre: o.producto_nombre, cantidad: o.cantidad,
+      estado_op: o.estado, estado_venta: pv?.estado||null, fecha_despacho: pv?.fecha_despacho||null
+    };
+  });
+}
+
+async function buscarProyectoFalla(){
+  const q = document.getElementById('fa-proy-search').value.trim().toLowerCase();
+  const res = document.getElementById('fa-proy-results');
+  if(q.length<2){ res.innerHTML=''; return; }
+  if(!proyectosFallaData.length) await loadProyectosFalla();
+  const found = proyectosFallaData.filter(p=>
+    (p.codigo||'').toLowerCase().includes(q) || (p.cliente||'').toLowerCase().includes(q) || (p.orden||'').toLowerCase().includes(q)
+  ).slice(0,20);
+  if(!found.length){ res.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px;">No encontrado</div>'; return; }
+  res.innerHTML = found.map(p=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer;" onclick="seleccionarProyectoFalla(${p.op_id})">
+    <div style="font-weight:600;font-size:12.5px;">${p.codigo} — ${p.cliente}</div>
+    <div style="font-size:11px;color:var(--text2);">${p.producto_nombre||''}${p.cantidad?' x'+p.cantidad:''} · ${p.estado_venta||p.estado_op}</div>
+  </div>`).join('');
+}
+
+function deseleccionarProyectoFalla(){
+  proyectoFallaSeleccionado = null;
+  garantiaFallaSnapshot = null;
+  bomFallaOptions = [];
+  const elSel = document.getElementById('fa-proy-seleccionado');
+  if(elSel) elSel.style.display='none';
+  const elIns = document.getElementById('fa-proy-insumo-wrap');
+  if(elIns) elIns.style.display='none';
+  const elRes = document.getElementById('fa-resolucion-wrap');
+  if(elRes) elRes.style.display='none';
+  const elCosto = document.getElementById('fa-costo-reposicion-wrap');
+  if(elCosto) elCosto.style.display='none';
+  const elSust = document.getElementById('fa-sustitucion-wrap');
+  if(elSust) elSust.style.display='none';
+  const elSustChk = document.getElementById('fa-sustitucion-check');
+  if(elSustChk) elSustChk.checked=false;
+  const elItemSel = document.getElementById('fa-proy-item-sel');
+  if(elItemSel) elItemSel.innerHTML='';
+  const elBanner = document.getElementById('fa-proy-garantia-banner');
+  if(elBanner) elBanner.innerHTML='';
+}
+
+async function seleccionarProyectoFalla(opId){
+  const p = proyectosFallaData.find(x=>x.op_id===opId);
+  if(!p) return;
+  proyectoFallaSeleccionado = p;
+  document.getElementById('fa-proy-results').innerHTML='';
+  document.getElementById('fa-proy-search').value='';
+  document.getElementById('fa-proy-seleccionado').style.display='block';
+  document.getElementById('fa-proy-nombre-sel').textContent = `${p.codigo} — ${p.cliente}`;
+  document.getElementById('fa-proy-meta-sel').textContent = `${p.producto_nombre||''}${p.cantidad?' x'+p.cantidad:''} · Producción: ${p.estado_op}${p.estado_venta?' · Venta: '+p.estado_venta:''}`;
+
+  const yaDespachado = p.estado_venta==='despachado' || p.estado_venta==='instalado';
+  renderGarantiaBannerFalla(p.fecha_despacho, yaDespachado);
+
+  document.getElementById('fa-resolucion-wrap').style.display = yaDespachado ? 'block' : 'none';
+  document.getElementById('fa-costo-reposicion-wrap').style.display = 'none';
+  if(yaDespachado) document.getElementById('fa-resolucion').value = 'devolucion';
+  toggleResolucionExtra();
+
+  await cargarInsumosFallablesDeProyecto(opId);
+}
+
+function renderGarantiaBannerFalla(fechaDespacho, yaDespachado){
+  const el = document.getElementById('fa-proy-garantia-banner');
+  if(!yaDespachado){
+    garantiaFallaSnapshot = null;
+    el.innerHTML = `<div style="font-size:11px;color:var(--text3);">Proyecto aún no despachado al cliente — se trata como detección interna, sin circuito de devolución.</div>`;
+    return;
+  }
+  if(!fechaDespacho){
+    garantiaFallaSnapshot = null;
+    el.innerHTML = `<div style="font-size:11px;color:var(--amber);">⚠ No hay fecha de despacho registrada para este proyecto (es anterior al seguimiento de garantía) — no se puede calcular automáticamente, revisar a mano.</div>`;
+    return;
+  }
+  const dias = Math.floor((Date.now() - new Date(fechaDespacho).getTime()) / 86400000);
+  garantiaFallaSnapshot = dias > 180;
+  if(dias <= 180){
+    el.innerHTML = `<div style="font-size:11px;color:var(--green);">✓ Dentro de garantía — ${dias} días desde el despacho (límite 180).</div>`;
+  } else {
+    el.innerHTML = `<div style="font-size:11px;color:var(--red);">⚠ Fuera de garantía — ${dias} días desde el despacho (límite 180). Evaluar reposición paga.</div>`;
+  }
+}
+
+async function cargarInsumosFallablesDeProyecto(opId){
+  const wrap = document.getElementById('fa-proy-insumo-wrap');
+  const sel = document.getElementById('fa-proy-item-sel');
+  wrap.style.display='block';
+  sel.innerHTML = '<option value="">Cargando...</option>';
+  const items = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&select=id,sku_id,variante_id,nombre,uid_asignado,skus(nombre,categoria_id),variantes(valor)`).catch(()=>[]);
+  bomFallaOptions = (items||[]).filter(i=>{
+    const catId = i.skus?.categoria_id;
+    return FALLA_CATEGORIAS_COMPLETAS.includes(catId) || FALLA_SKUS_EXTRA.includes(i.sku_id);
+  });
+  if(!bomFallaOptions.length){
+    sel.innerHTML = '<option value="">Este proyecto no tiene insumos falla-bles en su BOM</option>';
+    return;
+  }
+  sel.innerHTML = bomFallaOptions.map((it,idx)=>{
+    const ident = it.uid_asignado ? it.uid_asignado : 'de caja (sin identificación individual)';
+    return `<option value="${idx}">${it.skus?.nombre||it.nombre}${it.variantes?.valor?' · '+it.variantes.valor:''} — ${ident}</option>`;
+  }).join('');
+}
+
+function toggleResolucionExtra(){
+  const r = document.getElementById('fa-resolucion').value;
+  document.getElementById('fa-costo-reposicion-wrap').style.display = r==='reposicion_pagada' ? 'block' : 'none';
+  // Sustitución sin cargo: solo tiene sentido en devolución y dentro de los 180 días de garantía
+  const mostrarSustitucion = r==='devolucion' && garantiaFallaSnapshot===false;
+  document.getElementById('fa-sustitucion-wrap').style.display = mostrarSustitucion ? 'block' : 'none';
+  if(!mostrarSustitucion) document.getElementById('fa-sustitucion-check').checked = false;
+}
+
+// Salida real de stock de un repuesto asociado a un proyecto — se usa tanto para
+// "reposición paga" (le vendemos el repuesto) como para "sustitución en garantía"
+// (se lo mandamos sin cargo mientras se resuelve la devolución del original).
+async function descontarRepuestoProyecto(skuId, varianteId, opId, cliente, motivoLabel){
+  try{
+    const skuInfo = await api(`skus?id=eq.${skuId}&select=tracking,nombre`);
+    const tracking = skuInfo?.[0]?.tracking;
+    const fecha = new Date().toLocaleDateString('es-AR');
+    if(tracking==='uid'){
+      const disponibles = varianteId
+        ? await api(`unidades?sku_id=eq.${skuId}&variante_id=eq.${varianteId}&estado=eq.stock&select=id,uid&limit=1`)
+        : await api(`unidades?sku_id=eq.${skuId}&variante_id=is.null&estado=eq.stock&select=id,uid&limit=1`);
+      if(disponibles && disponibles.length){
+        await api(`unidades?id=eq.${disponibles[0].id}`,'PATCH',{
+          estado:'producido', op_id: opId,
+          notas:`Enviado como ${motivoLabel} a ${cliente||'cliente'} — ${fecha}`
+        });
+        return '';
+      }
+      return `⚠ no había stock disponible de "${skuInfo?.[0]?.nombre||'el repuesto'}" — reponer manualmente`;
+    } else {
+      const stockRows = varianteId
+        ? await api(`stock?sku_id=eq.${skuId}&variante_id=eq.${varianteId}&select=id,cantidad`)
+        : await api(`stock?sku_id=eq.${skuId}&variante_id=is.null&select=id,cantidad`);
+      if(stockRows && stockRows.length){
+        const nueva = (stockRows[0].cantidad||0) - 1;
+        await api(`stock?id=eq.${stockRows[0].id}`,'PATCH',{cantidad: nueva, updated_at:new Date().toISOString()});
+        return nueva < 0 ? `⚠ stock de "${skuInfo?.[0]?.nombre||'el repuesto'}" quedó negativo, revisar` : '';
+      }
+      return `⚠ no había stock cargado de "${skuInfo?.[0]?.nombre||'el repuesto'}" — reponer manualmente`;
+    }
+  }catch(e){ return '⚠ no se pudo descontar el repuesto del stock, revisar manualmente'; }
+}
+
 async function saveFalla(){
-  const item_type = document.getElementById('fa-tipo').value;
-  const item_id = document.getElementById('fa-item-sel').value;
+  const tipoRaw = document.getElementById('fa-tipo').value;
   const descripcion_falla = document.getElementById('fa-desc').value.trim();
-  if(!item_id || !descripcion_falla){ toast('Completá ítem y descripción'); return; }
+  const detectado_por = document.getElementById('fa-detectado').value.trim()||null;
+  if(!descripcion_falla){ toast('Completá la descripción de la falla'); return; }
+
+  if(tipoRaw !== 'insumo_proyecto'){
+    const item_id = document.getElementById('fa-item-sel').value;
+    if(!item_id){ toast('Completá ítem y descripción'); return; }
+    try{
+      const skuIdSimple = tipoRaw==='insumo_unidad'
+        ? (unidadesInsumoDisponibles.find(u=>String(u.id)===String(item_id))?.sku_id||null)
+        : null;
+      await api('fallas','POST',{
+        item_type: tipoRaw, item_id: Number(item_id), sku_id: skuIdSimple, descripcion_falla, detectado_por
+      });
+      const tabla = tipoRaw==='bien_unidad' ? 'bienes_unidades' : 'unidades';
+      await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado:'en_reparacion'});
+      toast('Falla registrada');
+      closeModal('modal-falla');
+      await loadFallasPage();
+    }catch(e){ toast('Error: '+e.message); }
+    return;
+  }
+
+  // Insumo de proyecto
+  if(!proyectoFallaSeleccionado){ toast('Elegí un proyecto'); return; }
+  const idx = document.getElementById('fa-proy-item-sel').value;
+  if(idx===''){ toast('Elegí el insumo con falla'); return; }
+  const bomItem = bomFallaOptions[Number(idx)];
+  if(!bomItem){ toast('Insumo inválido'); return; }
+
+  const yaDespachado = proyectoFallaSeleccionado.estado_venta==='despachado' || proyectoFallaSeleccionado.estado_venta==='instalado';
+  const resolucion = yaDespachado ? document.getElementById('fa-resolucion').value : null;
+  const costo_reposicion = resolucion==='reposicion_pagada' ? (parseFloat(document.getElementById('fa-costo-reposicion').value)||0) : null;
+
+  let item_type, item_id = null;
+  if(bomItem.uid_asignado){
+    item_type = 'insumo_unidad';
+    try{
+      const uds = await api(`unidades?uid=eq.${encodeURIComponent(bomItem.uid_asignado)}&select=id`);
+      item_id = uds && uds.length ? uds[0].id : null;
+    }catch(e){}
+  } else {
+    item_type = 'insumo_sku';
+  }
+
+  let estado = 'detectada';
+  if(resolucion==='devolucion') estado = 'pendiente_devolucion';
+  else if(resolucion==='reposicion_pagada') estado = 'resuelta_reposicion_cliente';
+
+  const sustitucionPedida = resolucion==='devolucion' && garantiaFallaSnapshot===false
+    && document.getElementById('fa-sustitucion-check').checked;
+
   try{
     await api('fallas','POST',{
-      item_type, item_id: Number(item_id), descripcion_falla,
-      detectado_por: document.getElementById('fa-detectado').value.trim()||null
+      item_type, item_id, sku_id: bomItem.sku_id, variante_id: bomItem.variante_id||null,
+      op_id: proyectoFallaSeleccionado.op_id, descripcion_falla, detectado_por,
+      resolucion, fuera_garantia: garantiaFallaSnapshot, costo_reposicion,
+      reingresa_stock: resolucion==='reposicion_pagada' ? false : null,
+      sustitucion_enviada: sustitucionPedida ? true : null,
+      estado
     });
-    const tabla = item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
-    await api(`${tabla}?id=eq.${item_id}`,'PATCH',{estado:'en_reparacion'});
-    toast('Falla registrada');
+
+    let avisoStock = '';
+    if(resolucion==='reposicion_pagada'){
+      // El cliente se queda con la unidad fallada — se pierde del inventario
+      if(item_type==='insumo_unidad' && item_id){
+        await api(`unidades?id=eq.${item_id}`,'PATCH',{estado:'baja', notas:`Falla — reposición paga, el cliente se queda con la unidad — ${new Date().toLocaleDateString('es-AR')}`});
+      }
+      // Le vendemos un repuesto — eso es una salida real de stock, hay que descontarlo
+      avisoStock = await descontarRepuestoProyecto(bomItem.sku_id, bomItem.variante_id||null, proyectoFallaSeleccionado.op_id, proyectoFallaSeleccionado.cliente, 'reposición paga');
+    } else if(sustitucionPedida){
+      // Dentro de garantía: mandamos un repuesto sin cargo mientras se resuelve la devolución del original
+      avisoStock = await descontarRepuestoProyecto(bomItem.sku_id, bomItem.variante_id||null, proyectoFallaSeleccionado.op_id, proyectoFallaSeleccionado.cliente, 'sustitución en garantía');
+    } else if(resolucion!=='devolucion' && item_type==='insumo_unidad' && item_id){
+      // Detección interna (aún no despachado) o reparación in situ — marcar mientras se gestiona
+      await api(`unidades?id=eq.${item_id}`,'PATCH',{estado:'en_reparacion'}).catch(()=>{});
+    }
+
+    toast('Falla registrada'+(avisoStock?' — '+avisoStock:''));
     closeModal('modal-falla');
+    await loadFallasPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function marcarRecibidaDevolucion(fallaId){
+  const f = fallasData.find(x=>x.id===fallaId);
+  if(!f) return;
+  if(!confirm('¿Confirmar que el ítem llegó físicamente al depósito?')) return;
+  try{
+    await api(`fallas?id=eq.${fallaId}`,'PATCH',{
+      estado:'detectada', fecha_recepcion_devolucion: new Date().toISOString().slice(0,10)
+    });
+    if(f.item_type==='insumo_unidad' && f.item_id){
+      await api(`unidades?id=eq.${f.item_id}`,'PATCH',{estado:'en_reparacion'}).catch(()=>{});
+    }
+    toast('Recepción confirmada');
     await loadFallasPage();
   }catch(e){ toast('Error: '+e.message); }
 }
@@ -963,15 +1279,51 @@ function abrirDetalleFalla(id){
   const f = fallasData.find(x=>x.id===id);
   if(!f) return;
   const service = (f.service_tecnico||[])[0];
-  document.getElementById('fd-titulo').textContent = `Falla #${f.id} — ${f.item_type==='bien_unidad'?'Bien':'Insumo'} #${f.item_id}`;
-  const puedeGestionar = f.estado==='detectada' || f.estado==='en_service';
-  document.getElementById('fd-content').innerHTML = `
-    <div class="timeline">
+  const op = f.ordenes_produccion;
+  const itemNombre = f.item_type==='bien_unidad' ? `Bien #${f.item_id}` : (f.skus?.nombre || `Insumo #${f.item_id}`);
+  document.getElementById('fd-titulo').textContent = `Falla #${f.id} — ${itemNombre}${op?' ('+(op.codigo_op_interno||op.op_numero)+' · '+op.cliente+')':''}`;
+
+  const infoExtra = [];
+  if(f.resolucion) infoExtra.push('Resolución: '+({devolucion:'Devolución',in_situ:'Reparación in situ',reposicion_pagada:'Reposición paga'}[f.resolucion]||f.resolucion));
+  if(f.fuera_garantia===true) infoExtra.push('<span style="color:var(--red)">Fuera de garantía</span>');
+  if(f.fuera_garantia===false) infoExtra.push('<span style="color:var(--green)">Dentro de garantía</span>');
+  if(f.sustitucion_enviada) infoExtra.push('<span style="color:var(--blue)">✓ Sustitución enviada sin cargo</span>');
+
+  let html = `<div class="timeline">
       <div class="timeline-item done">
         <div class="timeline-label">Detectada</div>
         <div class="timeline-val">${f.fecha_deteccion||'—'} ${f.detectado_por?'· '+f.detectado_por:''}</div>
         <div class="timeline-val" style="color:var(--text2)">${f.descripcion_falla}</div>
+        ${infoExtra.length?`<div class="timeline-val" style="color:var(--text3);font-size:11px;">${infoExtra.join(' · ')}</div>`:''}
+      </div>`;
+
+  if(f.estado==='pendiente_devolucion'){
+    html += `
+      <div class="timeline-item active">
+        <div class="timeline-label">Esperando devolución del cliente</div>
+        <div class="timeline-val" style="color:var(--text2)">El depósito debe confirmar cuando llegue físicamente.</div>
+        <button class="btn amber sm" style="margin-top:8px;" onclick="marcarRecibidaDevolucion(${f.id})">✓ Confirmar recepción en depósito</button>
       </div>
+    </div>`;
+    document.getElementById('fd-content').innerHTML = html;
+    openModal('modal-falla-detalle');
+    return;
+  }
+
+  if(f.estado==='resuelta_reposicion_cliente'){
+    html += `
+      <div class="timeline-item done">
+        <div class="timeline-label">Resolución</div>
+        <div class="timeline-val">✓ Reposición paga — el cliente se queda con la unidad fallada</div>
+        <div class="timeline-val" style="color:var(--text2)">Costo de reposición: ${f.costo_reposicion?('$'+Number(f.costo_reposicion).toLocaleString('es-AR')):'—'} (dato informativo)</div>
+      </div>
+    </div>`;
+    document.getElementById('fd-content').innerHTML = html;
+    openModal('modal-falla-detalle');
+    return;
+  }
+
+  html += `
       <div class="timeline-item ${service?'done':(f.estado==='detectada'?'active':'')}">
         <div class="timeline-label">Service técnico</div>
         ${service ? `
@@ -986,15 +1338,16 @@ function abrirDetalleFalla(id){
       </div>
       <div class="timeline-item ${f.estado.startsWith('resuelta')?'done':''}">
         <div class="timeline-label">Resolución</div>
-        ${f.estado.startsWith('resuelta') ? `<div class="timeline-val">${f.estado==='resuelta_reingreso'?'✓ Reingresó a stock':'✗ Dada de baja por rotura'}</div>` :
+        ${f.estado.startsWith('resuelta') ? `<div class="timeline-val">${f.estado==='resuelta_reingreso'?(f.resolucion==='in_situ'?'✓ Reparado in situ (no vuelve a stock)':'✓ Reingresó a stock'):(f.resolucion==='in_situ'?'✗ Irreparable (queda en sitio del cliente)':'✗ Dada de baja por rotura')}</div>` :
           (service && !service.resultado ? `
           <div class="form-group" style="margin-top:8px;"><label class="form-label">Costo final</label><input class="form-input" type="number" id="svc-costo-final" min="0" step="0.01" value="${service.costo||''}"></div>
           <div style="display:flex;gap:8px;">
-            <button class="btn green sm" onclick="resolverFalla(${f.id},'reparado')">✓ Reparado → reingresar a stock</button>
-            <button class="btn red sm" onclick="resolverFalla(${f.id},'irreparable')">✗ Irreparable → dar de baja</button>
+            <button class="btn green sm" onclick="resolverFalla(${f.id},'reparado')">✓ Reparado${f.resolucion==='in_situ'?'':' → reingresar a stock'}</button>
+            <button class="btn red sm" onclick="resolverFalla(${f.id},'irreparable')">✗ Irreparable${f.resolucion==='in_situ'?'':' → dar de baja'}</button>
           </div>` : '<div class="timeline-val" style="color:var(--text3)">Pendiente de envío a service</div>')}
       </div>
     </div>`;
+  document.getElementById('fd-content').innerHTML = html;
   openModal('modal-falla-detalle');
 }
 
@@ -1019,10 +1372,31 @@ async function resolverFalla(fallaId, resultado){
     if(service) await api(`service_tecnico?id=eq.${service.id}`,'PATCH',{resultado, costo: costoFinal, fecha_retorno: new Date().toISOString().slice(0,10)});
     const nuevoEstadoFalla = resultado==='reparado' ? 'resuelta_reingreso' : 'resuelta_baja';
     await api(`fallas?id=eq.${fallaId}`,'PATCH',{estado: nuevoEstadoFalla});
-    const tabla = f.item_type==='bien_unidad' ? 'bienes_unidades' : 'unidades';
-    const nuevoEstadoItem = resultado==='reparado' ? (f.item_type==='bien_unidad'?'disponible':'stock') : 'baja';
-    await api(`${tabla}?id=eq.${f.item_id}`,'PATCH',{estado: nuevoEstadoItem});
-    toast(resultado==='reparado' ? 'Reingresado a stock' : 'Dado de baja');
+
+    if(f.resolucion==='in_situ'){
+      // Reparado o no, el ítem nunca vuelve a nuestro depósito — no tocamos stock.
+    } else if(f.item_type==='bien_unidad'){
+      const nuevoEstadoItem = resultado==='reparado' ? 'disponible' : 'baja';
+      await api(`bienes_unidades?id=eq.${f.item_id}`,'PATCH',{estado: nuevoEstadoItem});
+    } else if(f.item_type==='insumo_sku'){
+      // Insumo de caja (sin UID individual) — vuelve al pool general de stock, sin identificación puntual
+      if(resultado==='reparado'){
+        const stockRows = await api(`stock?sku_id=eq.${f.sku_id}&variante_id=${f.variante_id?('eq.'+f.variante_id):'is.null'}&select=id,cantidad`).catch(()=>[]);
+        if(stockRows && stockRows.length){
+          await api(`stock?id=eq.${stockRows[0].id}`,'PATCH',{cantidad:(stockRows[0].cantidad||0)+1, updated_at:new Date().toISOString()});
+        } else {
+          await api('stock','POST',[{sku_id:f.sku_id, variante_id:f.variante_id||null, cantidad:1}]);
+        }
+      }
+      // Irreparable: no hay unidad individual que dar de baja, ya estaba descontada del stock al armarse el proyecto.
+    } else if(f.item_type==='insumo_unidad' && f.item_id){
+      const nuevoEstadoItem = resultado==='reparado' ? 'stock' : 'baja';
+      const notas = resultado==='reparado'
+        ? `Reingresó a stock tras reparación — con falla previa — ${new Date().toLocaleDateString('es-AR')}`
+        : `Dado de baja por falla irreparable — ${new Date().toLocaleDateString('es-AR')}`;
+      await api(`unidades?id=eq.${f.item_id}`,'PATCH',{estado: nuevoEstadoItem, notas});
+    }
+    toast(resultado==='reparado' ? (f.resolucion==='in_situ'?'Marcado como reparado':'Reingresado a stock') : 'Dado de baja');
     closeModal('modal-falla-detalle');
     await loadFallasPage();
   }catch(e){ toast('Error: '+e.message); }

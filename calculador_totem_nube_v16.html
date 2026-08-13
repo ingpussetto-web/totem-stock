@@ -6705,7 +6705,7 @@ async function saveToSheets(){
 
     // ── Proyectos ──────────────────────────────────────────────────────────
     // Traer todos los proyectos de DB para comparar
-    const proyDB = await stockAPI('proyectos_cotizador?select=id,orden').catch(()=>[]);
+    const proyDB = await stockAPI('proyectos_cotizador?select=id,orden,estado,fecha_despacho').catch(()=>[]);
     const ordenesActivos = proyectos.map(p=>p.orden).filter(Boolean);
     
     // Borrar proyectos eliminados de Supabase (por orden)
@@ -6733,15 +6733,23 @@ async function saveToSheets(){
       if(enDB){
         // Actualizar usando el id de DB
         p.id = enDB.id; // sincronizar id local con DB
-        await stockAPI('proyectos_cotizador?id=eq.'+enDB.id, 'PATCH', {
+        const patchBody = {
           orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio,
           estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items)
-        });
+        };
+        // Stampear fecha_despacho solo en la transición hacia 'despachado' (no retroactivo:
+        // proyectos ya despachados antes de este cambio quedan con fecha_despacho=NULL).
+        if(p.estado==='despachado' && enDB.estado!=='despachado' && enDB.estado!=='instalado' && !enDB.fecha_despacho){
+          patchBody.fecha_despacho = new Date().toISOString();
+        }
+        await stockAPI('proyectos_cotizador?id=eq.'+enDB.id, 'PATCH', patchBody);
       } else {
-        const res = await stockAPI('proyectos_cotizador', 'POST', [{
+        const postBody = {
           orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio,
           estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items)
-        }]);
+        };
+        if(p.estado==='despachado') postBody.fecha_despacho = new Date().toISOString();
+        const res = await stockAPI('proyectos_cotizador', 'POST', [postBody]);
         if(res && res[0]) p.id = res[0].id;
       }
     }
