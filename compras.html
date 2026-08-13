@@ -486,7 +486,8 @@ textarea.form-input{resize:vertical;min-height:70px;}
         </div>
       </div>
       <button class="btn green" onclick="openModalProveedor(true)" style="margin-bottom:16px;">+ Nuevo proveedor</button>
-      <div style="display:flex;justify-content:flex-end;">
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn amber" onclick="guardarOC('borrador')" id="btn-oc-borrador-p1" style="display:none;" title="Guarda el proveedor elegido para continuar después">💾 Guardar borrador</button>
         <button class="btn solid-green" onclick="ocPaso2()" id="btn-oc-p2" disabled>Continuar →</button>
       </div>
     </div>
@@ -535,7 +536,10 @@ textarea.form-input{resize:vertical;min-height:70px;}
 
       <div style="display:flex;justify-content:space-between;margin-top:14px;">
         <button class="btn" onclick="ocPaso1()">← Volver</button>
-        <button class="btn solid-green" onclick="ocPaso3()">Continuar →</button>
+        <div style="display:flex;gap:10px;">
+          <button class="btn amber" onclick="guardarOC('borrador')" title="Guarda lo cargado hasta ahora sin completar el paso de pago">💾 Guardar borrador</button>
+          <button class="btn solid-green" onclick="ocPaso3()">Continuar →</button>
+        </div>
       </div>
     </div>
 
@@ -1441,6 +1445,7 @@ function nuevaOC(skuIdPreCargado, nombrePreCargado, variantePreCargada){
   document.getElementById('oc-prov-results').innerHTML='';
   document.getElementById('oc-prov-seleccionado').style.display='none';
   document.getElementById('btn-oc-p2').disabled=true;
+  document.getElementById('btn-oc-borrador-p1').style.display='none';
   document.getElementById('oc-observaciones').value='';
   document.getElementById('oc-moneda').value='ARS';
   document.getElementById('tipo-cambio-group').style.display='none';
@@ -1540,12 +1545,14 @@ function seleccionarProveedorOC(id){
   document.getElementById('oc-prov-nombre-sel').textContent=provSeleccionado.razon_social;
   document.getElementById('oc-prov-meta-sel').textContent=[provSeleccionado.cuit,provSeleccionado.contacto,provSeleccionado.mail].filter(Boolean).join(' · ');
   document.getElementById('btn-oc-p2').disabled=false;
+  document.getElementById('btn-oc-borrador-p1').style.display='';
 }
 
 function deseleccionarProveedor(){
   provSeleccionado=null;
   document.getElementById('oc-prov-seleccionado').style.display='none';
   document.getElementById('btn-oc-p2').disabled=true;
+  document.getElementById('btn-oc-borrador-p1').style.display='none';
 }
 
 // ─── LÍNEAS ─────────────────────────────────────────────────
@@ -1905,7 +1912,8 @@ function calcularSenia(){
 
 // ─── GUARDAR OC ──────────────────────────────────────────────
 async function guardarOC(estado, previsualizar=false){
-  if(!provSeleccionado||!lineas.length){toast('Faltan datos');return;}
+  if(!provSeleccionado){toast('Faltan datos');return;}
+  if(!lineas.length && estado!=='borrador'){toast('Faltan datos');return;}
   const moneda=document.getElementById('oc-moneda').value;
   const condicion=pagoSeleccionado==='senia_saldo'
     ?`Seña ${document.getElementById('oc-senia-pct').value}% + saldo`
@@ -1960,8 +1968,8 @@ async function guardarOC(estado, previsualizar=false){
       }]);
       ocId=res[0].id;
     }
-    // Insertar líneas
-    await api('oc_items','POST',lineas.map(l=>({
+    // Insertar líneas (si hay — un borrador puede guardarse sin líneas todavía)
+    if(lineas.length) await api('oc_items','POST',lineas.map(l=>({
       oc_id:ocId,
       sku_id:l.sku_id,
       nombre:l.nombre,
@@ -2228,6 +2236,7 @@ async function editarOC(ocId){
     document.getElementById('oc-prov-seleccionado').style.display='block';
     document.getElementById('oc-prov-nombre-sel').textContent=o.proveedores?.razon_social||'—';
     document.getElementById('btn-oc-p2').disabled=false;
+    document.getElementById('btn-oc-borrador-p1').style.display='';
     document.getElementById('oc-observaciones').value=o.observaciones||'';
     document.getElementById('oc-moneda').value=o.moneda||'ARS';
     const catSel=document.getElementById('add-cat-sel');
