@@ -200,6 +200,7 @@ select.filter:focus{outline:none;border-color:var(--green);}
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn" onclick="abrirBOMMaestra()" style="border-color:var(--amber);color:var(--amber);">📋 BOM Maestra</button>
+          <button class="btn" onclick="abrirNuevaOPStock()" style="border-color:var(--purple, #8b6bd6);color:var(--purple, #8b6bd6);">📦 Nueva OP para stock</button>
           <button class="btn" onclick="loadOPs()">↻ Actualizar</button>
         </div>
       </div>
@@ -454,6 +455,7 @@ function renderOPCard(o){
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
           <div class="op-numero">${esc(o.op_numero)}</div>
           <span class="badge ${estadoBadge[o.estado]}">${estadoLabel[o.estado]}</span>
+          ${o.para_stock?`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(139,107,214,0.12);color:#8b6bd6;white-space:nowrap;">📦 para stock</span>`:''}
           ${o.color_gabinete?`<span style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;">● ${esc(o.color_gabinete)}</span>`:''}
         </div>
         <div class="op-cliente">${esc(o.cliente)}</div>
@@ -763,11 +765,25 @@ function renderBOMItem(item){
   }
 
   const esManual = item.notas === 'Agregado manualmente';
-  return `<div class="bom-item ${incluido?'':'excluido'}" id="bom-item-${item.id}">
-    <button class="bom-toggle ${incluido?'on':'off'}" onclick="toggleItem('${item.id}')" title="${incluido?'Excluir':'Incluir'}">
-      ${incluido?'✓':'✕'}
-    </button>
-    <div class="bom-item-nombre">${item.nombre}${esManual?'<span style="font-size:9px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">+ Manual</span>':''}</div>
+  // Items ya asignados a una unidad/cantidad física real (por ejemplo, componentes de
+  // un equipo armado que se está vendiendo desde stock) no se excluyen con el toggle
+  // normal — eso solo cambiaría un dato, sin avisarle a Producción que hay que sacarle
+  // físicamente esa pieza al equipo. Para esos casos se ofrece "marcar a desmontar".
+  const yaAsignadoFisico = item.estado === 'asignado' && !!item.uid_asignado;
+  const marcadoDesmontar = item._aDesmontar === true;
+  const toggleBtn = yaAsignadoFisico
+    ? `<button class="bom-toggle ${marcadoDesmontar?'off':'on'}" onclick="toggleDesmontar('${item.id}')" title="${marcadoDesmontar?'Deshacer':'Marcar a desmontar'}">
+        ${marcadoDesmontar?'↩':'✓'}
+      </button>`
+    : `<button class="bom-toggle ${incluido?'on':'off'}" onclick="toggleItem('${item.id}')" title="${incluido?'Excluir':'Incluir'}">
+        ${incluido?'✓':'✕'}
+      </button>`;
+  const estadoTag = marcadoDesmontar
+    ? '<span style="font-size:9px;background:rgba(255,94,94,0.12);color:var(--red);border:1px solid rgba(255,94,94,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">✕ A desmontar</span>'
+    : (yaAsignadoFisico ? '<span style="font-size:9px;background:rgba(0,229,160,0.12);color:var(--green);border:1px solid rgba(0,229,160,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">✓ Ya en el equipo</span>' : '');
+  return `<div class="bom-item ${incluido && !marcadoDesmontar?'':'excluido'}" id="bom-item-${item.id}">
+    ${toggleBtn}
+    <div class="bom-item-nombre">${item.nombre}${estadoTag}${esManual?'<span style="font-size:9px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">+ Manual</span>':''}</div>
     ${varHTML}
     ${stockHTML}
     <div class="bom-item-qty" style="text-align:right;">
@@ -783,6 +799,15 @@ function toggleItem(itemId){
   const item = currentBOMItems.find(i=>String(i.id)===String(itemId));
   if(!item) return;
   item.incluido = !item.incluido;
+  renderBOMEditor();
+}
+
+// Marca/desmarca un componente ya asignado físicamente (equipo vendido desde stock)
+// para que Producción lo desmonte antes de despachar. No se guarda hasta "Guardar BOM".
+function toggleDesmontar(itemId){
+  const item = currentBOMItems.find(i=>String(i.id)===String(itemId));
+  if(!item) return;
+  item._aDesmontar = !item._aDesmontar;
   renderBOMEditor();
 }
 
@@ -1194,6 +1219,10 @@ async function guardarBOM(estado){
           patch.sku_id = item.sku_id;
           patch.nombre = item.nombre;
         }
+        // Componente ya asignado físicamente (equipo vendido desde stock) marcado
+        // "a desmontar": no se excluye como un pendiente cualquiera, queda en un
+        // estado propio para que Producción sepa que hay que sacárselo al equipo.
+        if(item._aDesmontar) patch.estado = 'a_desmontar';
         await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
       }
     }
@@ -1415,11 +1444,15 @@ async function cambiarEstado(opId, nuevoEstado){
 
     // ── Descontar stock de insumos de caja asignados ────────────────────────
     // (excepción: cierre desde Ventas sin pasar por Producción)
+    var equiposGeneradosVentas = [];
     try{
-      const itemsCaja = await api(
-        `op_bom_items?op_id=eq.${opId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=sku_id,variante_id,uid_asignado,skus(tracking)`
+      const opInfo = await api(`ordenes_produccion?id=eq.${opId}&select=para_stock,producto_nombre,op_numero`).catch(()=>[]);
+      const esParaStock = !!(opInfo && opInfo[0] && opInfo[0].para_stock);
+
+      const itemsAsignados = await api(
+        `op_bom_items?op_id=eq.${opId}&incluido=eq.true&estado=eq.asignado&uid_asignado=not.is.null&select=sku_id,variante_id,uid_asignado,equipo_num,qty,skus(tracking)`
       ).catch(()=>[]);
-      const cajaItems = (itemsCaja||[]).filter(i => i.uid_asignado?.endsWith('-CAJA') && i.skus?.tracking === 'cantidad');
+      const cajaItems = (itemsAsignados||[]).filter(i => i.uid_asignado?.endsWith('-CAJA') && i.skus?.tracking === 'cantidad');
       const stockUpdates = {};
       for(const item of cajaItems){
         const key = `${item.sku_id}_${item.variante_id||'null'}`;
@@ -1439,12 +1472,20 @@ async function cambiarEstado(opId, nuevoEstado){
           });
         }
       }
-      // Marcar unidades UID asignadas como producido
-      const uidsReales = (itemsCaja||[])
+      // Marcar unidades UID asignadas como producido — salvo que sea una OP "para stock",
+      // en cuyo caso no salen a cliente: quedan "montadas" en un equipo armado (más abajo).
+      const uidsReales = (itemsAsignados||[])
         .filter(i => i.uid_asignado && !i.uid_asignado.endsWith('-CAJA'))
         .map(i => i.uid_asignado);
-      for(const uid of uidsReales){
-        await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', {estado:'producido', op_id: opId});
+      if(!esParaStock){
+        for(const uid of uidsReales){
+          await api(`unidades?uid=eq.${encodeURIComponent(uid)}`, 'PATCH', {estado:'producido', op_id: opId});
+        }
+      }
+
+      if(esParaStock){
+        const items = (itemsAsignados||[]).filter(i=>i.uid_asignado);
+        equiposGeneradosVentas = await generarEquiposParaStockVentas(opInfo[0], items);
       }
     }catch(e){ console.warn('Error descontando stock desde Ventas:', e); }
     // ────────────────────────────────────────────────────────────────────────
@@ -1458,9 +1499,44 @@ async function cambiarEstado(opId, nuevoEstado){
       notas: nuevoEstado === 'completada' ? 'Cierre desde módulo Ventas — insumos restados automáticamente.' : undefined,
       updated_at: new Date().toISOString()
     });
-    toast('Estado actualizado ✓');
+    toast(equiposGeneradosVentas.length ? `Estado actualizado ✓ — equipo(s) en stock: ${equiposGeneradosVentas.join(', ')}` : 'Estado actualizado ✓');
     loadOPs();
   }catch(e){toast('Error: '+e.message);}
+}
+
+// ─── OP PARA STOCK → EQUIPOS ARMADOS (cierre desde Ventas) ─────────────────
+// Misma lógica que produccion.html: agrupa los insumos ya asignados por
+// equipo_num y genera un conjunto_montado por cada uno.
+async function generarEquiposParaStockVentas(op, itemsAsignados){
+  const grupos = {};
+  for(const it of itemsAsignados){
+    const eq = it.equipo_num || 1;
+    if(!grupos[eq]) grupos[eq] = [];
+    grupos[eq].push(it);
+  }
+  const codigos = [];
+  const claves = Object.keys(grupos).sort((a,b)=>Number(a)-Number(b));
+  for(const eqNum of claves){
+    const items = grupos[eqNum];
+    const codigo = `CONJ-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}${claves.length>1?'-'+eqNum:''}`;
+    try{
+      const res = await api('conjuntos_montados','POST',[{
+        codigo, descripcion: `${op.producto_nombre} (OP ${op.op_numero})`, ubicacion: null, estado: 'armado'
+      }]);
+      const conjuntoId = res[0].id;
+      for(const it of items){
+        if(it.uid_asignado === 'CANTIDAD-DESCONTADA' || it.uid_asignado.endsWith('-CAJA')){
+          await api('conjunto_componentes_cantidad','POST',[{
+            conjunto_id: conjuntoId, sku_id: it.sku_id, variante_id: it.variante_id||null, cantidad: it.qty||1
+          }]);
+        } else {
+          await api(`unidades?uid=eq.${encodeURIComponent(it.uid_asignado)}`, 'PATCH', {estado:'montado', conjunto_id: conjuntoId, op_id: null});
+        }
+      }
+      codigos.push(codigo);
+    }catch(e){ console.warn('Error generando equipo en stock:', e); }
+  }
+  return codigos;
 }
 
 async function cancelarOP(opId, opNumero){
@@ -1675,6 +1751,91 @@ const PRODUCTOS_BOM = [
 let bomMaestraItems = [];
 let bomMaestraProducto = '';
 let skusDisponibles = [];
+
+// ─── NUEVA OP PARA STOCK ────────────────────────────────────────────────────
+// Genera una Orden de Producción sin cliente, rescatando la BOM Maestra ya
+// cargada para el producto elegido, para que Producción arme equipo(s) que
+// quedan disponibles en stock (Equipos armados) en vez de ir a un cliente.
+async function abrirNuevaOPStock(){
+  const pwd = prompt('Contraseña gerencia:');
+  if(pwd === null) return;
+  if(pwd !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
+  const bomsExistentes = await api('bom_maestra?select=producto_v14').catch(()=>[]);
+  const productosCon = new Set((bomsExistentes||[]).map(b=>b.producto_v14));
+  const disponibles = PRODUCTOS_BOM.filter(p=>productosCon.has(p.id));
+  if(!disponibles.length){ alert('No hay productos con BOM Maestra cargada todavía.\nCargá una desde "📋 BOM Maestra" primero.'); return; }
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-op-stock';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  const opts = disponibles.map(p=>'<option value="'+p.id+'">'+esc(p.nombre)+'</option>').join('');
+  overlay.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:420px;padding:22px;">'
+    +'<div style="font-size:16px;font-weight:700;margin-bottom:4px;">📦 Nueva OP para stock</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:18px;line-height:1.5;">Genera una Orden de Producción sin cliente, con la BOM Maestra del producto elegido. Producción la va a ver como cualquier OP, marcada "para stock", y al armarla queda disponible en Equipos armados.</div>'
+    +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Producto</div>'
+    +'<select id="ops-nueva-producto" style="width:100%;height:36px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:0 8px;margin-bottom:14px;">'+opts+'</select>'
+    +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Cantidad de equipos a armar</div>'
+    +'<input type="number" id="ops-nueva-cantidad" value="1" min="1" style="width:100%;height:36px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:0 8px;margin-bottom:20px;">'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button class="btn" onclick="document.getElementById(\'modal-op-stock\').remove()" style="flex:1;">Cancelar</button>'
+    +'<button class="btn solid-green" onclick="crearOPStock()" style="flex:1;">Crear OP</button>'
+    +'</div></div>';
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+async function crearOPStock(){
+  const productoId = document.getElementById('ops-nueva-producto').value;
+  const cantidad = parseInt(document.getElementById('ops-nueva-cantidad').value)||1;
+  if(!productoId){ toast('Elegí un producto'); return; }
+  const prodDef = PRODUCTOS_BOM.find(p=>p.id===productoId);
+  try{
+    const bomMaestra = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking)').catch(()=>[]);
+    if(!bomMaestra || !bomMaestra.length){ toast('Ese producto no tiene BOM Maestra cargada'); return; }
+
+    // Número de OP correlativo del día (mismo formato que usa el calculador)
+    const fechaHoy = new Date();
+    const dd = String(fechaHoy.getDate()).padStart(2,'0');
+    const mm = String(fechaHoy.getMonth()+1).padStart(2,'0');
+    const yyyy = fechaHoy.getFullYear();
+    const prefijoDia = 'OP'+dd+mm+yyyy+'-';
+    let ultimoNum = 0;
+    const opsHoy = await api('ordenes_produccion?op_numero=like.'+encodeURIComponent(prefijoDia+'%')+'&select=op_numero&order=op_numero.desc&limit=1').catch(()=>[]);
+    if(opsHoy && opsHoy.length){
+      const m = opsHoy[0].op_numero.match(/-(\d+)$/);
+      if(m) ultimoNum = parseInt(m[1]);
+    }
+    const opNumero = prefijoDia + String(ultimoNum+1).padStart(3,'0');
+
+    const opRes = await api('ordenes_produccion','POST',[{
+      op_numero: opNumero,
+      cliente: 'Stock interno',
+      producto_v14: productoId,
+      producto_nombre: prodDef ? prodDef.nombre : productoId,
+      cantidad: cantidad,
+      estado: 'bom_pendiente',
+      para_stock: true,
+      notas: 'Creada desde Órdenes de Producción — OP para stock ('+cantidad+' equipo'+(cantidad>1?'s':'')+').'
+    }]);
+    const opId = opRes[0].id;
+
+    const bomPayload = [];
+    for(let eq = 1; eq <= cantidad; eq++){
+      bomMaestra.forEach(function(r){
+        bomPayload.push({
+          op_id: opId, sku_id: r.sku_id, v14_key: r.v14_key || null,
+          nombre: r.skus ? r.skus.nombre : r.nombre, qty: r.qty || 1,
+          incluido: true, notas: null, estado: 'pendiente',
+          equipo_num: eq, variante_id: r.variante_id || null
+        });
+      });
+    }
+    if(bomPayload.length) await api('op_bom_items', 'POST', bomPayload);
+
+    document.getElementById('modal-op-stock')?.remove();
+    toast('OP '+opNumero+' creada para stock ✓');
+    loadOPs();
+  }catch(e){ toast('Error: '+e.message); }
+}
 
 async function abrirBOMMaestra(){
   const pwd = prompt('Contraseña gerencia:');

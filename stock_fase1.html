@@ -320,6 +320,22 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         </div>
       </div>
 
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">📦 Insumos de caja montados en equipos — no disponibles hasta desasociar</div>
+        <div style="padding:0 0 10px;">
+          <input class="search-input" type="text" placeholder="Buscar SKU..." id="montado-cant-search" oninput="renderMontadosCantidad()">
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>SKU</th><th>Variante</th><th style="text-align:right">Cantidad</th><th>Equipo</th><th></th></tr>
+            </thead>
+            <tbody id="montado-cant-tbody">
+              <tr><td colspan="5"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
     </div>
 
@@ -903,7 +919,82 @@ async function loadStock(){
     uidRowsData = uidRows;
     renderStock(stockData, uidRows);
     loadPendientesIngreso();
+    loadMontadosCantidad();
   } catch(e){ console.error(e); renderStock([]); }
+}
+
+// ─── INSUMOS DE CAJA MONTADOS EN EQUIPOS ──────────────────────────────────────
+let montadosCantidadData = [];
+async function loadMontadosCantidad(){
+  montadosCantidadData = await api('conjunto_componentes_cantidad?select=*,skus(nombre),variantes(valor),conjuntos_montados(id,codigo,descripcion,estado)').catch(()=>[]);
+  renderMontadosCantidad();
+}
+function renderMontadosCantidad(){
+  const search = document.getElementById('montado-cant-search')?.value.toLowerCase()||'';
+  const tbody = document.getElementById('montado-cant-tbody');
+  if(!tbody) return;
+  let rows = (montadosCantidadData||[]).filter(c=>c.conjuntos_montados?.estado!=='vendido');
+  if(search) rows = rows.filter(c=>(c.skus?.nombre||'').toLowerCase().includes(search));
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">✓</div>No hay insumos de caja montados en equipos</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(c=>{
+    const conj = c.conjuntos_montados;
+    return `<tr>
+      <td>${c.skus?.nombre||'—'}</td>
+      <td style="font-size:11px;color:var(--text3)">${c.variantes?.valor||'—'}</td>
+      <td class="td-num">${c.cantidad}</td>
+      <td class="td-mono" style="font-size:11px">${conj?.codigo||'—'} <span style="color:var(--text3)">— ${conj?.descripcion||''}</span></td>
+      <td class="td-actions"><button class="btn sm amber" onclick="desasociarCantidadEquipo(${c.id})">Desasociar</button></td>
+    </tr>`;
+  }).join('');
+}
+async function desasociarCantidadEquipo(compId){
+  let comp = (montadosCantidadData||[]).find(c=>c.id===compId);
+  if(!comp){
+    const rows = await api(`conjunto_componentes_cantidad?id=eq.${compId}&select=*,skus(nombre),variantes(valor),conjuntos_montados(id,codigo,descripcion,estado)`).catch(()=>[]);
+    comp = rows && rows[0];
+  }
+  if(!comp) return;
+  const pass = prompt('Esta acción requiere autorización.\nIngresá la contraseña:');
+  if(pass === null) return;
+  if(pass !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
+  const cantStr = prompt(`¿Cuántas unidades de "${comp.skus?.nombre}" querés liberar? (máximo ${comp.cantidad})`, comp.cantidad);
+  if(cantStr === null) return;
+  const cant = parseInt(cantStr);
+  if(!cant || cant<=0 || cant>comp.cantidad){ toast('Cantidad inválida'); return; }
+  try{
+    // Sumar al stock general
+    const stockRows = comp.variante_id
+      ? await api(`stock?sku_id=eq.${comp.sku_id}&variante_id=eq.${comp.variante_id}&select=id,cantidad`)
+      : await api(`stock?sku_id=eq.${comp.sku_id}&variante_id=is.null&select=id,cantidad`);
+    if(stockRows && stockRows.length){
+      await api(`stock?id=eq.${stockRows[0].id}`,'PATCH',{cantidad:(stockRows[0].cantidad||0)+cant, updated_at:new Date().toISOString()});
+    } else {
+      await api('stock','POST',[{sku_id:comp.sku_id, variante_id:comp.variante_id||null, cantidad:cant}]);
+    }
+    // Restar o eliminar la fila del conjunto
+    if(cant>=comp.cantidad){
+      await api(`conjunto_componentes_cantidad?id=eq.${compId}`,'DELETE');
+    } else {
+      await api(`conjunto_componentes_cantidad?id=eq.${compId}`,'PATCH',{cantidad:comp.cantidad-cant});
+    }
+    // Recalcular estado del conjunto si ya no le queda nada montado (ni UID ni caja)
+    const conjuntoId = comp.conjuntos_montados?.id;
+    if(conjuntoId){
+      const [montadosUid, montadosCant] = await Promise.all([
+        api(`unidades?conjunto_id=eq.${conjuntoId}&estado=eq.montado&select=id`).catch(()=>[]),
+        api(`conjunto_componentes_cantidad?conjunto_id=eq.${conjuntoId}&select=id`).catch(()=>[])
+      ]);
+      const quedaAlgo = (montadosUid&&montadosUid.length) || (montadosCant&&montadosCant.length);
+      await api(`conjuntos_montados?id=eq.${conjuntoId}`,'PATCH',{estado: quedaAlgo ? 'desarmado_parcial' : 'desarmado'});
+    }
+    toast('Insumo liberado — ya disponible en stock');
+    closeModal('modal-equipo-detalle');
+    loadMontadosCantidad();
+    loadEquipos();
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 function actualizarFiltroVariante(){
@@ -1513,12 +1604,16 @@ async function abrirDetalleEquipo(id){
         ${u.estado==='montado'?`<button class="btn sm amber" onclick="desasociarComponenteEquipo(${u.id},${conj.id})">Desasociar</button>`:''}
       </div>`).join('') : '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Sin componentes con UID.</div>'}
     ${compsCant.length ? `
-      <div class="form-label" style="margin:10px 0 6px;">Componentes de caja (informativo)</div>
-      ${compsCant.map(c=>`<div style="font-size:12px;color:var(--text2);padding:4px 0;">• ${c.skus?.nombre||'—'}${c.variantes?.valor?' · '+c.variantes.valor:''} x${c.cantidad}</div>`).join('')}
+      <div class="form-label" style="margin:10px 0 6px;">Componentes de caja</div>
+      ${compsCant.map(c=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:5px;font-size:12px;">
+          <span>${c.skus?.nombre||'—'}${c.variantes?.valor?' · '+c.variantes.valor:''} x${c.cantidad}</span>
+          ${conj.estado!=='vendido'?`<button class="btn sm amber" onclick="desasociarCantidadEquipo(${c.id})">Desasociar</button>`:''}
+        </div>`).join('')}
     ` : ''}
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn" onclick="closeModal('modal-equipo-detalle')">Cerrar</button>
-      ${hayMontados && conj.estado!=='vendido' ? `<button class="btn red" onclick="venderEquipoCompleto(${conj.id})">Vender equipo completo</button>` : ''}
+      ${hayMontados && conj.estado!=='vendido' ? `<button class="btn red" onclick="venderEquipoCompleto(${conj.id})">Vender equipo completo (crea OP)</button>` : ''}
     </div>
   `;
   openModal('modal-equipo-detalle');
@@ -1547,20 +1642,106 @@ async function venderEquipoCompleto(conjuntoId){
   const pass = prompt('Esta acción requiere autorización.\nIngresá la contraseña:');
   if(pass === null) return;
   if(pass !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
-  if(!confirm('¿Confirmar la venta del equipo completo? Todos los componentes con UID pasan a "producido" y salen del stock disponible.')) return;
+
+  const conjRows = await api(`conjuntos_montados?id=eq.${conjuntoId}&select=*,unidades(id,uid,estado,sku_id,variante_id,skus(nombre)),conjunto_componentes_cantidad(id,sku_id,variante_id,cantidad,skus(nombre))&limit=1`).catch(()=>[]);
+  if(!conjRows || !conjRows.length){ toast('Error al leer el equipo'); return; }
+  const conj = conjRows[0];
+  const montadosUid = (conj.unidades||[]).filter(u=>u.estado==='montado');
+  const compsCant = conj.conjunto_componentes_cantidad||[];
+  if(!montadosUid.length){ toast('No hay componentes montados con UID en este equipo'); return; }
+
+  const cliente = prompt('¿A qué cliente se vende este equipo?\n\nSe va a crear una Orden de Producción con los insumos que ya tiene identificados este equipo. Si le falta algún insumo para completar el despacho, se agrega después desde Órdenes de Producción.');
+  if(cliente === null) return;
+  if(!cliente.trim()){ alert('El cliente es obligatorio.'); return; }
+  const clienteFinal = cliente.trim();
+
+  if(!confirm(`¿Confirmar la venta del equipo "${conj.codigo}" a "${clienteFinal}"?\n\nSe crea una OP con ${montadosUid.length + compsCant.length} insumo(s) ya asignados, y los componentes con UID pasan a "producido".`)) return;
+
   try{
-    const montados = await api(`unidades?conjunto_id=eq.${conjuntoId}&estado=eq.montado&select=id`).catch(()=>[]);
-    for(const u of (montados||[])){
+    // 1) Número de OP correlativo del día (mismo formato usado en el cotizador)
+    const fechaHoy = new Date();
+    const dd = String(fechaHoy.getDate()).padStart(2,'0');
+    const mm = String(fechaHoy.getMonth()+1).padStart(2,'0');
+    const yyyy = fechaHoy.getFullYear();
+    const prefijoDia = 'OP'+dd+mm+yyyy+'-';
+    let ultimoNum = 0;
+    const opsHoy = await api('ordenes_produccion?op_numero=like.'+encodeURIComponent(prefijoDia+'%')+'&select=op_numero&order=op_numero.desc&limit=1').catch(()=>[]);
+    if(opsHoy && opsHoy.length){
+      const m = opsHoy[0].op_numero.match(/-(\d+)$/);
+      if(m) ultimoNum = parseInt(m[1]);
+    }
+    const opNumero = prefijoDia + String(ultimoNum+1).padStart(3,'0');
+
+    // 2) Crear la OP — insumos a confirmar/completar desde ops_ventas
+    const opRes = await api('ordenes_produccion','POST',[{
+      op_numero: opNumero,
+      cliente: clienteFinal,
+      producto_v14: 'equipo_armado',
+      producto_nombre: `Equipo armado ${conj.codigo} — ${conj.descripcion||''}`.trim(),
+      cantidad: 1,
+      estado: 'bom_pendiente',
+      notas: `Creada desde Equipos armados — conjunto ${conj.codigo}. Insumos ya identificados del equipo montado; revisar en Órdenes de Producción si requiere insumos adicionales antes de despachar.`
+    }]);
+    const opId = opRes[0].id;
+
+    // 3) BOM ya asignada — componentes con UID
+    const bomPayload = montadosUid.map(u=>({
+      op_id: opId, sku_id: u.sku_id, variante_id: u.variante_id||null,
+      nombre: u.skus?.nombre||'—', qty:1, incluido:true, estado:'asignado',
+      uid_asignado: u.uid, equipo_num:1
+    }));
+    // 4) BOM ya asignada — componentes de caja (cantidad)
+    compsCant.forEach(c=>{
+      bomPayload.push({
+        op_id: opId, sku_id: c.sku_id, variante_id: c.variante_id||null,
+        nombre: c.skus?.nombre||'—', qty:c.cantidad, incluido:true, estado:'asignado',
+        uid_asignado:'CANTIDAD-DESCONTADA', equipo_num:1
+      });
+    });
+    if(bomPayload.length) await api('op_bom_items','POST',bomPayload);
+
+    // 5) Unidades con UID → producidas, asociadas a la OP
+    for(const u of montadosUid){
       await api(`unidades?id=eq.${u.id}`,'PATCH',{
-        estado:'producido',
-        notas:`Vendido como parte de equipo armado — ${new Date().toLocaleDateString('es-AR')}`
+        estado:'producido', op_id: opId,
+        notas:`Vendido como parte de equipo armado ${conj.codigo} — OP ${opNumero} — ${new Date().toLocaleDateString('es-AR')}`
       });
     }
+
+    // 6) Conjunto → vendido
     await api(`conjuntos_montados?id=eq.${conjuntoId}`,'PATCH',{estado:'vendido'});
-    toast('Equipo vendido ✓');
+
+    toast(`Equipo vendido ✓ — OP ${opNumero} creada`);
     closeModal('modal-equipo-detalle');
     loadEquipos();
+    mostrarNotifVentaEquipo(opNumero, clienteFinal, conj.codigo);
   }catch(e){ toast('Error: '+e.message); }
+}
+
+// Banner con link a Órdenes de Producción para revisar la BOM recién creada —
+// ahí gerencia/ventas confirma si el equipo va tal cual o necesita agregar/sacar
+// algún componente antes de que Producción lo despache.
+function mostrarNotifVentaEquipo(opNumero, cliente, codigoConjunto){
+  const existing = document.getElementById('notif-venta-equipo-banner');
+  if(existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'notif-venta-equipo-banner';
+  banner.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:16px 20px;z-index:9999;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.4);";
+  banner.innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:4px;">✓ Equipo vendido — OP creada</div>
+        <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">${opNumero}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;">${cliente} · desde equipo ${codigoConjunto}</div>
+      </div>
+      <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0;line-height:1;">×</button>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <a href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html" target="_blank" style="flex:1;text-align:center;background:var(--green);color:#000;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;text-decoration:none;">→ Revisar BOM antes de producción</a>
+      <button onclick="this.parentElement.parentElement.remove()" style="background:transparent;border:1px solid var(--border);color:var(--text3);font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer;">Cerrar</button>
+    </div>`;
+  document.body.appendChild(banner);
+  setTimeout(()=>{ if(banner.parentElement) banner.remove(); }, 20000);
 }
 
 // ─── MODALS ─────────────────────────────────────────────────────────────────

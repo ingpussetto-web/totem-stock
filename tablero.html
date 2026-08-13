@@ -406,7 +406,7 @@ function setFiltro(filtro){
 
 async function cargarOps(){
   _ops = await api(
-    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,contacto,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
+    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,contacto,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,para_stock,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
   );
   computarFaltantes();
   renderBoard();
@@ -472,6 +472,7 @@ function cardHTML(op, colKey){
   const etiqHTML = etiquetas.map(e=>`<span class="etiq-chip ${(e.areas?.codigo||'').toLowerCase()}">${esc(e.titulo)}</span>`).join('');
   const desc = op.descripcion_extra ? `<div class="card-desc">${esc(op.descripcion_extra)}</div>` : '';
   const tipo = op.tipos_proyecto?.nombre ? `<span style="font-size:9px;color:var(--text3);"> · ${esc(op.tipos_proyecto.nombre)}</span>` : '';
+  const paraStockTag = op.para_stock ? '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(139,107,214,0.15);color:#8b6bd6;margin-left:4px;white-space:nowrap;">📦 para stock</span>' : '';
   const badgeOk = insumosOk ? '<span class="badge-ok">Insumos OK</span>' : '';
   const progRow = totalBOM>0 ? `<div class="card-progress">
     <div class="prog-label"><span>Insumos</span><span>${asignados}/${totalBOM}</span></div>
@@ -479,7 +480,7 @@ function cardHTML(op, colKey){
   </div>` : '';
 
   return `<div class="${clases}" draggable="true" data-opid="${op.id}" onclick="cardClick(event,${op.id})" ondragstart="dragStart(event,${op.id})" ondragend="dragEnd(event)">
-    <div class="card-op">${esc(op.codigo_op_interno||op.v14_orden||op.op_numero)} ${tipo}</div>
+    <div class="card-op">${esc(op.codigo_op_interno||op.v14_orden||op.op_numero)} ${tipo}${paraStockTag}</div>
     <div class="card-cliente">${esc(op.cliente)}${badgeOk}</div>
     <div class="card-producto">${esc(op.producto_nombre||'')}${op.cantidad>1?' × '+op.cantidad:''}</div>
     ${desc}
@@ -499,7 +500,7 @@ async function abrirDetalle(opId){
 
   document.getElementById('det-op').textContent = _opActual.codigo_op_interno || _opActual.v14_orden || _opActual.op_numero || '';
   document.getElementById('det-cliente').textContent = _opActual.cliente||'';
-  document.getElementById('det-producto').textContent = (_opActual.producto_nombre||'') + (_opActual.tipos_proyecto?.nombre ? ' · '+_opActual.tipos_proyecto.nombre : '');
+  document.getElementById('det-producto').textContent = (_opActual.producto_nombre||'') + (_opActual.tipos_proyecto?.nombre ? ' · '+_opActual.tipos_proyecto.nombre : '') + (_opActual.para_stock ? ' · 📦 para stock' : '');
   document.getElementById('overlay').classList.add('open');
   document.getElementById('det-body').innerHTML = '<div class="loader">Cargando...</div>';
 
