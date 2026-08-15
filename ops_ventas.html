@@ -201,6 +201,7 @@ select.filter:focus{outline:none;border-color:var(--green);}
         <div style="display:flex;gap:8px;">
           <button class="btn" onclick="abrirBOMMaestra()" style="border-color:var(--amber);color:var(--amber);">📋 BOM Maestra</button>
           <button class="btn" onclick="abrirNuevaOPStock()" style="border-color:var(--purple, #8b6bd6);color:var(--purple, #8b6bd6);">📦 Nueva OP para stock</button>
+          <button class="btn" onclick="abrirNuevaOPAmpliacion()" style="border-color:#4d9fff;color:#4d9fff;">🔧 Ampliar proyecto existente</button>
           <button class="btn" onclick="loadOPs()">↻ Actualizar</button>
         </div>
       </div>
@@ -1663,6 +1664,7 @@ const PRODUCTOS_BOM = [
   {id:'turn_sw_32_ecube', nombre:'Turnero con SW — E-Cube 32"', categoria:'Turnero con SW'},
   {id:'turn_sw_32_ultraslim', nombre:'Turnero con SW — Ultra Slim Vertical 32"', categoria:'Turnero con SW'},
   {id:'turn_sw_22_vert_silver', nombre:'Turnero con SW — Vertical Metálico Silver 22"', categoria:'Turnero con SW'},
+  {id:'turn_sw_22_vert_ia', nombre:'Turnero con SW — Vertical 22" IA', categoria:'Turnero con SW'},
   // Turnero sin SW
   {id:'turn_sin_sw_19_atril', nombre:'Turnero sin SW — Atril 19"', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_22_atril', nombre:'Turnero sin SW — Atril 22"', categoria:'Turnero sin SW'},
@@ -1672,6 +1674,7 @@ const PRODUCTOS_BOM = [
   {id:'turn_sin_sw_22_ecube', nombre:'Turnero sin SW — E-Cube 22"', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_32_ecube', nombre:'Turnero sin SW — E-Cube 32"', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_22_vert_silver', nombre:'Turnero sin SW — Vertical Metálico Silver 22"', categoria:'Turnero sin SW'},
+  {id:'turn_sin_sw_22_vert_ia', nombre:'Turnero sin SW — Vertical 22" IA', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_pos_15', nombre:'Turnero sin SW — POS 15"', categoria:'Turnero sin SW'},
   // Vigilancia
   {id:'vig_mdf', nombre:'Vigilancia Remota — MDF', categoria:'Vigilancia Remota'},
@@ -1742,6 +1745,7 @@ const PRODUCTOS_BOM = [
   {id:'ia_22_ecube', nombre:'Totem IA — E-Cube 22"', categoria:'Totem IA'},
   {id:'ia_32_ecube', nombre:'Totem IA — E-Cube 32"', categoria:'Totem IA'},
   {id:'ia_22_vert_silver', nombre:'Totem IA — Vertical Metálico Silver 22"', categoria:'Totem IA'},
+  {id:'ia_22_vert', nombre:'Totem Vertical 22" con IA', categoria:'Totem IA'},
   // Accesorios
   {id:'acc_minipc_beelink_n95', nombre:'Mini PC Beelink N95 8GB', categoria:'Accesorios'},
   {id:'acc_player_hdmi', nombre:'Player HDMI', categoria:'Accesorios'},
@@ -1834,6 +1838,135 @@ async function crearOPStock(){
     document.getElementById('modal-op-stock')?.remove();
     toast('OP '+opNumero+' creada para stock ✓');
     loadOPs();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── NUEVA OP: AMPLIACIÓN DE PROYECTO EXISTENTE ────────────────────────────
+// Caso: agregar un insumo suelto (ej. un Player Mini PC más) a un proyecto de
+// cliente ya despachado/cerrado, cuando NO es una reposición por falla (eso
+// se maneja desde Bienes y Personal → Fallas). Crea una OP vacía ligada al
+// mismo v14_orden/cliente del proyecto elegido, y abre directo el editor de
+// BOM para cargar el insumo con "+ Agregar", como en cualquier otra OP.
+let ampliacionProyectosData = [];
+let ampliacionProyectoSeleccionado = null;
+
+async function abrirNuevaOPAmpliacion(){
+  const pwd = prompt('Contraseña gerencia:');
+  if(pwd === null) return;
+  if(pwd !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
+  ampliacionProyectoSeleccionado = null;
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-op-ampliacion';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:460px;padding:22px;">'
+    +'<div style="font-size:16px;font-weight:700;margin-bottom:4px;">🔧 Nueva OP — Ampliación de proyecto existente</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.5;">Para agregar un insumo suelto a un proyecto de cliente ya cerrado — no es una reposición por falla (eso se maneja desde Fallas). Buscá el proyecto y después cargás el insumo desde el editor de BOM, como en cualquier OP.</div>'
+    +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Buscar proyecto (código, cliente u orden)</div>'
+    +'<input type="text" id="ampl-proy-search" oninput="buscarProyectoAmpliacion()" placeholder="Ej: multiplycard..." style="width:100%;height:36px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:0 10px;margin-bottom:8px;">'
+    +'<div id="ampl-proy-results" style="max-height:220px;overflow-y:auto;margin-bottom:8px;"></div>'
+    +'<div id="ampl-proy-seleccionado" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:16px;">'
+    +'<div id="ampl-proy-nombre-sel" style="font-weight:600;font-size:13px;"></div>'
+    +'<div id="ampl-proy-meta-sel" style="font-size:11px;color:var(--text2);margin-top:2px;"></div>'
+    +'<button class="btn sm" onclick="deseleccionarProyectoAmpliacion()" style="margin-top:6px;">Cambiar</button>'
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Qué se agrega (breve, para identificar la OP)</div>'
+    +'<input type="text" id="ampl-descripcion" placeholder="Ej: Mini PC adicional — player" style="width:100%;height:36px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:0 10px;margin-bottom:20px;">'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button class="btn" onclick="document.getElementById(\'modal-op-ampliacion\').remove()" style="flex:1;">Cancelar</button>'
+    +'<button class="btn solid-green" onclick="crearOPAmpliacion()" style="flex:1;">Crear OP</button>'
+    +'</div></div>';
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  await loadProyectosAmpliacion();
+}
+
+async function loadProyectosAmpliacion(){
+  const ops = await api('ordenes_produccion?select=id,v14_orden,cliente,codigo_op_interno,op_numero,producto_nombre,cantidad,estado,created_at&v14_orden=not.is.null&order=created_at.desc').catch(()=>[]);
+  const proys = await api('proyectos_cotizador?select=orden,estado').catch(()=>[]);
+  const proyMap = {};
+  (proys||[]).forEach(p=>{ proyMap[p.orden] = p; });
+  ampliacionProyectosData = (ops||[]).map(o=>{
+    const pv = proyMap[o.v14_orden];
+    return {
+      v14_orden: o.v14_orden, cliente: o.cliente||'',
+      codigo: o.codigo_op_interno || o.op_numero || o.v14_orden,
+      producto_nombre: o.producto_nombre, cantidad: o.cantidad,
+      estado_op: o.estado, estado_venta: pv?.estado||null
+    };
+  });
+}
+
+function buscarProyectoAmpliacion(){
+  const q = document.getElementById('ampl-proy-search').value.trim().toLowerCase();
+  const res = document.getElementById('ampl-proy-results');
+  if(q.length<2){ res.innerHTML=''; return; }
+  const vistos = new Set();
+  const found = ampliacionProyectosData.filter(p=>{
+    if(vistos.has(p.v14_orden)) return false;
+    const match = (p.codigo||'').toLowerCase().includes(q) || (p.cliente||'').toLowerCase().includes(q) || (p.v14_orden||'').toLowerCase().includes(q);
+    if(match) vistos.add(p.v14_orden);
+    return match;
+  }).slice(0,20);
+  window._amplFound = found;
+  if(!found.length){ res.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px;">No encontrado</div>'; return; }
+  res.innerHTML = found.map((p,idx)=>'<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer;" onclick="seleccionarProyectoAmpliacion('+idx+')">'
+    +'<div style="font-weight:600;font-size:12.5px;">'+esc(p.codigo)+' — '+esc(p.cliente)+'</div>'
+    +'<div style="font-size:11px;color:var(--text2);">'+esc(p.producto_nombre||'')+(p.cantidad?' x'+p.cantidad:'')+' · '+esc(p.estado_venta||p.estado_op||'')+'</div>'
+    +'</div>').join('');
+}
+
+function seleccionarProyectoAmpliacion(idx){
+  const p = (window._amplFound||[])[idx];
+  if(!p) return;
+  ampliacionProyectoSeleccionado = p;
+  document.getElementById('ampl-proy-results').innerHTML='';
+  document.getElementById('ampl-proy-search').value='';
+  document.getElementById('ampl-proy-seleccionado').style.display='block';
+  document.getElementById('ampl-proy-nombre-sel').textContent = p.codigo+' — '+p.cliente;
+  document.getElementById('ampl-proy-meta-sel').textContent = (p.producto_nombre||'')+(p.cantidad?' x'+p.cantidad:'')+' · '+(p.estado_venta||p.estado_op||'');
+}
+
+function deseleccionarProyectoAmpliacion(){
+  ampliacionProyectoSeleccionado = null;
+  const el = document.getElementById('ampl-proy-seleccionado');
+  if(el) el.style.display='none';
+}
+
+async function crearOPAmpliacion(){
+  if(!ampliacionProyectoSeleccionado){ toast('Buscá y elegí el proyecto'); return; }
+  const descripcion = document.getElementById('ampl-descripcion').value.trim();
+  if(!descripcion){ toast('Describí brevemente qué se agrega'); return; }
+  const p = ampliacionProyectoSeleccionado;
+  try{
+    const fechaHoy = new Date();
+    const dd = String(fechaHoy.getDate()).padStart(2,'0');
+    const mm = String(fechaHoy.getMonth()+1).padStart(2,'0');
+    const yyyy = fechaHoy.getFullYear();
+    const prefijoDia = 'OP'+dd+mm+yyyy+'-';
+    let ultimoNum = 0;
+    const opsHoy = await api('ordenes_produccion?op_numero=like.'+encodeURIComponent(prefijoDia+'%')+'&select=op_numero&order=op_numero.desc&limit=1').catch(()=>[]);
+    if(opsHoy && opsHoy.length){
+      const m = opsHoy[0].op_numero.match(/-(\d+)$/);
+      if(m) ultimoNum = parseInt(m[1]);
+    }
+    const opNumero = prefijoDia + String(ultimoNum+1).padStart(3,'0');
+
+    const opRes = await api('ordenes_produccion','POST',[{
+      op_numero: opNumero,
+      v14_orden: p.v14_orden,
+      cliente: p.cliente,
+      producto_v14: 'ampliacion',
+      producto_nombre: descripcion,
+      cantidad: 1,
+      estado: 'bom_pendiente',
+      notas: 'Ampliación post-cierre del proyecto '+p.v14_orden+' ('+p.cliente+') — insumo agregado a un proyecto ya despachado, no es reposición por falla.'
+    }]);
+    const opId = opRes[0].id;
+
+    document.getElementById('modal-op-ampliacion')?.remove();
+    toast('OP '+opNumero+' creada — agregá el insumo desde el editor de BOM');
+    await loadOPs();
+    abrirBOM(opId);
   }catch(e){ toast('Error: '+e.message); }
 }
 

@@ -1259,6 +1259,7 @@ let INSUMOS_BASE = {
   fuente_impresora:{name:"Fuente impresora",costoBase:60137,iva:0.21},
   gab_19_atril:{name:"Gabinete 19\" Atril",costoBase:582470,iva:0.21},
   gab_22_atril:{name:"Gabinete 22\" Atril",costoBase:582470,iva:0.21},
+  gab_22_vert_ia:{name:"Gabinete Vertical 22\" IA",costoBase:531080,iva:0.21},
   gab_32_incl_metal:{name:"Gabinete 32\" Inclinado Metal",costoBase:663225,iva:0.21},
   gab_32_vert_metal:{name:"Gabinete 32\" Vertical Metal",costoBase:805836,iva:0.21},
   gab_32_vert_chapa:{name:"Gabinete 32\" Vert. Frente Chapa",costoBase:781781,iva:0.21},
@@ -1338,6 +1339,9 @@ const PRODUCTOS = [
   {id:"turn_sin_sw_22_vert_silver",name:"Turnero sin SW — Vertical Metalico Silver 22\"",categoria:"Turnero sin software",
    precioLista:Math.round(2656.0*dolar),_usd:2656.0, precioListaConMiniPC:Math.round(2656.0*dolar),_usdConMini:2656.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cable_hdmi",qty:1},{key:"cooler",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"insumos_varios",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete Silver específico. Mini PC incluida en precio lista."},
+  {id:"turn_sin_sw_22_vert_ia",name:"Turnero sin SW — Vertical 22\" IA",categoria:"Turnero sin software",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:"minipc_beelink_n95",
+   insumos:[{key:"cable_hdmi",qty:1},{key:"cooler",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"gab_22_vert_ia",qty:1},{key:"insumos_varios",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista: gabinete Vertical 22\" IA específico."},
   {id:"turn_sin_sw_pos_15",name:"Turnero sin SW — Módulo Terminal POS 15\"",categoria:"Turnero sin software",
    precioLista:Math.round(1380.0*dolar),_usd:1380.0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"cable_hdmi",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1}],warning:"⚠️ Revisar insumos: módulo POS 15\""},
@@ -1384,6 +1388,9 @@ const PRODUCTOS = [
   {id:"turn_sw_22_vert_silver",name:"Turnero con SW — Vertical Metalico Silver 22\"",categoria:"Turnero con software",
    precioLista:Math.round(2656.0*dolar),_usd:2656.0, precioListaConMiniPC:Math.round(2656.0*dolar),_usdConMini:2656.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cable_hdmi",qty:1},{key:"cooler",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"insumos_varios",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete Silver. Mini PC incluida en precio lista."},
+  {id:"turn_sw_22_vert_ia",name:"Turnero con SW — Vertical 22\" IA",categoria:"Turnero con software",
+   precioLista:0,_usd:0, precioListaConMiniPC:0,_usdConMini:0, keyMiniPC:"minipc_beelink_n95",
+   insumos:[{key:"cable_hdmi",qty:1},{key:"cooler",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"gab_22_vert_ia",qty:1},{key:"insumos_varios",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista: gabinete Vertical 22\" IA específico. Mini PC incluida en precio lista."},
 
   // ══════════════════════════════════════════════════════════════
   // TOTEM VIGILANCIA REMOTA
@@ -1599,6 +1606,9 @@ const PRODUCTOS = [
   {id:"ia_22_vert_silver",name:"Totem IA — Vertical Metálico Silver 22\"",categoria:"Totem IA",
    precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cable_hdmi",qty:1},{key:"cooler",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"insumos_varios",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista: Totem IA. Gabinete Silver específico."},
+  {id:"ia_22_vert",name:"Totem Vertical 22\" con IA",categoria:"Totem IA",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:"minipc_beelink_n95",
+   insumos:[{key:"cable_hdmi",qty:1},{key:"cooler",qty:1},{key:"embalaje_std",qty:1},{key:"fuente",qty:1},{key:"gab_22_vert_ia",qty:1},{key:"insumos_varios",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista: Totem IA. Gabinete Vertical 22\" IA específico."},
 
   // ══════════════════════════════════════════════════════════════
   // ACCESORIOS
