@@ -252,6 +252,9 @@ textarea.form-input{resize:vertical;min-height:70px;}
         <span>⚠</span> Alertas de compra
         <span id="badge-alertas" tyle="display:none;background:#ff3b30;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;margin-left:6px;vertical-align:middle;">!</span>
       </div>
+      <div class="nav-item" onclick="showPage('historial-precios')" id="nav-historial-precios">
+        <span>📈</span> Historial de precios
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')" id="nav-config">
         <span>⚙</span> Configuración
@@ -361,6 +364,61 @@ textarea.form-input{resize:vertical;min-height:70px;}
       </div>
     </div>
 
+    <!-- HISTORIAL DE PRECIOS -->
+    <div class="page" id="page-historial-precios">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Historial de precios</div>
+          <div class="page-sub">Precios reales por insumo, tomados únicamente de Órdenes de Compra aprobadas — no incluye recepciones ni otros movimientos.</div>
+        </div>
+        <button class="btn" onclick="loadHistorialPrecios()" style="border-color:var(--border2);color:var(--text2);">↺ Actualizar</button>
+      </div>
+
+      <div class="metrics" id="hp-kpis" style="margin-bottom:16px;"></div>
+
+      <div class="toolbar">
+        <input class="search-input" type="text" placeholder="Buscar insumo..." id="hp-search" oninput="renderHistorialPrecios()">
+        <select class="filter" id="hp-filtro" onchange="renderHistorialPrecios()">
+          <option value="">Todos los insumos</option>
+          <option value="multiples">Con más de 1 OC aprobada</option>
+          <option value="sin-historial">Con OC aprobada pero sin historial (⚠ sin mapeo)</option>
+        </select>
+        <div class="spacer"></div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;min-width:760px;">
+            <thead>
+              <tr style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;border-bottom:1px solid var(--border2);">
+                <th style="padding:10px 16px;text-align:left;">Insumo</th>
+                <th style="padding:10px;text-align:center;">OCs aprobadas</th>
+                <th style="padding:10px;text-align:center;">Filas en historial</th>
+                <th style="padding:10px;text-align:left;">Última compra</th>
+                <th style="padding:10px;text-align:left;">Estado</th>
+                <th style="padding:10px;text-align:right;"></th>
+              </tr>
+            </thead>
+            <tbody id="hp-tbody">
+              <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">🔁 Migración retroactiva</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
+          Registra en <code style="font-family:'DM Mono',monospace;color:var(--amber);">historial_precios</code> las OCs aprobadas/cerradas que todavía no tienen su precio registrado (por ejemplo, insumos que recién se mapearon a <code style="font-family:'DM Mono',monospace;color:var(--amber);">v14_sku_map</code>). Solo inserta registros nuevos — no toca los existentes.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn amber" onclick="migrarHistorialPrecios()">▶ Ejecutar migración</button>
+          <button class="btn" onclick="identificarSinMapeo()">🔍 Ver ítems sin mapeo v14</button>
+        </div>
+        <div id="migracion-log" style="margin-top:14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);white-space:pre-wrap;max-height:320px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:8px;padding:12px;display:none;"></div>
+      </div>
+    </div>
+
     <div class="page" id="page-proveedores">
       <div class="page-header">
         <div>
@@ -390,19 +448,6 @@ textarea.form-input{resize:vertical;min-height:70px;}
         </div>
         <button class="btn green" onclick="saveConfig()">Guardar y reconectar</button>
         <div id="cfg-status" style="margin-top:10px;font-size:12px;font-family:'DM Mono',monospace;"></div>
-      </div>
-
-      <div class="card" style="margin-top:16px;">
-        <div class="card-title">🔁 Migración retroactiva — Historial de precios</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
-          Registra en <code style="font-family:'DM Mono',monospace;color:var(--amber);">historial_precios</code> todas las OCs aprobadas/cerradas que todavía no tienen su precio registrado.
-          Solo inserta registros nuevos — no toca los existentes. Ejecutar una sola vez.
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn amber" onclick="migrarHistorialPrecios()">▶ Ejecutar migración</button>
-          <button class="btn" onclick="identificarSinMapeo()">🔍 Ver ítems sin mapeo v14</button>
-        </div>
-        <div id="migracion-log" style="margin-top:14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);white-space:pre-wrap;max-height:320px;overflow-y:auto;background:rgba(0,0,0,0.3);border-radius:8px;padding:12px;display:none;"></div>
       </div>
     </div>
 
@@ -723,6 +768,7 @@ function showPage(id){
   if(id==='config') loadConfig();
   if(id==='desvios') loadDesvios();
   if(id==='gabinetes') loadGabinetesPendientes();
+  if(id==='historial-precios') loadHistorialPrecios();
 }
 
 // ─── COLORES PENDIENTES ──────────────────────────────────────
@@ -1090,6 +1136,205 @@ async function loadDesvios(){
   }
 }
 
+// ─── HISTORIAL DE PRECIOS ────────────────────────────────────
+// Única fuente de verdad: OCs aprobadas/recibida_parcial/cerrada. No se toca con
+// recepciones — eso es un proceso distinto de la compra en sí.
+let hpData = [];
+
+async function loadHistorialPrecios(){
+  const tbody = document.getElementById('hp-tbody');
+  const kpisEl = document.getElementById('hp-kpis');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">⏳ Calculando...</td></tr>';
+  if(kpisEl) kpisEl.innerHTML = '';
+  try{
+    const ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial,cerrada)&select=id,created_at').catch(()=>[]);
+    const ocFechaMap = {};
+    (ocs||[]).forEach(function(o){ ocFechaMap[o.id] = o.created_at; });
+    const ocIds = (ocs||[]).map(function(o){ return o.id; });
+    if(!ocIds.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Sin OCs aprobadas todavía.</td></tr>';
+      return;
+    }
+
+    const items = await api('oc_items?oc_id=in.('+ocIds.join(',')+')&sku_id=not.is.null&precio_unitario_neto=gt.0&select=sku_id,oc_id').catch(()=>[]);
+    const mapRaw = await api('v14_sku_map?select=sku_id').catch(()=>[]);
+    const mapeoSet = new Set((mapRaw||[]).map(function(m){ return m.sku_id; }));
+    const hist = await api('historial_precios?select=sku_id,oc_id').catch(()=>[]);
+
+    const histPorSku = {};
+    (hist||[]).forEach(function(h){
+      if(!h.sku_id) return;
+      if(!histPorSku[h.sku_id]) histPorSku[h.sku_id] = { ocs: new Set(), filas: 0 };
+      if(h.oc_id) histPorSku[h.sku_id].ocs.add(h.oc_id);
+      histPorSku[h.sku_id].filas++;
+    });
+
+    const porSku = {};
+    (items||[]).forEach(function(it){
+      if(!porSku[it.sku_id]) porSku[it.sku_id] = { ocIds: new Set(), ultima: null };
+      porSku[it.sku_id].ocIds.add(it.oc_id);
+      const f = ocFechaMap[it.oc_id];
+      if(f && (!porSku[it.sku_id].ultima || f > porSku[it.sku_id].ultima)) porSku[it.sku_id].ultima = f;
+    });
+
+    const skuIds = Object.keys(porSku);
+    if(!skuIds.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Sin ítems con precio en OCs aprobadas.</td></tr>';
+      return;
+    }
+    const skus = await api('skus?id=in.('+skuIds.join(',')+')&select=id,nombre,codigo').catch(()=>[]);
+    const skuInfo = {};
+    (skus||[]).forEach(function(s){ skuInfo[s.id] = s; });
+
+    hpData = skuIds.map(function(sid){
+      const d = porSku[sid];
+      const h = histPorSku[sid] || { ocs: new Set(), filas: 0 };
+      return {
+        sku_id: Number(sid),
+        nombre: (skuInfo[sid] && skuInfo[sid].nombre) || ('SKU #'+sid),
+        codigo: (skuInfo[sid] && skuInfo[sid].codigo) || '',
+        ocsAprobadas: d.ocIds.size,
+        filasHistorial: h.filas,
+        ocsEnHistorial: h.ocs.size,
+        ultima: d.ultima,
+        mapeado: mapeoSet.has(Number(sid))
+      };
+    }).sort(function(a,b){ return b.ocsAprobadas - a.ocsAprobadas || a.nombre.localeCompare(b.nombre); });
+
+    const totalInsumos = hpData.length;
+    const conMultiples = hpData.filter(function(r){ return r.ocsAprobadas>1; }).length;
+    const sinHistorial = hpData.filter(function(r){ return r.filasHistorial===0; }).length;
+    const desactualizados = hpData.filter(function(r){ return r.ocsAprobadas > r.ocsEnHistorial && r.filasHistorial>0; }).length;
+    if(kpisEl) kpisEl.innerHTML =
+      '<div class="metric"><div class="metric-label">Insumos con compras</div><div class="metric-value">'+totalInsumos+'</div></div>'
+      +'<div class="metric blue"><div class="metric-label">Con más de 1 OC</div><div class="metric-value">'+conMultiples+'</div></div>'
+      +'<div class="metric amber"><div class="metric-label">OCs sin reflejar en historial</div><div class="metric-value">'+desactualizados+'</div></div>'
+      +'<div class="metric" style="background:rgba(255,94,94,0.09);border-color:rgba(255,94,94,0.25);"><div class="metric-label" style="color:#ff5e5e;">Sin historial (posible falta de mapeo)</div><div class="metric-value" style="color:#ff5e5e;">'+sinHistorial+'</div></div>';
+
+    renderHistorialPrecios();
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;color:#ff5e5e;">Error: '+e.message+'</td></tr>';
+    console.error('loadHistorialPrecios:', e);
+  }
+}
+
+function renderHistorialPrecios(){
+  const tbody = document.getElementById('hp-tbody');
+  if(!tbody) return;
+  const search = (document.getElementById('hp-search')?.value||'').toLowerCase();
+  const filtro = document.getElementById('hp-filtro')?.value||'';
+  const rows = hpData.filter(function(r){
+    if(search && !r.nombre.toLowerCase().includes(search) && !r.codigo.toLowerCase().includes(search)) return false;
+    if(filtro==='multiples' && r.ocsAprobadas<=1) return false;
+    if(filtro==='sin-historial' && r.filasHistorial>0) return false;
+    return true;
+  });
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">Sin resultados para ese filtro.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(r){
+    const fecha = r.ultima ? new Date(r.ultima).toLocaleDateString('es-AR') : '—';
+    let estadoHtml;
+    if(r.filasHistorial===0){
+      estadoHtml = '<span style="color:#ff5e5e;">⚠ Sin historial'+(r.mapeado?'':' — falta mapeo v14')+'</span>';
+    } else if(r.ocsAprobadas > r.ocsEnHistorial){
+      estadoHtml = '<span style="color:var(--amber);">⚠ '+(r.ocsAprobadas-r.ocsEnHistorial)+' OC sin reflejar</span>';
+    } else {
+      estadoHtml = '<span style="color:var(--green);">✓ Al día</span>';
+    }
+    const nombreEsc = r.nombre.replace(/'/g,"\\'");
+    return '<tr style="border-top:1px solid var(--border2);">'
+      + '<td style="padding:10px 16px;">'+r.nombre+(r.codigo?' <span style="color:var(--text3);font-size:11px;">'+r.codigo+'</span>':'')+'</td>'
+      + '<td style="padding:10px;text-align:center;">'+r.ocsAprobadas+'</td>'
+      + '<td style="padding:10px;text-align:center;">'+r.filasHistorial+'</td>'
+      + '<td style="padding:10px;">'+fecha+'</td>'
+      + '<td style="padding:10px;">'+estadoHtml+'</td>'
+      + '<td style="padding:10px;text-align:right;"><button class="btn" style="height:26px;padding:0 10px;font-size:11px;" onclick="verHistorialSku('+r.sku_id+',\''+nombreEsc+'\')">Ver →</button></td>'
+    +'</tr>';
+  }).join('');
+}
+
+async function verHistorialSku(skuId, nombre){
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  modal.id = 'modal-hist-sku';
+  modal.innerHTML = '<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto;">'
+    + '<div style="font-size:10px;color:#3a4055;font-family:\'DM Mono\',monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Historial de precios</div>'
+    + '<div style="font-size:16px;font-weight:600;color:#e8eaf0;margin-bottom:4px;">'+nombre+'</div>'
+    + '<div id="hs-sub" style="font-size:11px;color:#3a4055;margin-bottom:16px;">Cargando...</div>'
+    + '<div id="hs-contenido" style="font-size:13px;color:#7a8099;">Cargando...</div>'
+    + '<div style="margin-top:16px;text-align:right;">'
+    + '<button onclick="document.getElementById(\'modal-hist-sku\').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Cerrar</button>'
+    + '</div></div>';
+  document.body.appendChild(modal);
+
+  try{
+    const registros = await api('historial_precios?sku_id=eq.'+skuId+'&select=precio_neto,moneda,tipo_cambio,fecha,oc_id,proveedores(razon_social)&order=fecha.desc');
+    const el = document.getElementById('hs-contenido');
+    const sub = document.getElementById('hs-sub');
+    if(!registros || !registros.length){
+      el.innerHTML = '<div style="color:#3a4055;padding:12px 0;">Sin registros en historial_precios para este insumo.</div>';
+      if(sub) sub.textContent = '';
+      return;
+    }
+    if(sub && registros[0].fecha){
+      const fechaUlt = new Date(registros[0].fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+      const prov = registros[0].proveedores ? ' · '+registros[0].proveedores.razon_social : '';
+      sub.textContent = 'Última actualización: '+fechaUlt+prov;
+    }
+    let html = '<table style="width:100%;border-collapse:collapse;">';
+    html += '<tr style="font-size:10px;color:#3a4055;font-family:\'DM Mono\',monospace;text-transform:uppercase;">'
+      + '<td style="padding:6px 8px;">Fecha</td>'
+      + '<td style="padding:6px 8px;text-align:right;">Precio neto ARS</td>'
+      + '<td style="padding:6px 8px;text-align:right;">Equiv. USD</td>'
+      + '<td style="padding:6px 8px;text-align:center;">TC usado</td>'
+      + '<td style="padding:6px 8px;">Proveedor</td>'
+      + '<td style="padding:6px 8px;">OC</td>'
+      + '</tr>';
+    registros.forEach(function(r, i){
+      const prev = registros[i+1];
+      const fecha = r.fecha ? new Date(r.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+      const proveedor = r.proveedores ? r.proveedores.razon_social : '—';
+      const tc = r.tipo_cambio || null;
+      let precioARS, precioUSD, tcLabel;
+      if(r.moneda === 'USD'){
+        precioUSD = r.precio_neto;
+        precioARS = tc ? Math.round(r.precio_neto * tc) : null;
+        tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
+      } else {
+        precioARS = r.precio_neto;
+        precioUSD = tc ? Math.round(r.precio_neto / tc) : null;
+        tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
+      }
+      let diffHtml = '';
+      if(prev && prev.precio_neto > 0){
+        const prevARS = prev.moneda === 'USD' && prev.tipo_cambio ? Math.round(prev.precio_neto * prev.tipo_cambio) : prev.precio_neto;
+        const curARS = precioARS || r.precio_neto;
+        const diff = ((curARS - prevARS) / prevARS * 100).toFixed(1);
+        const color = diff > 0 ? '#ff4d6a' : '#00e5a0';
+        diffHtml = ' <span style="font-size:10px;color:'+color+';">'+(diff>0?'+':'')+diff+'%</span>';
+      }
+      const rowBg = i === 0 ? 'background:rgba(255,179,64,0.05);' : '';
+      const colVal = i === 0 ? '#e8eaf0' : '#7a8099';
+      const fw = i === 0 ? '600' : '400';
+      html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);'+rowBg+'">'
+        + '<td style="padding:8px;">'+(i===0?'<strong style="color:#ffb340;">':'')+fecha+(i===0?'</strong>':'')+'</td>'
+        + '<td style="padding:8px;text-align:right;font-weight:'+fw+';color:'+colVal+';">'+(precioARS!==null?'$'+Math.round(precioARS).toLocaleString('es-AR'):'—')+diffHtml+'</td>'
+        + '<td style="padding:8px;text-align:right;color:#7a8099;font-size:12px;">'+(precioUSD!==null?'u$s '+precioUSD.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}):'—')+'</td>'
+        + '<td style="padding:8px;text-align:center;color:#3a4055;font-size:11px;">'+tcLabel+'</td>'
+        + '<td style="padding:8px;color:#7a8099;">'+proveedor+'</td>'
+        + '<td style="padding:8px;color:#3a4055;font-size:11px;">'+(r.oc_id?'#'+r.oc_id:'—')+'</td>'
+        + '</tr>';
+    });
+    html += '</table>';
+    el.innerHTML = html;
+  }catch(e){
+    const el = document.getElementById('hs-contenido');
+    if(el) el.innerHTML = '<div style="color:#ff4d6a;">Error: '+e.message+'</div>';
+  }
+}
 
 function toggleAlertaCard(cardId){
   const el = document.getElementById(cardId);

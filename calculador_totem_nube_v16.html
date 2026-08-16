@@ -498,14 +498,15 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <div class="metric-value" id="total-fijos-display">$0</div>
       </div>
       <div class="metric blue">
-        <div class="metric-label">Ingresos licencias (promedio)</div>
-        <div class="metric-value" id="licencias-promedio-display">$0</div>
-        <div class="metric-sub" id="licencias-periodo-label">sin datos</div>
+        <div class="metric-label">Ingreso mensual por licencias (neto, sin IVA)</div>
+        <input type="number" id="ingreso-licencias-input" value="4958678" step="10000" onchange="actualizarIngresoLicencias()"
+          style="width:100%;background:transparent;border:none;border-bottom:1px solid var(--blue-border,var(--border2));color:var(--blue);font-size:20px;font-weight:600;font-family:inherit;padding:2px 0;" />
+        <div class="metric-sub" id="licencias-periodo-label">cargá el neto — si tenés el bruto, dividilo por 1.21</div>
       </div>
       <div class="metric">
         <div class="metric-label">Fijos netos a recuperar</div>
         <div class="metric-value" id="fijos-netos-display">$0</div>
-        <div class="metric-sub">fijos − licencias promedio</div>
+        <div class="metric-sub">fijos − ingreso licencias</div>
       </div>
       <div class="metric green">
         <div class="metric-label">Coeficiente de fijos</div>
@@ -1359,7 +1360,7 @@ let INSUMOS_BASE = {
   gab_43_chapa:{name:"Gabinete 43\" Frente Chapa",costoBase:821300,iva:0.21},
   gab_43_vert_metal:{name:"Gabinete 43\" Vertical Metal",costoBase:975938,iva:0.21},
   gab_43_mdf:{name:"Gabinete 43\" MDF",costoBase:343640,iva:0.21},
-  gab_43_horiz_acc:{name:"Gabinete Horizontal 43\" Accesibilidad",costoBase:0,iva:0.21},
+  gab_43_horiz_acc:{name:"Gabinete Horizontal 43\" Accesibilidad",costoBase:1365969,iva:0.21}, // U$S 795 neto (última OC real, 30/07/2026) + 21% IVA, a BASE_DOLAR
   gab_50_mdf:{name:"Gabinete 50\" MDF",costoBase:360822,iva:0.21},
   gab_mdf_incl_22:{name:"Gabinete MDF Incl. 22\"",costoBase:326458,iva:0.21},
   gab_mdf_incl_32:{name:"Gabinete MDF Incl. 32\"",costoBase:360822,iva:0.21},
@@ -1737,6 +1738,13 @@ const FIJOS_DEFAULT = [
 
 // Estado
 let fijos = FIJOS_DEFAULT.map(f=>({...f}));
+// Ingreso mensual recurrente por licencias (número manual, "por ahora"): se resta de los
+// costos fijos para que el coeficiente de precios sea objetivo. Independiente de la página
+// Licencias (que trackea compromisos uno por uno pero hoy no está completa/actualizada).
+// Neto de IVA (sin IVA): las licencias facturan con 21% IVA, y el precio de equipos que
+// se usa como base de venta en el coeficiente (precioLista) también está en neto — así que
+// para que la resta sea consistente, este número tiene que ser neto también (bruto ÷ 1.21).
+let ingresoLicenciasManual = 4958678;
 let productoActual = null;
 let insumosActivos = [];
 let extraInsumos = [];
@@ -1747,16 +1755,20 @@ function fmt(n){return '$'+Math.round(n).toLocaleString('es-AR');}
 function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getUndMes(){return parseInt(document.getElementById('unidades-mes')?.value)||15;}
 function getTotalFijos(){return fijos.reduce((s,f)=>s+f.monto,0);}
+function getIngresoLicenciasMensual(){return ingresoLicenciasManual||0;}
+// Fijos netos = estructura fija − ingreso recurrente de licencias. Esta es la base
+// objetiva que debe usarse en cualquier cálculo de precio/punto de equilibrio.
+function getTotalFijosNeto(){return Math.max(0, getTotalFijos() - getIngresoLicenciasMensual());}
 
-// Nuevo método: coeficiente = suma fijos 6 meses / suma ventas 6 meses
+// Nuevo método: coeficiente = suma fijos netos 6 meses / suma ventas 6 meses
 function getCoeficienteFijos(){
   if(window._coeficienteFijos !== undefined) return window._coeficienteFijos;
-  // Fallback: fijos/ventas estimadas si no hay historial
-  const totalFijos = getTotalFijos();
+  // Fallback: fijos netos/ventas estimadas si no hay historial
+  const totalFijosNeto = getTotalFijosNeto();
   const undMes = getUndMes();
   const precioRef = 3000000; // precio referencia si no hay datos
   const ventasEstim = undMes * precioRef;
-  return ventasEstim > 0 ? (totalFijos * 6) / (ventasEstim * 6) : 0.05;
+  return ventasEstim > 0 ? (totalFijosNeto * 6) / (ventasEstim * 6) : 0.05;
 }
 
 // Compatibilidad: getFijoPorUnidad ahora usa coeficiente × precio promedio
@@ -2092,7 +2104,7 @@ function recalcCotizador(){
 
   // Veredicto
   const undMes=getUndMes();
-  const totalFijos=getTotalFijos();
+  const totalFijos=getTotalFijosNeto();
   const contribucion=precioListaConIva-costoVarBruto;
   const peUnd=contribucion>0?Math.ceil(totalFijos/contribucion):999;
   const vEl=document.getElementById('veredicto');
@@ -2617,7 +2629,6 @@ function renderInsumosMgmt(){
         +'onchange="updateInsumoFromNeto(\''+key+'\',parseFloat(this.value))" /></td>'
       +'<td style="text-align:center;"><span class="var-badge '+badgeClass+'">'+badgeText+'</span></td>'
       +'<td style="text-align:center;display:flex;gap:4px;justify-content:center;">'
-        +'<button class="btn" title="Historial de precios" onclick="verHistorialInsumo(\''+key+'\')" style="height:26px;padding:0 8px;font-size:11px;">📈</button>'
         +'<button class="btn" title="Editar nombre" onclick="editarNombreInsumo(\''+key+'\')" '
           +'style="height:26px;padding:0 8px;font-size:11px;">✏</button>'
         +'<button class="btn red" title="Eliminar insumo" onclick="confirmarEliminarInsumo(\''+key+'\')" '
@@ -2938,12 +2949,15 @@ function recalcHistorial(){
     return s + montoHistorico + montoAcum;
   },0) / datos.length;
 
-  // Calcular coeficiente: suma fijos período / suma ventas equipos período
-  const sumaFijos = getTotalFijos() * datos.length;
+  // Calcular coeficiente: suma fijos NETOS período / suma ventas equipos período
+  // (fijos netos = estructura fija − ingreso mensual de licencias, para que el precio
+  // que le carga el coeficiente a cada equipo sea objetivo y no ignore ese ingreso)
+  const ingresoLic = getIngresoLicenciasMensual();
+  const sumaFijosNetos = getTotalFijosNeto() * datos.length;
   const sumaVentasEq = datos.reduce(function(s,h){ return s+h.factEquipos; },0);
-  window._coeficienteFijos = sumaVentasEq > 0 ? sumaFijos / sumaVentasEq : 0.05;
+  window._coeficienteFijos = sumaVentasEq > 0 ? sumaFijosNetos / sumaVentasEq : 0.05;
 
-  const fijosNetos = Math.max(0, totalFijos - promLic);
+  const fijosNetos = getTotalFijosNeto();
   const costoXEq = promUnidades > 0 ? Math.round(fijosNetos / promUnidades) : 0;
   const periodoLabel = periodo===0 ? 'todos los meses ('+historial.length+')' : 'últimos '+Math.min(periodo, historial.length)+' meses';
 
@@ -2953,8 +2967,7 @@ function recalcHistorial(){
   set('hist-prom-fact-eq', fmt(Math.round(promFactEq)));
   set('hist-prom-lic', fmt(Math.round(promLic)));
   set('hist-costo-x-eq', (window._coeficienteFijos*100).toFixed(1)+'%');
-  set('licencias-promedio-display', fmt(Math.round(promLic)));
-  set('licencias-periodo-label', periodoLabel);
+  set('licencias-periodo-label', 'ingreso mensual manual');
   set('fijos-netos-display', fmt(Math.round(fijosNetos)));
   set('fijos-und-label', datos.length);
   set('fijo-x-unidad', (window._coeficienteFijos*100).toFixed(1)+'%');
@@ -3264,17 +3277,27 @@ function verHistorialVersiones(proyId){
 function recalcFijos(){
   const total=getTotalFijos();
   set('total-fijos-display',fmt(total));
+  const licInput = document.getElementById('ingreso-licencias-input');
+  if(licInput && document.activeElement !== licInput) licInput.value = ingresoLicenciasManual;
   // If historial has data, recalculate from it; otherwise show placeholder
   if(historial.length>0){
     recalcHistorial();
   } else {
     set('fijo-x-unidad','—');
     set('fijos-und-label','sin datos');
-    set('fijos-netos-display',fmt(total));
-    set('licencias-promedio-display','$0');
-    set('licencias-periodo-label','sin datos');
+    set('fijos-netos-display',fmt(getTotalFijosNeto()));
+    set('licencias-periodo-label','sin historial cargado');
     window._fijoPorUnidad = undefined;
+    window._coeficienteFijos = undefined;
   }
+}
+
+function actualizarIngresoLicencias(){
+  const val = parseFloat(document.getElementById('ingreso-licencias-input')?.value) || 0;
+  ingresoLicenciasManual = Math.max(0, val);
+  recalcFijos();
+  recalcCotizador();
+  autoSave();
 }
 function addFijo(){
   const nombre=document.getElementById('fijo-nombre').value.trim();
@@ -3290,7 +3313,7 @@ function addFijo(){
 function recalcMes(){
   const facturacion=parseFloat(document.getElementById('facturacion-mes')?.value)||0;
   const unidades=getUndMes();
-  const totalFijos=getTotalFijos();
+  const totalFijos=getTotalFijosNeto();
   const promedio=unidades>0?facturacion/unidades:0;
   const excedente=facturacion-totalFijos;
   const ok=excedente>=0;
@@ -3315,7 +3338,7 @@ function recalcMes(){
 function recalcPE(){
   const costoVar=window._lastCostoVar||0;
   const precioFinal=window._lastPrecioFinal||0;
-  const totalFijos=getTotalFijos();
+  const totalFijos=getTotalFijosNeto();
   const undMes=getUndMes();
   const simUnd=parseInt(document.getElementById('sim-und')?.value)||undMes;
   const coef = getCoeficienteFijos();
@@ -6689,6 +6712,9 @@ async function loadFromSheets(){
           const pel = document.getElementById('periodo-analisis');
           if(pel) pel.value = r.value;
         }
+        if(r.key === 'ingreso_licencias' && r.value){
+          ingresoLicenciasManual = parseFloat(r.value)||0;
+        }
       });
     }
 
@@ -6804,6 +6830,7 @@ async function saveToSheets(){
     const periodoVal = document.getElementById('periodo-analisis')?.value || 6;
     await stockAPI('config_cotizador?key=eq.dolar', 'PATCH', { value: dolar });
     await stockAPI('config_cotizador?key=eq.periodo', 'PATCH', { value: periodoVal });
+    await stockAPI('config_cotizador?key=eq.ingreso_licencias', 'PATCH', { value: ingresoLicenciasManual });
 
     // ── Proyectos ──────────────────────────────────────────────────────────
     // Traer todos los proyectos de DB para comparar
@@ -7708,6 +7735,7 @@ function saveData(){
       costosOverride,
       ivaOverride,
       fijos,
+      ingresoLicenciasManual,
       historial,
       customInsumos: Object.fromEntries(Object.entries(INSUMOS_BASE).filter(function(e){return e[0].startsWith('custom_');})),
       proyectos,
@@ -7757,6 +7785,7 @@ function loadData(){
 
     // Fijos
     if(data.fijos && data.fijos.length > 0) fijos = data.fijos;
+    if(data.ingresoLicenciasManual !== undefined) ingresoLicenciasManual = parseFloat(data.ingresoLicenciasManual)||0;
 
     // Unidades mes
     if(data.unidadesMes){
@@ -8033,113 +8062,9 @@ async function stockAPI(path, method='GET', body=null){
   return res.json();
 }
 
-async function verHistorialInsumo(key){
-  const nombre = (INSUMOS_BASE[key]||{}).name || key;
-  // Crear modal con historial de precios del insumo
-  const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
-  modal.id = 'modal-hist-insumo';
-  modal.innerHTML = '<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto;">'
-    + '<div style="font-size:10px;color:#3a4055;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Historial de precios</div>'
-    + '<div style="font-size:16px;font-weight:600;color:#e8eaf0;margin-bottom:4px;">'+nombre+'</div>'
-    + '<div id="hist-ultima-actualizacion" style="font-size:11px;color:#3a4055;margin-bottom:16px;">Cargando...</div>'
-    + '<div id="historial-tabla-contenido" style="font-size:13px;color:#7a8099;">Cargando...</div>'
-    + '<div style="margin-top:16px;text-align:right;">'
-    + '<button onclick="document.getElementById(\'modal-hist-insumo\').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Cerrar</button>'
-    + '</div></div>';
-  document.body.appendChild(modal);
-
-  try{
-    const url = localStorage.getItem('supa_url');
-    const key2 = localStorage.getItem('supa_key');
-    if(!url || !key2){
-      document.getElementById('historial-tabla-contenido').innerHTML = '<div style="color:#ff4d6a;">Sin conexión a Supabase.</div>';
-      return;
-    }
-    // Buscar historial por v14_key con datos de proveedor
-    const registros = await stockAPI(
-      'historial_precios?v14_key=eq.'+encodeURIComponent(key)
-      +'&select=precio_neto,moneda,tipo_cambio,fecha,created_at,proveedores(razon_social)'
-      +'&order=fecha.desc'
-    );
-
-    const el = document.getElementById('historial-tabla-contenido');
-    const elSub = document.getElementById('hist-ultima-actualizacion');
-    if(!registros || !registros.length){
-      el.innerHTML = '<div style="color:#3a4055;padding:12px 0;">Sin registros de compras para este insumo todavía.</div>';
-      if(elSub) elSub.textContent = '';
-      return;
-    }
-    // Mostrar fecha de última actualización
-    if(elSub && registros[0].fecha){
-      const fechaUlt = new Date(registros[0].fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-      const prov = registros[0].proveedores ? ' · '+registros[0].proveedores.razon_social : '';
-      elSub.textContent = 'Última actualización: '+fechaUlt+prov;
-    }
-
-    let html = '<table style="width:100%;border-collapse:collapse;">';
-    html += '<tr style="font-size:10px;color:#3a4055;font-family:DM Mono,monospace;text-transform:uppercase;">'
-      + '<td style="padding:6px 8px;">Fecha</td>'
-      + '<td style="padding:6px 8px;text-align:right;">Precio neto ARS</td>'
-      + '<td style="padding:6px 8px;text-align:right;">Equiv. USD</td>'
-      + '<td style="padding:6px 8px;text-align:center;">TC usado</td>'
-      + '<td style="padding:6px 8px;">Proveedor</td>'
-      + '</tr>';
-
-    registros.forEach(function(r, i){
-      const prev = registros[i+1];
-      const fecha = r.fecha ? new Date(r.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
-      const proveedor = r.proveedores ? r.proveedores.razon_social : '—';
-      const tc = r.tipo_cambio || null;
-
-      // Precio ARS y USD usando SOLO el TC fijo de la OC — si no hay TC, USD queda vacío
-      let precioARS, precioUSD, tcLabel;
-      if(r.moneda === 'USD'){
-        precioUSD = r.precio_neto;
-        precioARS = tc ? Math.round(r.precio_neto * tc) : null;
-        tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
-      } else {
-        precioARS = r.precio_neto;
-        precioUSD = tc ? Math.round(r.precio_neto / tc) : null;
-        tcLabel = tc ? '$'+tc.toLocaleString('es-AR') : '—';
-      }
-
-      let diffHtml = '';
-      if(prev && prev.precio_neto > 0){
-        const prevARS = prev.moneda === 'USD' && prev.tipo_cambio ? Math.round(prev.precio_neto * prev.tipo_cambio) : prev.precio_neto;
-        const curARS = precioARS || r.precio_neto;
-        const diff = ((curARS - prevARS) / prevARS * 100).toFixed(1);
-        const color = diff > 0 ? '#ff4d6a' : '#00e5a0';
-        diffHtml = ' <span style="font-size:10px;color:'+color+';">'+(diff>0?'+':'')+diff+'%</span>';
-      }
-
-      const rowBg = i === 0 ? 'background:rgba(255,179,64,0.05);' : '';
-      const colVal = i === 0 ? '#e8eaf0' : '#7a8099';
-      const fw = i === 0 ? '600' : '400';
-      html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);'+rowBg+'">'
-        + '<td style="padding:8px;">'+(i===0?'<strong style="color:#ffb340;">':'')+fecha+(i===0?'</strong>':'')+'</td>'
-        + '<td style="padding:8px;text-align:right;font-weight:'+fw+';color:'+colVal+';">'+(precioARS!==null?'$'+Math.round(precioARS).toLocaleString('es-AR'):'—')+diffHtml+'</td>'
-        + '<td style="padding:8px;text-align:right;color:#7a8099;font-size:12px;">'+(precioUSD!==null?'u$s '+precioUSD.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}):'—')+'</td>'
-        + '<td style="padding:8px;text-align:center;color:#3a4055;font-size:11px;">'+tcLabel+'</td>'
-        + '<td style="padding:8px;color:#7a8099;">'+proveedor+'</td>'
-        + '</tr>';
-    });
-    html += '</table>';
-
-    // Precio actual en el cotizador
-    const insumo = INSUMOS_BASE[key];
-    if(insumo){
-      html += '<div style="margin-top:12px;padding:10px;background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:6px;font-size:12px;color:#7a8099;">'
-        + '💡 Precio actual en cotizador: <strong style="color:#e8eaf0;">$'+insumo.costoBase.toLocaleString('es-AR')+'</strong>'
-        + '</div>';
-    }
-
-    el.innerHTML = html;
-  }catch(e){
-    const el = document.getElementById('historial-tabla-contenido');
-    if(el) el.innerHTML = '<div style="color:#ff4d6a;">Error: '+e.message+'</div>';
-  }
-}
+// Nota: el modal "Historial de precios" (verHistorialInsumo) se movió a Compras
+// (compras.html → nueva sección "Historial de precios") — ahí tiene más sentido,
+// es donde se generan y aprueban las OCs que alimentan este dato.
 
 async function verificarPreciosActualizados(){
   try{
