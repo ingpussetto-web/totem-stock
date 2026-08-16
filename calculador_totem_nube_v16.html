@@ -7084,9 +7084,17 @@ function getTiemposProduccionPeriodo(todas){
 function getKeyMesAnio(anio, mes){ return anio*12+mes; }
 function keyToMesAnio(k){ return { anio: Math.floor((k-1)/12), mes: ((k-1)%12)+1 }; }
 
+// Proyectos marcados con este tag en notas quedan afuera del cálculo de backlog/producción
+// (venta real y ya entregada, pero sin OP cargada en el sistema — no hay con qué trackearla).
+// Igual siguen contando en Ventas totales / categoría / provincia, que son de facturación.
+const TAG_SIN_OP_CERRADO = '[Cierre histórico sin OP registrada';
+function tieneOPRastreable(p){
+  return !(p.notas && p.notas.indexOf(TAG_SIN_OP_CERRADO) !== -1);
+}
+
 async function getFlujoProduccionMensual(){
   const ventasPorMes = {};
-  proyectos.filter(function(p){ return esVentaCerrada(p.estado); }).forEach(function(p){
+  proyectos.filter(function(p){ return esVentaCerrada(p.estado) && tieneOPRastreable(p); }).forEach(function(p){
     const key = getKeyMesAnio(p.anio, p.mes);
     let und = 0;
     (p.items||[]).forEach(function(it){ if(it.cat==='equipo') und += it.cant||0; });
