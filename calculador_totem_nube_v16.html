@@ -1320,9 +1320,9 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         </div>
 
         <div class="card">
-          <div class="card-title">Tiempo de producción por mes (días, BOM confirmada → OP cerrada)</div>
+          <div class="card-title">Tiempo de producción por mes (días, primer insumo escaneado → OP cerrada)</div>
           <div class="dash-nota" id="dash-prod-nota">
-            Cuánto tarda un equipo en estar listo una vez que es 100% responsabilidad de Producción (sin BOM armándose en Ventas, sin esperar pago del cliente). Si sube, puede ser falta de insumos, sobrecarga de trabajo, o un par de casos puntuales que se destraban juntos y estiran el promedio sin ser tendencia real — conviene mirar cuántos casos hay detrás del número antes de alarmarse. Barras claras/rayadas = aproximado (creación de OP → cierre, todavía sin fecha de confirmación de BOM registrada). Barras sólidas = medición exacta.
+            Cuánto tarda un equipo en estar listo desde que Producción escanea el primer insumo hasta que cierra la OP — mide trabajo real en el piso, no depende de que alguien apriete "Iniciar OP" a destiempo. Si sube, puede ser falta de insumos, sobrecarga de trabajo, o un par de casos puntuales que se destraban juntos y estiran el promedio sin ser tendencia real — conviene mirar cuántos casos hay detrás del número antes de alarmarse. Barras claras/rayadas = aproximado (creación de OP → cierre, todavía sin escaneo registrado por ser de antes de este cambio). Barras sólidas = medición exacta desde primer escaneo.
           </div>
           <div class="chart-wrap"><canvas id="chart-produccion"></canvas></div>
         </div>
@@ -7038,13 +7038,13 @@ async function getVentasPorProvinciaMensual(){
   return { serie, sinIdentificar };
 }
 
-// ─── TIEMPO DE PRODUCCIÓN (BOM confirmada → OP cerrada) ─────────────────────
+// ─── TIEMPO DE PRODUCCIÓN (primer escaneo real → OP cerrada) ────────────────
 let tiemposProduccionCache = null; // cache de ordenes_produccion cerradas, para no refetchear en cada render
 
 async function getTiemposProduccionMensual(){
   if(!tiemposProduccionCache){
     try{
-      tiemposProduccionCache = await stockAPI('ordenes_produccion?estado=eq.completada&fecha_cierre=not.is.null&select=id,created_at,fecha_bom_confirmada,fecha_cierre,cantidad');
+      tiemposProduccionCache = await stockAPI('ordenes_produccion?estado=eq.completada&fecha_cierre=not.is.null&select=id,created_at,fecha_bom_confirmada,fecha_primer_escaneo,fecha_cierre,cantidad');
     }catch(e){
       tiemposProduccionCache = [];
     }
@@ -7053,10 +7053,11 @@ async function getTiemposProduccionMensual(){
   tiemposProduccionCache.forEach(function(op){
     if(!op.fecha_cierre) return;
     const cierre = new Date(op.fecha_cierre);
-    // Inicio real de responsabilidad de Producción: fecha_bom_confirmada (exacto) si existe;
-    // si no, se aproxima con created_at de la OP (incluye tiempo de armado de BOM en Ventas).
-    const inicio = new Date(op.fecha_bom_confirmada || op.created_at);
-    const preciso = !!op.fecha_bom_confirmada;
+    // Inicio real de trabajo: fecha_primer_escaneo (se estampa sola con el primer insumo
+    // escaneado en Producción — no depende de que alguien apriete "Iniciar OP"). Si no existe
+    // (OP cerrada antes de este cambio), se aproxima con fecha_bom_confirmada o created_at.
+    const inicio = new Date(op.fecha_primer_escaneo || op.fecha_bom_confirmada || op.created_at);
+    const preciso = !!op.fecha_primer_escaneo;
     const dias = (cierre - inicio) / 86400000;
     if(!isFinite(dias) || dias < 0) return; // dato inconsistente, descartar
     const mes = cierre.getUTCMonth()+1, anio = cierre.getUTCFullYear();
@@ -7103,7 +7104,7 @@ async function getFlujoProduccionMensual(){
 
   if(!tiemposProduccionCache){
     try{
-      tiemposProduccionCache = await stockAPI('ordenes_produccion?estado=eq.completada&fecha_cierre=not.is.null&select=id,created_at,fecha_bom_confirmada,fecha_cierre,cantidad');
+      tiemposProduccionCache = await stockAPI('ordenes_produccion?estado=eq.completada&fecha_cierre=not.is.null&select=id,created_at,fecha_bom_confirmada,fecha_primer_escaneo,fecha_cierre,cantidad');
     }catch(e){
       tiemposProduccionCache = [];
     }
@@ -7502,7 +7503,7 @@ async function renderDashboard(){
     if(chartBacklog){ chartBacklog.destroy(); chartBacklog=null; }
   }
 
-  // Chart 3 — Tiempo de producción (BOM confirmada → cierre; aproximado con created_at hasta que haya dato exacto)
+  // Chart 3 — Tiempo de producción (primer escaneo → cierre; aproximado con created_at/BOM confirmada hasta que haya dato exacto)
   const prodMensualTodo = await getTiemposProduccionMensual();
   const prodDatos = getTiemposProduccionPeriodo(prodMensualTodo);
 
@@ -7518,7 +7519,7 @@ async function renderDashboard(){
     const totalDias = prodDatos.reduce(function(s,h){ return s+h.sumaDias; },0);
     const totalPrecisas = prodDatos.reduce(function(s,h){ return s+h.precisas; },0);
     set('dash-prod-prom', totalOPs>0 ? (Math.round((totalDias/totalOPs)*10)/10)+' días' : '— días');
-    set('dash-prod-muestra', totalOPs+' OPs cerradas ('+totalPrecisas+' con medición exacta desde BOM confirmada)');
+    set('dash-prod-muestra', totalOPs+' OPs cerradas ('+totalPrecisas+' con medición exacta desde primer escaneo)');
 
     if(chartProd) chartProd.destroy();
     const ctx3 = document.getElementById('chart-produccion');
@@ -7892,7 +7893,7 @@ async function cargarInfoOP(proyId, orden){
   }
 
   try{
-    const ops = await stockAPI('ordenes_produccion?v14_orden=eq.'+encodeURIComponent(orden)+'&select=op_numero,estado,color_gabinete&limit=1');
+    const ops = await stockAPI('op_progreso?v14_orden=eq.'+encodeURIComponent(orden)+'&select=id,op_numero,estado,color_gabinete,items_total,items_asignados&limit=1');
     if(!ops || !ops.length){
       el.style.display='none';
       return;
@@ -7946,12 +7947,24 @@ async function cargarInfoOP(proyId, orden){
       // Banner Listo para despacho
       html = '<div style="margin-bottom:6px;padding:10px 14px;background:rgba(0,200,150,0.12);border:1px solid var(--green);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'        +'<span style="font-size:16px;">✅</span>'        +'<span style="color:var(--green);font-weight:600;font-size:13px;">Lista para despacho!</span>'        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')        +'<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">'          +'<a href="'+opUrl+'" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;border:1px solid var(--green);border-radius:4px;padding:2px 8px;">Ver OP →</a>'          +'<button onclick="despacharProyecto(\''+proyId+'\')" style="background:var(--green);color:#000;border:none;border-radius:4px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;">✓ Marcar despachado</button>'        +'</div>'      +'</div>'      +playersHtml;
     } else if(enProd){
-      html = '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;">'
-        +'<span style="font-size:14px;">⚙️</span>'
-        +'<span style="color:var(--green);font-size:12px;">En producción · '+op.op_numero+'</span>'
-        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
-        +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>'
-      +'</div>';
+      const escaneoCompleto = (op.items_total||0) > 0 && op.items_asignados === op.items_total;
+      if(escaneoCompleto){
+        // Todos los insumos escaneados, pero la OP no fue cerrada desde Producción todavía.
+        // No depende de que Producción apriete ningún botón — es el dato real de op_progreso.
+        html = '<div style="margin-bottom:6px;padding:10px 14px;background:rgba(245,166,35,0.1);border:1px solid var(--amber);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+          +'<span style="font-size:16px;">🔔</span>'
+          +'<span style="color:var(--amber);font-weight:600;font-size:13px;">Escaneado 100% · '+op.op_numero+' — confirmá finalización de producción</span>'
+          +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
+          +'<a href="'+opUrlBOM+'" target="_blank" style="margin-left:auto;color:var(--amber);font-size:11px;text-decoration:none;border:1px solid var(--amber);border-radius:4px;padding:2px 8px;">Confirmar en Ops Ventas →</a>'
+        +'</div>';
+      } else {
+        html = '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;">'
+          +'<span style="font-size:14px;">⚙️</span>'
+          +'<span style="color:var(--green);font-size:12px;">En producción · '+op.op_numero+' ('+(op.items_asignados||0)+'/'+(op.items_total||0)+' insumos)</span>'
+          +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
+          +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>'
+        +'</div>';
+      }
     } else {
       // BOM pendiente o confirmada
       const estadoLabelsOP = {bom_pendiente:'BOM pendiente',bom_confirmada:'BOM confirmada'};

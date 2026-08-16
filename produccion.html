@@ -508,6 +508,21 @@ function renderOPs(lista, vista){
   if(opIds.length) setTimeout(()=>cargarBadgesNotas(opIds), 100);
 }
 
+// ─── PRIMER ESCANEO REAL (inicio real de producción, no depende de que aprieten "Iniciar OP") ───
+async function marcarPrimerEscaneo(){
+  if(!currentOP || currentOP.fecha_primer_escaneo) return;
+  try{
+    const chk = await api(`ordenes_produccion?id=eq.${currentOP.id}&select=fecha_primer_escaneo`);
+    if(chk && chk[0] && chk[0].fecha_primer_escaneo){
+      currentOP.fecha_primer_escaneo = chk[0].fecha_primer_escaneo;
+      return;
+    }
+    const ahora = new Date().toISOString();
+    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {fecha_primer_escaneo: ahora});
+    currentOP.fecha_primer_escaneo = ahora;
+  }catch(e){ /* no bloquear el escaneo si esto falla */ }
+}
+
 // ─── ABRIR OP ───────────────────────────────────────────────
 async function abrirOP(opId){
   try{
@@ -710,6 +725,7 @@ async function procesarCaja(sku){
   const patchCaja = {estado:'asignado', uid_asignado: sku.codigo+'-CAJA'};
   if(viaFamilia){ patchCaja.sku_id = sku.id; patchCaja.nombre = sku.nombre; }
   await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patchCaja);
+  marcarPrimerEscaneo();
   // Incrementar cantidad_reservada en la fila de stock correspondiente
   if(stockRowEspecifico){
     const reservadoVariante = (asignadosRealesProd||[]).filter(i =>
@@ -1141,6 +1157,7 @@ async function asignarManual(itemId){
         estado: 'asignado',
         uid_asignado: 'CANTIDAD-DESCONTADA'
       });
+      marcarPrimerEscaneo();
       item.estado='asignado';
       item.uid_asignado='CANTIDAD-DESCONTADA';
       actualizarProgreso();
@@ -1575,6 +1592,7 @@ async function asignarItemUID(item, unidad, uid, viaFamilia){
     if(viaFamilia){ patch.sku_id = unidad.sku_id; patch.nombre = unidad.skus?.nombre || item.nombre; }
     if(registrarVariante){ patch.variante_id = unidad.variante_id; }
     await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
+    marcarPrimerEscaneo();
     await api(`unidades?id=eq.${unidad.id}`, 'PATCH', {
       estado: 'reservado',
       updated_at: new Date().toISOString()
@@ -1702,6 +1720,7 @@ async function elegirVarianteCaja(varianteId){
   if(viaFamilia){ patch.sku_id = sku.id; patch.nombre = sku.nombre; }
   if(modoLibre){ patch.variante_id = varianteId; } // la BOM no exigía modelo — queda registrado el usado
   await api(`op_bom_items?id=eq.${item.id}`, 'PATCH', patch);
+  marcarPrimerEscaneo();
   if(stockRowEspecifico){
     const reservadoVariante = (asignadosRealesProd||[]).filter(i =>
       _estadosActivos.includes(i.ordenes_produccion?.estado) && i.variante_id === varianteId
