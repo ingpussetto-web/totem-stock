@@ -61,6 +61,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .metric.purple .metric-value{color:var(--purple);}
 .dash-nota{font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5;}
 .dash-section-title{font-size:13px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.04em;font-family:'DM Mono',monospace;padding-bottom:8px;margin-bottom:14px;border-bottom:1px solid var(--border);}
+.dash-tabs{display:flex;gap:8px;margin-bottom:18px;border-bottom:1px solid var(--border);}
+.dash-tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);font-family:'DM Mono',monospace;font-size:13px;font-weight:600;padding:10px 6px;cursor:pointer;text-transform:uppercase;letter-spacing:0.03em;}
+.dash-tab-btn:hover{color:var(--text);}
+.dash-tab-btn.active{color:var(--green);border-bottom-color:var(--green);}
+.chart-wrap{position:relative;height:260px;}
+.chart-wrap-dona{height:320px;max-width:520px;margin:0 auto;}
 .metric-sub{font-size:10px;color:var(--text3);margin-top:4px;font-family:'DM Mono',monospace;}
 select,input[type=number],input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text);font-size:13px;transition:border-color 0.15s;height:36px;}
 select:focus,input:focus{outline:none;border-color:var(--green);}
@@ -1195,123 +1201,132 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
 
     <div id="dash-contenido" style="display:none;">
 
-      <div class="dash-section-title">📈 Comercial</div>
-
-      <div class="metrics" style="margin-bottom:16px;">
-        <div class="metric green">
-          <div class="metric-label">Ventas totales del período</div>
-          <div class="metric-value" id="dash-vtas-total">$0</div>
-          <div class="metric-sub" id="dash-vtas-total-usd">USD 0</div>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Promedio mensual</div>
-          <div class="metric-value" id="dash-prom-fact">$0</div>
-          <div class="metric-sub" id="dash-prom-fact-usd">USD 0</div>
-        </div>
-        <div class="metric blue">
-          <div class="metric-label">Cantidad de ventas</div>
-          <div class="metric-value" id="dash-cant-ventas">0</div>
-          <div class="metric-sub">proyectos en el período</div>
-        </div>
-        <div class="metric amber">
-          <div class="metric-label">Mes de mayor venta</div>
-          <div class="metric-value" id="dash-mes-pico">—</div>
-          <div class="metric-sub" id="dash-mes-pico-monto">$0</div>
-        </div>
+      <div class="dash-tabs">
+        <button type="button" class="dash-tab-btn active" id="dash-tab-btn-comercial" onclick="mostrarDashTab('comercial')">📈 Comercial</button>
+        <button type="button" class="dash-tab-btn" id="dash-tab-btn-produccion" onclick="mostrarDashTab('produccion')">🏭 Producción</button>
       </div>
 
-      <div class="card">
-        <div class="card-title">Facturación mensual — ventas totales</div>
-        <div class="dash-nota">Cuánto se facturó por mes. Sirve para ver tendencia comercial — no dice nada sobre si Producción llega o no a entregarlo.</div>
-        <canvas id="chart-facturacion" height="80"></canvas>
+      <div id="dash-tab-comercial" class="dash-tab-content">
+
+        <div class="metrics" style="margin-bottom:16px;">
+          <div class="metric green">
+            <div class="metric-label">Ventas totales del período</div>
+            <div class="metric-value" id="dash-vtas-total">$0</div>
+            <div class="metric-sub" id="dash-vtas-total-usd">USD 0</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Promedio mensual</div>
+            <div class="metric-value" id="dash-prom-fact">$0</div>
+            <div class="metric-sub" id="dash-prom-fact-usd">USD 0</div>
+          </div>
+          <div class="metric blue">
+            <div class="metric-label">Cantidad de ventas</div>
+            <div class="metric-value" id="dash-cant-ventas">0</div>
+            <div class="metric-sub">proyectos en el período</div>
+          </div>
+          <div class="metric amber">
+            <div class="metric-label">Mes de mayor venta</div>
+            <div class="metric-value" id="dash-mes-pico">—</div>
+            <div class="metric-sub" id="dash-mes-pico-monto">$0</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Facturación mensual — ventas totales</div>
+          <div class="dash-nota">Cuánto se facturó por mes. Sirve para ver tendencia comercial — no dice nada sobre si Producción llega o no a entregarlo.</div>
+          <div class="chart-wrap"><canvas id="chart-facturacion"></canvas></div>
+        </div>
+
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">Ventas por tipo de función — mensual</div>
+          <div class="dash-nota" id="dash-categoria-nota">
+            Qué categoría de producto vendiste cada mes (Turnero, Publicidad, IA, NubiPay, etc.), tomado directo de la cotización aprobada. Sirve para ver si un tipo de producto está creciendo o cayendo mes a mes.
+          </div>
+          <div class="chart-wrap"><canvas id="chart-categoria-mensual"></canvas></div>
+        </div>
+
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">Distribución acumulada por tipo de función (período)</div>
+          <div class="dash-nota">Del total facturado en el período, qué porcentaje corresponde a cada categoría. Sirve para decidir dónde conviene reforzar publicidad — si una categoría es chica en el acumulado, ahí hay lugar para crecer.</div>
+          <div class="chart-wrap chart-wrap-dona"><canvas id="chart-categoria-dona"></canvas></div>
+        </div>
+
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">Ventas por provincia — mensual</div>
+          <div class="dash-nota">
+            Provincia estimada a partir del código de área del teléfono cargado en la cotización aprobada. Es una aproximación, no un dato certero: el teléfono no siempre es del lugar físico del cliente (ej. un área de compras centralizada en otra ciudad), y algunos códigos de área pueden quedar sin identificar. Sirve para ver en qué zonas está creciendo la demanda.
+          </div>
+          <div class="chart-wrap"><canvas id="chart-provincia-mensual"></canvas></div>
+        </div>
+
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">Distribución acumulada por provincia (período)</div>
+          <div class="dash-nota">Del total facturado en el período, qué porcentaje corresponde a cada provincia. Sirve para decidir dónde conviene reforzar publicidad geográficamente.</div>
+          <div class="chart-wrap chart-wrap-dona"><canvas id="chart-provincia-dona"></canvas></div>
+          <div class="dash-nota" id="dash-provincia-sin-id" style="margin-top:10px;"></div>
+        </div>
+
       </div>
 
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Ventas por tipo de función — mensual</div>
-        <div class="dash-nota" id="dash-categoria-nota">
-          Qué categoría de producto vendiste cada mes (Turnero, Publicidad, IA, NubiPay, etc.), tomado directo de la cotización aprobada. Sirve para ver si un tipo de producto está creciendo o cayendo mes a mes.
-        </div>
-        <canvas id="chart-categoria-mensual" height="100"></canvas>
-      </div>
+      <div id="dash-tab-produccion" class="dash-tab-content" style="display:none;">
 
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Distribución acumulada por tipo de función (período)</div>
-        <div class="dash-nota">Del total facturado en el período, qué porcentaje corresponde a cada categoría. Sirve para decidir dónde conviene reforzar publicidad — si una categoría es chica en el acumulado, ahí hay lugar para crecer.</div>
-        <canvas id="chart-categoria-dona" height="140"></canvas>
-      </div>
-
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Ventas por provincia — mensual</div>
-        <div class="dash-nota">
-          Provincia estimada a partir del código de área del teléfono cargado en la cotización aprobada. Es una aproximación, no un dato certero: el teléfono no siempre es del lugar físico del cliente (ej. un área de compras centralizada en otra ciudad), y algunos códigos de área pueden quedar sin identificar. Sirve para ver en qué zonas está creciendo la demanda.
+        <div class="metrics" style="margin-bottom:16px;">
+          <div class="metric blue">
+            <div class="metric-label">Tasa de cumplimiento (prom. del período)</div>
+            <div class="metric-value" id="dash-tasa-cumplimiento">—</div>
+            <div class="metric-sub">finalizado ÷ (backlog + vendido)</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Unidades finalizadas (período)</div>
+            <div class="metric-value" id="dash-unidades-finalizadas">0</div>
+          </div>
+          <div class="metric red">
+            <div class="metric-label">Backlog actual</div>
+            <div class="metric-value" id="dash-backlog-actual">0</div>
+            <div class="metric-sub">unidades vendidas sin terminar producción</div>
+          </div>
         </div>
-        <canvas id="chart-provincia-mensual" height="100"></canvas>
-      </div>
 
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Distribución acumulada por provincia (período)</div>
-        <div class="dash-nota">Del total facturado en el período, qué porcentaje corresponde a cada provincia. Sirve para decidir dónde conviene reforzar publicidad geográficamente.</div>
-        <canvas id="chart-provincia-dona" height="140"></canvas>
-        <div class="dash-nota" id="dash-provincia-sin-id" style="margin-top:10px;"></div>
-      </div>
+        <div class="card">
+          <div class="card-title">Unidades vendidas vs. finalizadas en producción, por mes</div>
+          <div class="dash-nota">
+            Comparación directa mes a mes. Si "Finalizadas" queda por debajo de "Vendidas" de forma sostenida, se está acumulando backlog — la brecha entre las dos barras es, en unidades, lo que ese mes no se llegó a terminar.
+          </div>
+          <div class="chart-wrap"><canvas id="chart-vendidas-finalizadas"></canvas></div>
+        </div>
 
-      <div class="dash-section-title" style="margin-top:28px;">🏭 Producción</div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">Tasa de cumplimiento mensual</div>
+          <div class="dash-nota">
+            Finalizadas ÷ (backlog del mes anterior + vendidas del mes). Cerca de 100% = Producción va al ritmo de lo que se vende. Cayendo 2-3 meses seguidos = la demanda le está ganando a la capacidad instalada — ahí es cuando conviene sumar capacidad, priorizar pedidos o frenar ventas un tiempo. No sacar conclusiones de un solo mes suelto, mirar la tendencia.
+          </div>
+          <div class="chart-wrap"><canvas id="chart-cumplimiento"></canvas></div>
+        </div>
 
-      <div class="metrics" style="margin-bottom:16px;">
-        <div class="metric blue">
-          <div class="metric-label">Tasa de cumplimiento (prom. del período)</div>
-          <div class="metric-value" id="dash-tasa-cumplimiento">—</div>
-          <div class="metric-sub">finalizado ÷ (backlog + vendido)</div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-title">Backlog / cartera pendiente (unidades)</div>
+          <div class="dash-nota">
+            Unidades vendidas que todavía no terminaron producción, acumuladas mes a mes (si un mes no se entrega algo, se suma al mes siguiente). Es el número concreto detrás de la tasa de cumplimiento: sirve para calibrar la urgencia real — no es lo mismo un atraso con 5 equipos pendientes que con 40, aunque el porcentaje diga lo mismo.
+          </div>
+          <div class="chart-wrap"><canvas id="chart-backlog"></canvas></div>
         </div>
-        <div class="metric">
-          <div class="metric-label">Unidades finalizadas (período)</div>
-          <div class="metric-value" id="dash-unidades-finalizadas">0</div>
-        </div>
-        <div class="metric red">
-          <div class="metric-label">Backlog actual</div>
-          <div class="metric-value" id="dash-backlog-actual">0</div>
-          <div class="metric-sub">unidades vendidas sin terminar producción</div>
-        </div>
-      </div>
 
-      <div class="card">
-        <div class="card-title">Unidades vendidas vs. finalizadas en producción, por mes</div>
-        <div class="dash-nota">
-          Comparación directa mes a mes. Si "Finalizadas" queda por debajo de "Vendidas" de forma sostenida, se está acumulando backlog — la brecha entre las dos barras es, en unidades, lo que ese mes no se llegó a terminar.
+        <div class="metrics" style="margin-top:16px;margin-bottom:16px;">
+          <div class="metric amber">
+            <div class="metric-label">Tiempo promedio de producción</div>
+            <div class="metric-value" id="dash-prod-prom">— días</div>
+            <div class="metric-sub" id="dash-prod-muestra">0 OPs</div>
+          </div>
         </div>
-        <canvas id="chart-vendidas-finalizadas" height="90"></canvas>
-      </div>
 
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Tasa de cumplimiento mensual</div>
-        <div class="dash-nota">
-          Finalizadas ÷ (backlog del mes anterior + vendidas del mes). Cerca de 100% = Producción va al ritmo de lo que se vende. Cayendo 2-3 meses seguidos = la demanda le está ganando a la capacidad instalada — ahí es cuando conviene sumar capacidad, priorizar pedidos o frenar ventas un tiempo. No sacar conclusiones de un solo mes suelto, mirar la tendencia.
+        <div class="card">
+          <div class="card-title">Tiempo de producción por mes (días, BOM confirmada → OP cerrada)</div>
+          <div class="dash-nota" id="dash-prod-nota">
+            Cuánto tarda un equipo en estar listo una vez que es 100% responsabilidad de Producción (sin BOM armándose en Ventas, sin esperar pago del cliente). Si sube, puede ser falta de insumos, sobrecarga de trabajo, o un par de casos puntuales que se destraban juntos y estiran el promedio sin ser tendencia real — conviene mirar cuántos casos hay detrás del número antes de alarmarse. Barras claras/rayadas = aproximado (creación de OP → cierre, todavía sin fecha de confirmación de BOM registrada). Barras sólidas = medición exacta.
+          </div>
+          <div class="chart-wrap"><canvas id="chart-produccion"></canvas></div>
         </div>
-        <canvas id="chart-cumplimiento" height="90"></canvas>
-      </div>
 
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Backlog / cartera pendiente (unidades)</div>
-        <div class="dash-nota">
-          Unidades vendidas que todavía no terminaron producción, acumuladas mes a mes (si un mes no se entrega algo, se suma al mes siguiente). Es el número concreto detrás de la tasa de cumplimiento: sirve para calibrar la urgencia real — no es lo mismo un atraso con 5 equipos pendientes que con 40, aunque el porcentaje diga lo mismo.
-        </div>
-        <canvas id="chart-backlog" height="90"></canvas>
-      </div>
-
-      <div class="metrics" style="margin-top:16px;margin-bottom:16px;">
-        <div class="metric amber">
-          <div class="metric-label">Tiempo promedio de producción</div>
-          <div class="metric-value" id="dash-prod-prom">— días</div>
-          <div class="metric-sub" id="dash-prod-muestra">0 OPs</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Tiempo de producción por mes (días, BOM confirmada → OP cerrada)</div>
-        <div class="dash-nota" id="dash-prod-nota">
-          Cuánto tarda un equipo en estar listo una vez que es 100% responsabilidad de Producción (sin BOM armándose en Ventas, sin esperar pago del cliente). Si sube, puede ser falta de insumos, sobrecarga de trabajo, o un par de casos puntuales que se destraban juntos y estiran el promedio sin ser tendencia real — conviene mirar cuántos casos hay detrás del número antes de alarmarse. Barras claras/rayadas = aproximado (creación de OP → cierre, todavía sin fecha de confirmación de BOM registrada). Barras sólidas = medición exacta.
-        </div>
-        <canvas id="chart-produccion" height="90"></canvas>
       </div>
     </div>
   </div>
@@ -7161,6 +7176,7 @@ const CHART_COLORS = {
 function getChartDefaults(){
   return {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { labels: { color: CHART_COLORS.text, font: { size: 11 } } },
       tooltip: { backgroundColor: '#1e1e22', titleColor: '#f0f0f0', bodyColor: '#888', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
@@ -7176,6 +7192,23 @@ function getChartDefaultsCount(){
   const d = getChartDefaults();
   d.scales.y.ticks.callback = function(v){ return v; };
   return d;
+}
+
+function mostrarDashTab(tab){
+  const comercial = document.getElementById('dash-tab-comercial');
+  const produccion = document.getElementById('dash-tab-produccion');
+  const btnComercial = document.getElementById('dash-tab-btn-comercial');
+  const btnProduccion = document.getElementById('dash-tab-btn-produccion');
+  if(comercial) comercial.style.display = tab==='comercial' ? 'block' : 'none';
+  if(produccion) produccion.style.display = tab==='produccion' ? 'block' : 'none';
+  if(btnComercial) btnComercial.classList.toggle('active', tab==='comercial');
+  if(btnProduccion) btnProduccion.classList.toggle('active', tab==='produccion');
+  // Los charts de Chart.js no recalculan bien su tamaño en un contenedor que estaba
+  // display:none — al mostrar la pestaña, forzamos un resize de los charts activos.
+  [chartFact, chartCategoriaMes, chartCategoriaDona, chartProvinciaMes, chartProvinciaDona,
+   chartVF, chartCumpl, chartBacklog, chartProd].forEach(function(c){
+    if(c) c.resize();
+  });
 }
 
 async function renderDashboard(){
@@ -7283,6 +7316,7 @@ async function renderDashboard(){
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
           legend: { position:'right', labels:{ color: CHART_COLORS.text, font:{ size:11 } } },
           tooltip: {
@@ -7357,6 +7391,7 @@ async function renderDashboard(){
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
           legend: { position:'right', labels:{ color: CHART_COLORS.text, font:{ size:11 } } },
           tooltip: {
