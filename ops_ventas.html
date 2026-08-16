@@ -1660,12 +1660,22 @@ init();
 
 // Si se entra con ?op=OPXXXX (ej: link "Armar/revisar BOM" desde el Cotizador),
 // abrir directo la BOM de esa OP en vez de dejar al usuario buscándola en la lista.
+// Ojo: el modal de BOM es para armar/confirmar la BOM hacia Producción — si la OP ya
+// está en producción (ej: vino del link "Escaneado 100%" de Detalle de Ventas), no tiene
+// sentido mostrar ese modal con los botones de "Confirmar BOM → Producción". En ese caso
+// se filtra la lista a esa OP puntual, para ver la tarjeta con el aviso tal cual está.
 function abrirOPDesdeURL(){
   const params = new URLSearchParams(window.location.search);
   const opNumero = params.get('op');
   if(!opNumero) return;
   const op = (ops||[]).find(o=>o.op_numero===opNumero);
-  if(op) abrirBOM(op.id);
+  if(!op) return;
+  if(op.estado==='bom_pendiente' || op.estado==='bom_confirmada'){
+    abrirBOM(op.id);
+  } else {
+    const searchEl = document.getElementById('ops-search');
+    if(searchEl){ searchEl.value = opNumero; renderOPs(); }
+  }
 }
 
 // ─── BOM MAESTRA ──────────────────────────────────────────────────────────────
