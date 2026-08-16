@@ -419,8 +419,8 @@ async function loadOPs(){
     // Metrics
     document.getElementById('m-pendiente').textContent = ops.filter(o=>o.estado==='bom_pendiente').length;
     document.getElementById('m-confirmada').textContent = ops.filter(o=>o.estado==='bom_confirmada').length;
-    document.getElementById('m-produccion').textContent = ops.filter(o=>o.estado==='en_produccion').length;
-    document.getElementById('m-listas-confirmar').textContent = ops.filter(o=>o.estado==='en_produccion' && o.items_total>0 && o.items_asignados===o.items_total).length;
+    document.getElementById('m-produccion').textContent = ops.filter(o=>o.estado==='en_produccion'||o.estado==='iniciada').length;
+    document.getElementById('m-listas-confirmar').textContent = ops.filter(o=>(o.estado==='en_produccion'||o.estado==='iniciada') && o.items_total>0 && o.items_asignados===o.items_total).length;
     document.getElementById('m-completada').textContent = ops.filter(o=>o.estado==='completada').length;
     renderOPs();
   }catch(e){toast('Error: '+e.message);}
@@ -451,6 +451,9 @@ function renderOPs(){
 function renderOPCard(o){
   const estadoLabel = {bom_pendiente:'BOM pendiente',bom_confirmada:'BOM confirmada',en_produccion:'En producción',iniciada:'En producción',completada:'Completada',cancelada:'Cancelada'};
   const estadoBadge = {bom_pendiente:'pendiente',bom_confirmada:'confirmada',en_produccion:'produccion',iniciada:'produccion',completada:'completada',cancelada:'cancelada'};
+  // "en_produccion" (liberada por Ventas) e "iniciada" (Producción tocó Iniciar) se muestran
+  // igual en la UI (mismo label/badge) — hay que tratarlas igual en todas las acciones/avisos.
+  const enProd = o.estado==='en_produccion' || o.estado==='iniciada';
   const pct = o.items_total > 0 ? Math.round((o.items_asignados/o.items_total)*100) : 0;
   const fecha = new Date(o.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
 
@@ -468,22 +471,22 @@ function renderOPCard(o){
         <div class="op-meta">${o.v14_orden||'—'} · Creada ${fecha}</div>
       </div>
       <div class="op-actions">
-        ${o.estado==='bom_pendiente'||o.estado==='bom_confirmada'||o.estado==='en_produccion'
+        ${o.estado==='bom_pendiente'||o.estado==='bom_confirmada'||enProd
           ? `<button class="btn amber sm" onclick="abrirBOM(${o.id})">✏ Revisar BOM</button>`
           : ''}
         ${o.estado==='bom_confirmada'
           ? `<button class="btn solid-green sm" onclick="liberarAProduccion(${o.id})">→ Liberar a Producción</button>`
           : ''}
-        ${o.estado==='en_produccion'
+        ${enProd
           ? `<a href="https://ingpussetto-web.github.io/totem-stock/produccion.html?area=gerencia" class="btn green sm">→ Ir a Producción</a>`
           : ''}
-        ${o.estado==='en_produccion'
+        ${enProd
           ? `<button class="btn green sm" onclick="cambiarEstado(${o.id},'completada')">✓ Marcar completada</button>`
           : ''}
         <button class="btn red sm" onclick="cancelarOP(${o.id},'${o.op_numero}')">✕</button>
       </div>
     </div>
-    ${o.estado==='en_produccion' ? `
+    ${enProd ? `
     <div class="bom-progress">
       <div class="bom-progress-label">
         <span>Progreso de producción</span>
@@ -491,7 +494,7 @@ function renderOPCard(o){
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
     </div>` : ''}
-    ${o.estado==='en_produccion' && o.items_total>0 && o.items_asignados===o.items_total ? `
+    ${enProd && o.items_total>0 && o.items_asignados===o.items_total ? `
     <div style="margin-top:10px;padding:10px 12px;background:rgba(0,229,160,0.08);border:1px solid var(--green-border);border-radius:8px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green);">
       <span style="font-size:15px;">🔔</span>
       <span><strong>Confirmar finalización de producción de este proyecto.</strong> Terminó el escaneo de todos los insumos — antes de dar el cierre productivo, consultá con Producción / Sistemas / demás áreas si falta algo.</span>
