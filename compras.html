@@ -3072,36 +3072,49 @@ function renderProveedores(){
         <button class="btn sm" onclick="openModalProveedor(false,${p.id})">Editar</button>
       </div>
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
-        <div style="cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;" onclick="toggleHistorialProveedor(${p.id})">
-          <span id="prov-hist-arrow-${p.id}" style="font-size:10px;color:var(--text3);transition:transform 0.15s;display:inline-block;">▶</span>
+        <div style="cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation();abrirHistorialProveedor(${p.id},'${(p.razon_social||'').replace(/'/g,"\\'")}')">
+          <span style="font-size:10px;color:var(--text3);display:inline-block;">▶</span>
           🧾 ${cant} compra${cant===1?'':'s'} efectuada${cant===1?'':'s'}
         </div>
-        <div id="prov-hist-${p.id}" style="display:none;margin-top:8px;"></div>
       </div>
     </div>`;
     }).join('')}
   </div>`;
 }
 
-async function toggleHistorialProveedor(provId){
-  const box = document.getElementById('prov-hist-'+provId);
-  const arrow = document.getElementById('prov-hist-arrow-'+provId);
-  if(!box) return;
-  const abrir = box.style.display === 'none';
-  box.style.display = abrir ? 'block' : 'none';
-  if(arrow) arrow.style.transform = abrir ? 'rotate(90deg)' : 'rotate(0deg)';
-  if(!abrir) return;
+async function abrirHistorialProveedor(provId, nombre){
+  // Popup flotante (no queda encajonado en el ancho de la tarjeta) — se cierra solo
+  // al tocar afuera, o con el botón Cerrar.
+  document.getElementById('popup-hist-prov')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'popup-hist-prov';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+  overlay.innerHTML = '<div id="popup-hist-prov-panel" style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;max-width:900px;width:100%;max-height:82vh;overflow-y:auto;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'
+    + '<div>'
+    + '<div style="font-size:10px;color:#3a4055;font-family:\'DM Mono\',monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Historial de compras</div>'
+    + '<div style="font-size:16px;font-weight:600;color:#e8eaf0;">'+nombre+'</div>'
+    + '</div>'
+    + '<button onclick="document.getElementById(\'popup-hist-prov\').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">Cerrar ✕</button>'
+    + '</div>'
+    + '<div id="popup-hist-prov-contenido" style="font-size:13px;color:#7a8099;">Cargando...</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  // Click afuera del panel (en el fondo oscuro) cierra el popup
+  overlay.addEventListener('click', function(ev){
+    if(ev.target === overlay) overlay.remove();
+  });
 
+  const cont = document.getElementById('popup-hist-prov-contenido');
   if(provHistCache[provId]){
-    renderHistorialProveedor(provId);
+    renderHistorialProveedor(provId, cont);
     return;
   }
-  box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 0;">Cargando...</div>';
   try{
     const ocsProv = await api('ordenes_compra?proveedor_id=eq.'+provId+'&estado=in.(aprobada,recibida_parcial,cerrada)&select=id,oc_numero,estado,moneda,created_at&order=created_at.desc');
     if(!ocsProv || !ocsProv.length){
       provHistCache[provId] = [];
-      renderHistorialProveedor(provId);
+      renderHistorialProveedor(provId, cont);
       return;
     }
     const ocIds = ocsProv.map(function(o){ return o.id; });
@@ -3114,39 +3127,38 @@ async function toggleHistorialProveedor(provId){
     provHistCache[provId] = ocsProv.map(function(o){
       return { oc_numero: o.oc_numero, estado: o.estado, moneda: o.moneda, fecha: o.created_at, items: itemsPorOC[o.id]||[] };
     });
-    renderHistorialProveedor(provId);
+    renderHistorialProveedor(provId, cont);
   }catch(e){
-    box.innerHTML = '<div style="font-size:11px;color:#ff5e5e;padding:6px 0;">Error: '+e.message+'</div>';
+    if(cont) cont.innerHTML = '<div style="color:#ff4d6a;">Error: '+e.message+'</div>';
   }
 }
 
-function renderHistorialProveedor(provId){
-  const box = document.getElementById('prov-hist-'+provId);
-  if(!box) return;
+function renderHistorialProveedor(provId, cont){
+  if(!cont) return;
   const ocsList = provHistCache[provId]||[];
   if(!ocsList.length){
-    box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 0;">Sin compras aprobadas registradas.</div>';
+    cont.innerHTML = '<div style="color:#3a4055;padding:12px 0;">Sin compras aprobadas registradas.</div>';
     return;
   }
   const simboloMoneda = { ARS:'$', USD:'u$s' };
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
-  html += '<tr style="color:var(--text3);text-transform:uppercase;font-size:9px;font-family:\'DM Mono\',monospace;">'
-    + '<td style="padding:3px 4px;">Fecha</td><td style="padding:3px 4px;">OC</td>'
-    + '<td style="padding:3px 4px;">Ítems</td><td style="padding:3px 4px;text-align:right;">Precios</td></tr>';
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<tr style="color:#3a4055;text-transform:uppercase;font-size:10px;font-family:\'DM Mono\',monospace;">'
+    + '<td style="padding:6px 8px;">Fecha</td><td style="padding:6px 8px;">OC</td>'
+    + '<td style="padding:6px 8px;">Ítems</td><td style="padding:6px 8px;text-align:right;">Precios</td></tr>';
   ocsList.forEach(function(o){
     const fecha = o.fecha ? new Date(o.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
     const simbolo = simboloMoneda[o.moneda] || '$';
     const itemsTexto = o.items.length ? o.items.map(function(i){ return i.nombre+' ×'+i.cantidad; }).join('<br>') : '—';
     const preciosTexto = o.items.length ? o.items.map(function(i){ return simbolo+' '+Number(i.precio_unitario_neto||0).toLocaleString('es-AR'); }).join('<br>') : '—';
-    html += '<tr style="border-top:1px solid var(--border);vertical-align:top;">'
-      + '<td style="padding:4px;color:var(--text2);white-space:nowrap;">'+fecha+'</td>'
-      + '<td style="padding:4px;color:var(--text2);white-space:nowrap;">'+o.oc_numero+'</td>'
-      + '<td style="padding:4px;color:var(--text2);">'+itemsTexto+'</td>'
-      + '<td style="padding:4px;text-align:right;color:var(--text2);">'+preciosTexto+'</td>'
+    html += '<tr style="border-top:1px solid rgba(255,255,255,0.06);vertical-align:top;">'
+      + '<td style="padding:8px;color:#7a8099;white-space:nowrap;">'+fecha+'</td>'
+      + '<td style="padding:8px;color:#7a8099;white-space:nowrap;">'+o.oc_numero+'</td>'
+      + '<td style="padding:8px;color:#e8eaf0;">'+itemsTexto+'</td>'
+      + '<td style="padding:8px;text-align:right;color:#e8eaf0;">'+preciosTexto+'</td>'
     + '</tr>';
   });
   html += '</table>';
-  box.innerHTML = html;
+  cont.innerHTML = html;
 }
 
 let editandoProvId=null;
