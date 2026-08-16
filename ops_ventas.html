@@ -1179,11 +1179,23 @@ async function guardarBOM(estado){
   const cantEquipos = currentOP.cantidad || 1;
   try{
     // Actualizar OP
-    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
+    const patchOP = {
       estado,
       color_gabinete: selectedColor,
       updated_at: new Date().toISOString()
-    });
+    };
+    // Estampar fecha_bom_confirmada solo la primera vez que se confirma la BOM
+    // (marca el traspaso real de responsabilidad Ventas → Producción). No se pisa
+    // si ya estaba seteada, para que quede el momento real de la primera confirmación.
+    if(estado === 'bom_confirmada'){
+      try{
+        const chk = await api(`ordenes_produccion?id=eq.${currentOP.id}&select=fecha_bom_confirmada`);
+        if(!(chk && chk[0] && chk[0].fecha_bom_confirmada)){
+          patchOP.fecha_bom_confirmada = new Date().toISOString();
+        }
+      }catch(e){}
+    }
+    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', patchOP);
 
     // Si todos los items son nuevos (vienen de BOM maestra), borrar los viejos primero
     const todosNuevos = currentBOMItems.every(i=>i._isNew) && currentPlayerItems.every(i=>i._isNew);

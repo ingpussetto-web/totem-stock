@@ -59,6 +59,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .metric.blue .metric-value{color:var(--blue);}
 .metric.red .metric-value{color:var(--red);}
 .metric.purple .metric-value{color:var(--purple);}
+.dash-nota{font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5;}
+.dash-section-title{font-size:13px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.04em;font-family:'DM Mono',monospace;padding-bottom:8px;margin-bottom:14px;border-bottom:1px solid var(--border);}
 .metric-sub{font-size:10px;color:var(--text3);margin-top:4px;font-family:'DM Mono',monospace;}
 select,input[type=number],input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text);font-size:13px;transition:border-color 0.15s;height:36px;}
 select:focus,input:focus{outline:none;border-color:var(--green);}
@@ -1182,59 +1184,134 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
   <!-- DASHBOARD -->
   <div class="page" id="page-dashboard">
     <div class="page-title">Dashboard de evolución</div>
-    <div class="page-sub">Indicadores basados en el historial mensual cargado. Período: <span id="dash-periodo-label">—</span></div>
+    <div class="page-sub">Ventas cerradas por mes. Período: <span id="dash-periodo-label">—</span></div>
+    <div style="padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);font-size:12px;color:var(--text3);margin-bottom:16px;">
+      <strong style="color:var(--text);">Fuente de datos:</strong> proyectos con estado <strong style="color:var(--text);">despachado</strong>, <strong style="color:var(--text);">en producción</strong> o <strong style="color:var(--text);">listo para despacho</strong> (cotización aprobada que generó una orden de producción). Se agrupan por el <strong style="color:var(--text);">mes/año cargado al crear el proyecto</strong> en el cotizador — no por la fecha de despacho ni por la fecha en que se guardó el registro. Un proyecto "en producción" o "listo para despacho" ya cuenta como venta cerrada aunque todavía no se haya entregado.
+    </div>
 
     <div id="dash-sin-datos" style="padding:40px;text-align:center;color:var(--text3);font-family:monospace;font-size:13px;">
-      — Sin datos suficientes. Cargá al menos 2 meses en el Historial mensual.
+      — Sin datos suficientes. Necesitás al menos 2 meses con proyectos despachados o en producción.
     </div>
 
     <div id="dash-contenido" style="display:none;">
+
+      <div class="dash-section-title">📈 Comercial</div>
+
       <div class="metrics" style="margin-bottom:16px;">
         <div class="metric green">
-          <div class="metric-label">Facturación promedio equipos</div>
+          <div class="metric-label">Ventas totales del período</div>
+          <div class="metric-value" id="dash-vtas-total">$0</div>
+          <div class="metric-sub" id="dash-vtas-total-usd">USD 0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Promedio mensual</div>
           <div class="metric-value" id="dash-prom-fact">$0</div>
           <div class="metric-sub" id="dash-prom-fact-usd">USD 0</div>
         </div>
-        <div class="metric">
-          <div class="metric-label">Promedio unidades/mes</div>
-          <div class="metric-value" id="dash-prom-und">0</div>
-          <div class="metric-sub">equipos</div>
-        </div>
         <div class="metric blue">
-          <div class="metric-label">Licencias promedio</div>
-          <div class="metric-value" id="dash-prom-lic">$0</div>
+          <div class="metric-label">Cantidad de ventas</div>
+          <div class="metric-value" id="dash-cant-ventas">0</div>
+          <div class="metric-sub">proyectos en el período</div>
         </div>
         <div class="metric amber">
-          <div class="metric-label">Costo fijo por equipo</div>
-          <div class="metric-value" id="dash-costo-eq">$0</div>
-          <div class="metric-sub">fijos netos ÷ unidades prom.</div>
-        </div>
-        <div class="metric" id="dash-excedente-card">
-          <div class="metric-label">Excedente promedio/mes</div>
-          <div class="metric-value" id="dash-excedente">$0</div>
-          <div class="metric-sub" id="dash-excedente-usd">USD 0</div>
+          <div class="metric-label">Mes de mayor venta</div>
+          <div class="metric-value" id="dash-mes-pico">—</div>
+          <div class="metric-sub" id="dash-mes-pico-monto">$0</div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Facturación mensual — Equipos vs Licencias y servicios</div>
+        <div class="card-title">Facturación mensual — ventas totales</div>
+        <div class="dash-nota">Cuánto se facturó por mes. Sirve para ver tendencia comercial — no dice nada sobre si Producción llega o no a entregarlo.</div>
         <canvas id="chart-facturacion" height="80"></canvas>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div class="card">
-          <div class="card-title">Unidades vendidas por mes</div>
-          <canvas id="chart-unidades" height="120"></canvas>
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">Ventas por tipo de función — mensual</div>
+        <div class="dash-nota" id="dash-categoria-nota">
+          Qué categoría de producto vendiste cada mes (Turnero, Publicidad, IA, NubiPay, etc.), tomado directo de la cotización aprobada. Sirve para ver si un tipo de producto está creciendo o cayendo mes a mes.
         </div>
-        <div class="card">
-          <div class="card-title">Costo fijo por equipo (evolución)</div>
-          <canvas id="chart-costo-eq" height="120"></canvas>
-        </div>
+        <canvas id="chart-categoria-mensual" height="100"></canvas>
       </div>
 
       <div class="card" style="margin-top:14px;">
-        <div class="card-title">Excedente mensual (facturación equipos − costos fijos netos)</div>
-        <canvas id="chart-excedente" height="70"></canvas>
+        <div class="card-title">Distribución acumulada por tipo de función (período)</div>
+        <div class="dash-nota">Del total facturado en el período, qué porcentaje corresponde a cada categoría. Sirve para decidir dónde conviene reforzar publicidad — si una categoría es chica en el acumulado, ahí hay lugar para crecer.</div>
+        <canvas id="chart-categoria-dona" height="140"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">Ventas por provincia — mensual</div>
+        <div class="dash-nota">
+          Provincia estimada a partir del código de área del teléfono cargado en la cotización aprobada. Es una aproximación, no un dato certero: el teléfono no siempre es del lugar físico del cliente (ej. un área de compras centralizada en otra ciudad), y algunos códigos de área pueden quedar sin identificar. Sirve para ver en qué zonas está creciendo la demanda.
+        </div>
+        <canvas id="chart-provincia-mensual" height="100"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">Distribución acumulada por provincia (período)</div>
+        <div class="dash-nota">Del total facturado en el período, qué porcentaje corresponde a cada provincia. Sirve para decidir dónde conviene reforzar publicidad geográficamente.</div>
+        <canvas id="chart-provincia-dona" height="140"></canvas>
+        <div class="dash-nota" id="dash-provincia-sin-id" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="dash-section-title" style="margin-top:28px;">🏭 Producción</div>
+
+      <div class="metrics" style="margin-bottom:16px;">
+        <div class="metric blue">
+          <div class="metric-label">Tasa de cumplimiento (prom. del período)</div>
+          <div class="metric-value" id="dash-tasa-cumplimiento">—</div>
+          <div class="metric-sub">finalizado ÷ (backlog + vendido)</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Unidades finalizadas (período)</div>
+          <div class="metric-value" id="dash-unidades-finalizadas">0</div>
+        </div>
+        <div class="metric red">
+          <div class="metric-label">Backlog actual</div>
+          <div class="metric-value" id="dash-backlog-actual">0</div>
+          <div class="metric-sub">unidades vendidas sin terminar producción</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Unidades vendidas vs. finalizadas en producción, por mes</div>
+        <div class="dash-nota">
+          Comparación directa mes a mes. Si "Finalizadas" queda por debajo de "Vendidas" de forma sostenida, se está acumulando backlog — la brecha entre las dos barras es, en unidades, lo que ese mes no se llegó a terminar.
+        </div>
+        <canvas id="chart-vendidas-finalizadas" height="90"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">Tasa de cumplimiento mensual</div>
+        <div class="dash-nota">
+          Finalizadas ÷ (backlog del mes anterior + vendidas del mes). Cerca de 100% = Producción va al ritmo de lo que se vende. Cayendo 2-3 meses seguidos = la demanda le está ganando a la capacidad instalada — ahí es cuando conviene sumar capacidad, priorizar pedidos o frenar ventas un tiempo. No sacar conclusiones de un solo mes suelto, mirar la tendencia.
+        </div>
+        <canvas id="chart-cumplimiento" height="90"></canvas>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">Backlog / cartera pendiente (unidades)</div>
+        <div class="dash-nota">
+          Unidades vendidas que todavía no terminaron producción, acumuladas mes a mes (si un mes no se entrega algo, se suma al mes siguiente). Es el número concreto detrás de la tasa de cumplimiento: sirve para calibrar la urgencia real — no es lo mismo un atraso con 5 equipos pendientes que con 40, aunque el porcentaje diga lo mismo.
+        </div>
+        <canvas id="chart-backlog" height="90"></canvas>
+      </div>
+
+      <div class="metrics" style="margin-top:16px;margin-bottom:16px;">
+        <div class="metric amber">
+          <div class="metric-label">Tiempo promedio de producción</div>
+          <div class="metric-value" id="dash-prod-prom">— días</div>
+          <div class="metric-sub" id="dash-prod-muestra">0 OPs</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Tiempo de producción por mes (días, BOM confirmada → OP cerrada)</div>
+        <div class="dash-nota" id="dash-prod-nota">
+          Cuánto tarda un equipo en estar listo una vez que es 100% responsabilidad de Producción (sin BOM armándose en Ventas, sin esperar pago del cliente). Si sube, puede ser falta de insumos, sobrecarga de trabajo, o un par de casos puntuales que se destraban juntos y estiran el promedio sin ser tendencia real — conviene mirar cuántos casos hay detrás del número antes de alarmarse. Barras claras/rayadas = aproximado (creación de OP → cierre, todavía sin fecha de confirmación de BOM registrada). Barras sólidas = medición exacta.
+        </div>
+        <canvas id="chart-produccion" height="90"></canvas>
       </div>
     </div>
   </div>
@@ -6801,7 +6878,272 @@ async function syncAll(){
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
-let chartFact = null, chartUnd = null, chartCostoEq = null, chartExc = null;
+let chartFact = null, chartProd = null, chartVF = null, chartCumpl = null, chartBacklog = null, chartCategoriaMes = null, chartCategoriaDona = null, chartProvinciaMes = null, chartProvinciaDona = null;
+
+// ─── VENTAS POR TIPO DE FUNCIÓN (categoría, desde cotizaciones_crm) ─────────
+let cotizacionesCRMCache = null; // {orden: {categoria, tel}}
+
+async function getCategoriaPorOrden(){
+  if(!cotizacionesCRMCache){
+    cotizacionesCRMCache = {};
+    try{
+      const rows = await stockAPI('cotizaciones_crm?select=numero,data');
+      rows.forEach(function(r){
+        const orden = (r.numero||'').replace(/^COT-/,'');
+        cotizacionesCRMCache[orden] = { categoria: (r.data && r.data.categoria) || null, tel: (r.data && r.data.tel) || null };
+      });
+    }catch(e){}
+  }
+  return cotizacionesCRMCache;
+}
+
+const CATEGORIA_COLORES = {
+  'Turnero sin software': '#4d9fff',
+  'Turnero con software': '#00c896',
+  'Totem Publicidad': '#f5a623',
+  'Vigilancia Remota': '#ff5e5e',
+  'Terminal Autogestión': '#a78bfa',
+  'Atención Remota': '#f472b6',
+  'Totem NubiPay': '#2dd4bf',
+  'VideoWall': '#fbbf24',
+  'Encuesta Satisfacción': '#818cf8',
+  'Totem IA': '#34d399',
+  'Accesorios': '#94a3b8',
+  'Sin categorizar': '#555555',
+};
+function colorCategoria(cat){ return CATEGORIA_COLORES[cat] || '#c084fc'; }
+
+// Cruza proyectos cerrados (despachado/producción) con la categoría cargada en la
+// cotización aprobada (cotizaciones_crm, por orden). Proyectos de antes de que existiera
+// ese registro (marzo 2026) quedan como "Sin categorizar" — no hay forma de reconstruirlo.
+// Venta cerrada = cotización aprobada que generó una OP: despachada, en producción, o
+// con la OP ya completada esperando el paso de despacho (listo_despacho — estado que el
+// calculador setea solo cuando alguien abre ese proyecto y detecta la OP en 'completada').
+function esVentaCerrada(estado){
+  return estado==='despachado' || estado==='produccion' || estado==='listo_despacho';
+}
+
+async function getVentasPorCategoriaMensual(){
+  const crm = await getCategoriaPorOrden();
+  const cerrados = proyectos.filter(function(p){ return esVentaCerrada(p.estado); });
+  const porMes = {};
+  cerrados.forEach(function(p){
+    const key = getKeyMesAnio(p.anio, p.mes);
+    const info = crm[p.orden];
+    const cat = (info && info.categoria) || 'Sin categorizar';
+    let monto = 0;
+    (p.items||[]).forEach(function(it){ monto += (it.precio||0) * (it.cant||0); });
+    if(!porMes[key]) porMes[key] = { anio: p.anio, mes: p.mes, porCategoria: {} };
+    porMes[key].porCategoria[cat] = (porMes[key].porCategoria[cat]||0) + monto;
+  });
+  return Object.values(porMes).sort(function(a,b){ return (a.anio*12+a.mes)-(b.anio*12+b.mes); });
+}
+
+// ─── VENTAS POR PROVINCIA (estimado desde el código de área del teléfono) ────
+// Tabla de códigos de área por provincia (fuente: ENACOM / comollamar.net, ago-2026).
+// Es una estimación: el teléfono cargado no siempre corresponde al lugar físico del
+// cliente (ej. compras centralizado en otra ciudad), y códigos no listados acá quedan
+// como "Sin identificar" en vez de adivinar.
+const PROVINCIA_POR_ZONA = {
+  'CABA / GBA': ['11'],
+  'Buenos Aires': ['221','223','291','249','220','230','236','237','336','2202','2221','2223','2224','2225','2226','2227','2229','2241','2242','2243','2244','2245','2246','2252','2254','2255','2257','2261','2262','2264','2265','2266','2267','2268','2271','2272','2273','2274','2281','2283','2284','2285','2286','2291','2292','2296','2297','2314','2316','2317','2320','2323','2324','2325','2326','2337','2342','2343','2344','2345','2346','2352','2353','2354','2355','2356','2357','2358','2392','2393','2394','2395','2396','2473','2474','2475','2477','2478','2921','2922','2923','2924','2925','2926','2927','2928','2929','2932','2933','2935','2936','2982','2983','3327','3329','3388','3407','3487','3489','3891'],
+  'Córdoba': ['351','353','358','3525','3541','3547','2336','3385','3387','3463','3467','3468','3472','3521','3522','3524','3532','3533','3537','3542','3543','3544','3546','3548','3549','3562','3563','3564','3571','3572','3573','3574','3575','3576','3582','3583','3584','3585','3856'],
+  'Santa Fe': ['341','342','3462','3492','3476','3482','3382','3400','3401','3402','3404','3405','3406','3408','3409','3460','3464','3465','3466','3469','3471','3483','3491','3493','3496','3497','3498'],
+  'Entre Ríos': ['343','345','3446','3442','3455','3447','3435','3436','3437','3438','3444','3445','3454','3456','3458'],
+  'Mendoza': ['261','260','263','2622','2624','2625','2626'],
+  'San Juan': ['264','2647','2646','2648'],
+  'San Luis': ['266','2651','2655','2656','2658'],
+  'Tucumán': ['381','3863','3865','3862','3867','3869','3892','3894'],
+  'Salta': ['387','3873','3878','3876','3877','3868'],
+  'Jujuy': ['388','3885','3886','3887','3888'],
+  'Santiago del Estero': ['385','3858','3854','3844','3843','3841','3846','3855','3857','3861'],
+  'Catamarca': ['383','3832','3835','3837','3838'],
+  'La Rioja': ['380','3825','3821','3826','3827'],
+  'Misiones': ['376','3757','3751','3755','3743','3754','3758','3741','3845'],
+  'Corrientes': ['379','3777','3772','3774','3773','3756','3775','3781','3782','3786'],
+  'Chaco': ['362','364','3735','3725','3731','3721','3734'],
+  'Formosa': ['370','3718','3715','3716','3711'],
+  'Neuquén': ['299','2942','2948','2972'],
+  'Río Negro': ['294','298','2920','2934','2946','2931','2940'],
+  'Chubut': ['297','280','2945','2903'],
+  'Santa Cruz': ['2966','2902','2963','2962'],
+  'Tierra del Fuego': ['2901','2964'],
+  'La Pampa': ['2954','2302','2334','2331','2952','2338','2333','2335','2953'],
+};
+const AREA_PROVINCIA = {};
+Object.keys(PROVINCIA_POR_ZONA).forEach(function(prov){
+  PROVINCIA_POR_ZONA[prov].forEach(function(cod){ AREA_PROVINCIA[cod] = prov; });
+});
+
+function normalizarTel(tel){
+  let d = (tel||'').replace(/\D/g,'');
+  if(d.indexOf('54')===0 && d.length>10) d = d.slice(2);
+  if(d.indexOf('0')===0) d = d.slice(1);
+  if(d.indexOf('9')===0 && d.length>10) d = d.slice(1);
+  return d;
+}
+
+function provinciaDeTelefono(tel){
+  const d = normalizarTel(tel);
+  if(!d) return 'Sin identificar';
+  for(let len=4; len>=2; len--){
+    const pref = d.slice(0,len);
+    if(AREA_PROVINCIA[pref]) return AREA_PROVINCIA[pref];
+  }
+  return 'Sin identificar';
+}
+
+function colorProvincia(nombre){
+  if(nombre==='Sin categorizar') return '#555555';
+  if(nombre==='Sin identificar') return '#888888';
+  let hash = 0;
+  for(let i=0;i<nombre.length;i++){ hash = nombre.charCodeAt(i) + ((hash<<5)-hash); }
+  const hue = Math.abs(hash) % 360;
+  return 'hsl('+hue+',60%,55%)';
+}
+
+async function getVentasPorProvinciaMensual(){
+  const crm = await getCategoriaPorOrden();
+  const cerrados = proyectos.filter(function(p){ return esVentaCerrada(p.estado); });
+  const porMes = {};
+  const sinIdentificar = []; // {cliente, tel} para revisión manual
+  cerrados.forEach(function(p){
+    const key = getKeyMesAnio(p.anio, p.mes);
+    const info = crm[p.orden];
+    const prov = info && info.tel ? provinciaDeTelefono(info.tel) : 'Sin categorizar';
+    if(prov === 'Sin identificar'){
+      sinIdentificar.push({ cliente: p.cliente, tel: info.tel });
+    }
+    let monto = 0;
+    (p.items||[]).forEach(function(it){ monto += (it.precio||0) * (it.cant||0); });
+    if(!porMes[key]) porMes[key] = { anio: p.anio, mes: p.mes, porProvincia: {} };
+    porMes[key].porProvincia[prov] = (porMes[key].porProvincia[prov]||0) + monto;
+  });
+  const serie = Object.values(porMes).sort(function(a,b){ return (a.anio*12+a.mes)-(b.anio*12+b.mes); });
+  return { serie, sinIdentificar };
+}
+
+// ─── TIEMPO DE PRODUCCIÓN (BOM confirmada → OP cerrada) ─────────────────────
+let tiemposProduccionCache = null; // cache de ordenes_produccion cerradas, para no refetchear en cada render
+
+async function getTiemposProduccionMensual(){
+  if(!tiemposProduccionCache){
+    try{
+      tiemposProduccionCache = await stockAPI('ordenes_produccion?estado=eq.completada&fecha_cierre=not.is.null&select=id,created_at,fecha_bom_confirmada,fecha_cierre,cantidad');
+    }catch(e){
+      tiemposProduccionCache = [];
+    }
+  }
+  const porMes = {};
+  tiemposProduccionCache.forEach(function(op){
+    if(!op.fecha_cierre) return;
+    const cierre = new Date(op.fecha_cierre);
+    // Inicio real de responsabilidad de Producción: fecha_bom_confirmada (exacto) si existe;
+    // si no, se aproxima con created_at de la OP (incluye tiempo de armado de BOM en Ventas).
+    const inicio = new Date(op.fecha_bom_confirmada || op.created_at);
+    const preciso = !!op.fecha_bom_confirmada;
+    const dias = (cierre - inicio) / 86400000;
+    if(!isFinite(dias) || dias < 0) return; // dato inconsistente, descartar
+    const mes = cierre.getUTCMonth()+1, anio = cierre.getUTCFullYear();
+    const key = anio+'-'+mes;
+    if(!porMes[key]) porMes[key] = { mes, anio, sumaDias:0, cantOPs:0, precisas:0, aproximadas:0 };
+    porMes[key].sumaDias += dias;
+    porMes[key].cantOPs += 1;
+    if(preciso) porMes[key].precisas += 1; else porMes[key].aproximadas += 1;
+  });
+  return Object.values(porMes).sort(function(a,b){ return (b.anio*12+b.mes)-(a.anio*12+a.mes); });
+}
+
+function getTiemposProduccionPeriodo(todas){
+  const periodo = parseInt(document.getElementById('periodo-analisis')?.value||6);
+  if(periodo===0) return todas;
+  return todas.slice(0, periodo);
+}
+
+// ─── FLUJO DE PRODUCCIÓN: vendidas vs finalizadas, tasa de cumplimiento, backlog ─
+// Backlog(mes) = Backlog(mes anterior) + Vendidas(mes) - Finalizadas(mes)
+// Tasa de cumplimiento(mes) = Finalizadas(mes) / (Backlog(mes anterior) + Vendidas(mes))
+// Serie recursiva: arranca en 0 en el primer mes con datos (no hay forma de reconstruir
+// backlog previo a eso). "Finalizadas" usa fecha_cierre de la OP (100% responsabilidad
+// de Producción, sin depender de cuándo el cliente paga el saldo y se despacha).
+function getKeyMesAnio(anio, mes){ return anio*12+mes; }
+function keyToMesAnio(k){ return { anio: Math.floor((k-1)/12), mes: ((k-1)%12)+1 }; }
+
+async function getFlujoProduccionMensual(){
+  const ventasPorMes = {};
+  proyectos.filter(function(p){ return esVentaCerrada(p.estado); }).forEach(function(p){
+    const key = getKeyMesAnio(p.anio, p.mes);
+    let und = 0;
+    (p.items||[]).forEach(function(it){ if(it.cat==='equipo') und += it.cant||0; });
+    ventasPorMes[key] = (ventasPorMes[key]||0) + und;
+  });
+
+  if(!tiemposProduccionCache){
+    try{
+      tiemposProduccionCache = await stockAPI('ordenes_produccion?estado=eq.completada&fecha_cierre=not.is.null&select=id,created_at,fecha_bom_confirmada,fecha_cierre,cantidad');
+    }catch(e){
+      tiemposProduccionCache = [];
+    }
+  }
+  const finalizadasPorMes = {};
+  tiemposProduccionCache.forEach(function(op){
+    if(!op.fecha_cierre) return;
+    const cierre = new Date(op.fecha_cierre);
+    const key = getKeyMesAnio(cierre.getUTCFullYear(), cierre.getUTCMonth()+1);
+    finalizadasPorMes[key] = (finalizadasPorMes[key]||0) + (op.cantidad||0);
+  });
+
+  const keys = Object.keys(ventasPorMes).map(Number).concat(Object.keys(finalizadasPorMes).map(Number));
+  if(!keys.length) return [];
+  const minKey = Math.min.apply(null, keys), maxKey = Math.max.apply(null, keys);
+
+  const serie = [];
+  let backlog = 0;
+  for(let k=minKey; k<=maxKey; k++){
+    const km = keyToMesAnio(k);
+    const vendidas = ventasPorMes[k]||0;
+    const finalizadas = finalizadasPorMes[k]||0;
+    const backlogAnterior = backlog;
+    const pool = backlogAnterior + vendidas;
+    const tasa = pool>0 ? Math.min(1, finalizadas/pool) : null;
+    backlog = Math.max(0, pool - finalizadas);
+    serie.push({ anio: km.anio, mes: km.mes, vendidas, finalizadas, backlogAnterior, backlogFinal: backlog, tasa });
+  }
+  return serie;
+}
+
+function sliceUltimosMeses(serie){
+  const periodo = parseInt(document.getElementById('periodo-analisis')?.value||6);
+  if(periodo===0) return serie;
+  return serie.slice(-periodo);
+}
+
+function getVentasMensuales(){
+  // Ventas cerradas = proyectos con estado despachado, en producción, o listo_despacho.
+  // Se agrupan por el mes/año cargado en el proyecto (campo p.mes/p.anio).
+  const cerrados = proyectos.filter(function(p){ return esVentaCerrada(p.estado); });
+  const porMes = {};
+  cerrados.forEach(function(p){
+    const key = p.anio+'-'+p.mes;
+    if(!porMes[key]) porMes[key] = { mes:p.mes, anio:p.anio, monto:0, unidades:0, cantVentas:0 };
+    let montoProy = 0, undProy = 0;
+    (p.items||[]).forEach(function(it){
+      montoProy += (it.precio||0) * (it.cant||0);
+      if(it.cat==='equipo') undProy += it.cant||0;
+    });
+    porMes[key].monto += montoProy;
+    porMes[key].unidades += undProy;
+    porMes[key].cantVentas += 1;
+  });
+  return Object.values(porMes).sort(function(a,b){ return (b.anio*12+b.mes)-(a.anio*12+a.mes); });
+}
+
+function getVentasPeriodo(){
+  const periodo = parseInt(document.getElementById('periodo-analisis')?.value||6);
+  const todas = getVentasMensuales();
+  if(periodo===0) return todas;
+  return todas.slice(0, periodo);
+}
 
 const CHART_COLORS = {
   green: '#00c896',
@@ -6836,10 +7178,9 @@ function getChartDefaultsCount(){
   return d;
 }
 
-function renderDashboard(){
-  const datos = getHistorialPeriodo();
+async function renderDashboard(){
+  const datos = getVentasPeriodo();
   const periodo = parseInt(document.getElementById('periodo-analisis')?.value||6);
-  const totalFijos = getTotalFijos();
 
   const sinDatos = document.getElementById('dash-sin-datos');
   const contenido = document.getElementById('dash-contenido');
@@ -6856,29 +7197,23 @@ function renderDashboard(){
   const cronologico = [...datos].sort(function(a,b){ return (a.anio*12+a.mes)-(b.anio*12+b.mes); });
   const labels = cronologico.map(function(h){ return MESES_NOMBRES[h.mes]+' '+h.anio; });
 
-  const promUnd = datos.reduce(function(s,h){ return s+h.unidades; },0)/datos.length;
-  const promFact = datos.reduce(function(s,h){ return s+h.factEquipos; },0)/datos.length;
-  const promLic = datos.reduce(function(s,h){ return s+h.licencias; },0)/datos.length;
-  const fijosNetos = Math.max(0, totalFijos - promLic);
-  const costoXEq = promUnd > 0 ? Math.round(fijosNetos/promUnd) : 0;
-  const excedenteProm = promFact - fijosNetos;
+  const ventasTotal = datos.reduce(function(s,h){ return s+h.monto; },0);
+  const promFact = ventasTotal/datos.length;
+  const cantVentas = datos.reduce(function(s,h){ return s+h.cantVentas; },0);
+  const mesPico = datos.reduce(function(a,b){ return b.monto>a.monto?b:a; }, datos[0]);
 
   // Update KPIs
   set('dash-periodo-label', periodo===0?'todos los meses':'últimos '+Math.min(periodo,datos.length)+' meses');
+  set('dash-vtas-total', fmt(Math.round(ventasTotal)));
+  set('dash-vtas-total-usd', 'USD '+Math.round(ventasTotal/dolar));
   set('dash-prom-fact', fmt(Math.round(promFact)));
   set('dash-prom-fact-usd', 'USD '+Math.round(promFact/dolar));
-  set('dash-prom-und', Math.round(promUnd*10)/10);
-  set('dash-prom-lic', fmt(Math.round(promLic)));
-  set('dash-costo-eq', fmt(costoXEq));
-  set('dash-excedente', fmt(Math.round(excedenteProm)));
-  set('dash-excedente-usd', 'USD '+Math.round(excedenteProm/dolar));
-  const excCard = document.getElementById('dash-excedente-card');
-  if(excCard) excCard.className = 'metric '+(excedenteProm>=0?'green':'red');
+  set('dash-cant-ventas', cantVentas);
+  set('dash-mes-pico', MESES_NOMBRES[mesPico.mes]+' '+mesPico.anio);
+  set('dash-mes-pico-monto', fmt(Math.round(mesPico.monto)));
 
-  // Chart 1 — Facturación: equipos + licencias stacked
-  const factEq = cronologico.map(function(h){ return h.factEquipos; });
-  const factLic = cronologico.map(function(h){ return h.licencias; });
-  const factIns = cronologico.map(function(h){ return h.factInsumos; });
+  // Chart 1 — Facturación mensual (ventas totales, una sola serie)
+  const factTotal = cronologico.map(function(h){ return h.monto; });
   if(chartFact) chartFact.destroy();
   const ctx1 = document.getElementById('chart-facturacion');
   if(ctx1) chartFact = new Chart(ctx1, {
@@ -6886,62 +7221,277 @@ function renderDashboard(){
     data:{
       labels,
       datasets:[
-        { label:'Equipos', data:factEq, backgroundColor:CHART_COLORS.greenFill, borderColor:CHART_COLORS.green, borderWidth:1.5 },
-        { label:'Licencias', data:factLic, backgroundColor:CHART_COLORS.blueFill, borderColor:CHART_COLORS.blue, borderWidth:1.5 },
-        { label:'Insumos/periféricos', data:factIns, backgroundColor:CHART_COLORS.amberFill, borderColor:CHART_COLORS.amber, borderWidth:1.5 },
+        { label:'Ventas totales', data:factTotal, backgroundColor:CHART_COLORS.greenFill, borderColor:CHART_COLORS.green, borderWidth:1.5 },
       ]
     },
     options: getChartDefaults()
   });
 
-  // Chart 2 — Unidades
-  const unidades = cronologico.map(function(h){ return h.unidades; });
-  if(chartUnd) chartUnd.destroy();
-  const ctx2 = document.getElementById('chart-unidades');
-  if(ctx2) chartUnd = new Chart(ctx2, {
-    type:'bar',
-    data:{
-      labels,
-      datasets:[{ label:'Unidades vendidas', data:unidades, backgroundColor:CHART_COLORS.greenFill, borderColor:CHART_COLORS.green, borderWidth:1.5 }]
-    },
-    options: getChartDefaultsCount()
-  });
+  // Chart — Ventas por tipo de función (mensual apilado + distribución acumulada)
+  const catMensualTodo = await getVentasPorCategoriaMensual();
+  const catMensualDatos = sliceUltimosMeses(catMensualTodo);
 
-  // Chart 3 — Costo fijo por equipo evolución
-  const costoXEqMes = cronologico.map(function(h){
-    const licM = h.licencias;
-    const fijosM = Math.max(0, totalFijos - licM);
-    return h.unidades > 0 ? Math.round(fijosM/h.unidades) : 0;
-  });
-  if(chartCostoEq) chartCostoEq.destroy();
-  const ctx3 = document.getElementById('chart-costo-eq');
-  if(ctx3) chartCostoEq = new Chart(ctx3, {
-    type:'line',
-    data:{
-      labels,
-      datasets:[{ label:'Costo fijo/equipo', data:costoXEqMes, borderColor:CHART_COLORS.amber, backgroundColor:CHART_COLORS.amberFill, tension:0.3, fill:true, pointRadius:4 }]
-    },
-    options: getChartDefaults()
-  });
+  if(catMensualDatos.length){
+    const catLabels = catMensualDatos.map(function(h){ return MESES_NOMBRES[h.mes]+' '+h.anio; });
+    const categoriasPresentes = Array.from(new Set(
+      catMensualDatos.reduce(function(acc,h){ return acc.concat(Object.keys(h.porCategoria)); }, [])
+    ));
 
-  // Chart 4 — Excedente mensual
-  const excedentes = cronologico.map(function(h){
-    const licM = h.licencias;
-    const fijosM = Math.max(0, totalFijos - licM);
-    return h.factEquipos - fijosM;
-  });
-  const excColors = excedentes.map(function(v){ return v>=0?CHART_COLORS.greenFill:CHART_COLORS.redFill; });
-  const excBorders = excedentes.map(function(v){ return v>=0?CHART_COLORS.green:CHART_COLORS.red; });
-  if(chartExc) chartExc.destroy();
-  const ctx4 = document.getElementById('chart-excedente');
-  if(ctx4) chartExc = new Chart(ctx4, {
-    type:'bar',
-    data:{
-      labels,
-      datasets:[{ label:'Excedente mensual', data:excedentes, backgroundColor:excColors, borderColor:excBorders, borderWidth:1.5 }]
-    },
-    options: getChartDefaults()
-  });
+    const datasetsCategoria = categoriasPresentes.map(function(cat){
+      return {
+        label: cat,
+        data: catMensualDatos.map(function(h){ return Math.round(h.porCategoria[cat]||0); }),
+        backgroundColor: colorCategoria(cat),
+        borderColor: colorCategoria(cat),
+        borderWidth: 1,
+      };
+    });
+
+    if(chartCategoriaMes) chartCategoriaMes.destroy();
+    const ctxCM = document.getElementById('chart-categoria-mensual');
+    if(ctxCM){
+      const optsCM = getChartDefaults();
+      optsCM.scales.x.stacked = true;
+      optsCM.scales.y.stacked = true;
+      chartCategoriaMes = new Chart(ctxCM, {
+        type:'bar',
+        data:{ labels: catLabels, datasets: datasetsCategoria },
+        options: optsCM
+      });
+    }
+
+    const totalesPorCategoria = {};
+    catMensualDatos.forEach(function(h){
+      Object.keys(h.porCategoria).forEach(function(cat){
+        totalesPorCategoria[cat] = (totalesPorCategoria[cat]||0) + h.porCategoria[cat];
+      });
+    });
+    const catsOrdenadas = Object.keys(totalesPorCategoria).sort(function(a,b){ return totalesPorCategoria[b]-totalesPorCategoria[a]; });
+
+    if(chartCategoriaDona) chartCategoriaDona.destroy();
+    const ctxCD = document.getElementById('chart-categoria-dona');
+    if(ctxCD) chartCategoriaDona = new Chart(ctxCD, {
+      type:'doughnut',
+      data:{
+        labels: catsOrdenadas,
+        datasets:[{
+          data: catsOrdenadas.map(function(c){ return Math.round(totalesPorCategoria[c]); }),
+          backgroundColor: catsOrdenadas.map(colorCategoria),
+          borderColor: '#1a1a1e',
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position:'right', labels:{ color: CHART_COLORS.text, font:{ size:11 } } },
+          tooltip: {
+            backgroundColor:'#1e1e22', titleColor:'#f0f0f0', bodyColor:'#888', borderColor:'rgba(255,255,255,0.1)', borderWidth:1,
+            callbacks:{ label: function(ctx){
+              const total = ctx.dataset.data.reduce(function(s,v){ return s+v; },0);
+              const pct = total>0 ? Math.round(ctx.parsed/total*1000)/10 : 0;
+              return ctx.label+': '+fmt(ctx.parsed)+' ('+pct+'%)';
+            } }
+          }
+        }
+      }
+    });
+  } else {
+    if(chartCategoriaMes){ chartCategoriaMes.destroy(); chartCategoriaMes=null; }
+    if(chartCategoriaDona){ chartCategoriaDona.destroy(); chartCategoriaDona=null; }
+  }
+
+  // Chart — Ventas por provincia (mensual apilado + distribución acumulada)
+  const provTodo = await getVentasPorProvinciaMensual();
+  const provMensualDatos = sliceUltimosMeses(provTodo.serie);
+
+  if(provMensualDatos.length){
+    const provLabels = provMensualDatos.map(function(h){ return MESES_NOMBRES[h.mes]+' '+h.anio; });
+    const provinciasPresentes = Array.from(new Set(
+      provMensualDatos.reduce(function(acc,h){ return acc.concat(Object.keys(h.porProvincia)); }, [])
+    ));
+
+    const datasetsProvincia = provinciasPresentes.map(function(prov){
+      return {
+        label: prov,
+        data: provMensualDatos.map(function(h){ return Math.round(h.porProvincia[prov]||0); }),
+        backgroundColor: colorProvincia(prov),
+        borderColor: colorProvincia(prov),
+        borderWidth: 1,
+      };
+    });
+
+    if(chartProvinciaMes) chartProvinciaMes.destroy();
+    const ctxPM = document.getElementById('chart-provincia-mensual');
+    if(ctxPM){
+      const optsPM = getChartDefaults();
+      optsPM.scales.x.stacked = true;
+      optsPM.scales.y.stacked = true;
+      chartProvinciaMes = new Chart(ctxPM, {
+        type:'bar',
+        data:{ labels: provLabels, datasets: datasetsProvincia },
+        options: optsPM
+      });
+    }
+
+    const totalesPorProvincia = {};
+    provMensualDatos.forEach(function(h){
+      Object.keys(h.porProvincia).forEach(function(prov){
+        totalesPorProvincia[prov] = (totalesPorProvincia[prov]||0) + h.porProvincia[prov];
+      });
+    });
+    const provsOrdenadas = Object.keys(totalesPorProvincia).sort(function(a,b){ return totalesPorProvincia[b]-totalesPorProvincia[a]; });
+
+    if(chartProvinciaDona) chartProvinciaDona.destroy();
+    const ctxPD = document.getElementById('chart-provincia-dona');
+    if(ctxPD) chartProvinciaDona = new Chart(ctxPD, {
+      type:'doughnut',
+      data:{
+        labels: provsOrdenadas,
+        datasets:[{
+          data: provsOrdenadas.map(function(p){ return Math.round(totalesPorProvincia[p]); }),
+          backgroundColor: provsOrdenadas.map(colorProvincia),
+          borderColor: '#1a1a1e',
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position:'right', labels:{ color: CHART_COLORS.text, font:{ size:11 } } },
+          tooltip: {
+            backgroundColor:'#1e1e22', titleColor:'#f0f0f0', bodyColor:'#888', borderColor:'rgba(255,255,255,0.1)', borderWidth:1,
+            callbacks:{ label: function(ctx){
+              const total = ctx.dataset.data.reduce(function(s,v){ return s+v; },0);
+              const pct = total>0 ? Math.round(ctx.parsed/total*1000)/10 : 0;
+              return ctx.label+': '+fmt(ctx.parsed)+' ('+pct+'%)';
+            } }
+          }
+        }
+      }
+    });
+
+    const sinIdEl = document.getElementById('dash-provincia-sin-id');
+    if(sinIdEl){
+      if(provTodo.sinIdentificar.length){
+        const unicos = [];
+        const vistos = new Set();
+        provTodo.sinIdentificar.forEach(function(s){
+          const k = s.cliente+'|'+s.tel;
+          if(!vistos.has(k)){ vistos.add(k); unicos.push(s); }
+        });
+        sinIdEl.innerHTML = '⚠ '+unicos.length+' cliente(s) con código de área no identificado — decime la provincia real y lo agrego a la tabla: '+
+          unicos.map(function(s){ return '<strong style="color:var(--text);">'+s.cliente+'</strong> ('+s.tel+')'; }).join(', ');
+      } else {
+        sinIdEl.innerHTML = '';
+      }
+    }
+  } else {
+    if(chartProvinciaMes){ chartProvinciaMes.destroy(); chartProvinciaMes=null; }
+    if(chartProvinciaDona){ chartProvinciaDona.destroy(); chartProvinciaDona=null; }
+  }
+
+  // Chart 2 — Vendidas vs. finalizadas, tasa de cumplimiento y backlog
+  const flujoTodo = await getFlujoProduccionMensual();
+  const flujoDatos = sliceUltimosMeses(flujoTodo);
+
+  if(flujoDatos.length){
+    const flujoLabels = flujoDatos.map(function(h){ return MESES_NOMBRES[h.mes]+' '+h.anio; });
+    const serieVendidas = flujoDatos.map(function(h){ return h.vendidas; });
+    const serieFinalizadas = flujoDatos.map(function(h){ return h.finalizadas; });
+    const serieTasa = flujoDatos.map(function(h){ return h.tasa===null ? null : Math.round(h.tasa*1000)/10; });
+    const serieBacklog = flujoDatos.map(function(h){ return h.backlogFinal; });
+
+    const ultimoMes = flujoTodo[flujoTodo.length-1];
+    set('dash-backlog-actual', ultimoMes ? ultimoMes.backlogFinal : 0);
+    const tasasValidas = flujoDatos.filter(function(h){ return h.tasa!==null; });
+    const tasaProm = tasasValidas.length ? tasasValidas.reduce(function(s,h){ return s+h.tasa; },0)/tasasValidas.length : null;
+    set('dash-tasa-cumplimiento', tasaProm===null ? '—' : (Math.round(tasaProm*1000)/10)+'%');
+    set('dash-unidades-finalizadas', flujoDatos.reduce(function(s,h){ return s+h.finalizadas; },0));
+
+    if(chartVF) chartVF.destroy();
+    const ctxVF = document.getElementById('chart-vendidas-finalizadas');
+    if(ctxVF) chartVF = new Chart(ctxVF, {
+      type:'bar',
+      data:{
+        labels: flujoLabels,
+        datasets:[
+          { label:'Vendidas', data:serieVendidas, backgroundColor:CHART_COLORS.blueFill, borderColor:CHART_COLORS.blue, borderWidth:1.5 },
+          { label:'Finalizadas en producción', data:serieFinalizadas, backgroundColor:CHART_COLORS.greenFill, borderColor:CHART_COLORS.green, borderWidth:1.5 },
+        ]
+      },
+      options: getChartDefaultsCount()
+    });
+
+    if(chartCumpl) chartCumpl.destroy();
+    const ctxC = document.getElementById('chart-cumplimiento');
+    if(ctxC){
+      const optsC = getChartDefaults();
+      optsC.scales.y.ticks.callback = function(v){ return v+'%'; };
+      optsC.scales.y.min = 0;
+      optsC.scales.y.max = 100;
+      chartCumpl = new Chart(ctxC, {
+        type:'line',
+        data:{
+          labels: flujoLabels,
+          datasets:[{ label:'Tasa de cumplimiento', data: serieTasa, borderColor:CHART_COLORS.amber, backgroundColor:CHART_COLORS.amberFill, tension:0.3, fill:true, pointRadius:4, spanGaps:true }]
+        },
+        options: optsC
+      });
+    }
+
+    if(chartBacklog) chartBacklog.destroy();
+    const ctxB = document.getElementById('chart-backlog');
+    if(ctxB) chartBacklog = new Chart(ctxB, {
+      type:'line',
+      data:{
+        labels: flujoLabels,
+        datasets:[{ label:'Backlog (unidades)', data: serieBacklog, borderColor:CHART_COLORS.red, backgroundColor:CHART_COLORS.redFill, tension:0.3, fill:true, pointRadius:4 }]
+      },
+      options: getChartDefaultsCount()
+    });
+  } else {
+    set('dash-backlog-actual','0');
+    set('dash-tasa-cumplimiento','—');
+    set('dash-unidades-finalizadas','0');
+    if(chartVF){ chartVF.destroy(); chartVF=null; }
+    if(chartCumpl){ chartCumpl.destroy(); chartCumpl=null; }
+    if(chartBacklog){ chartBacklog.destroy(); chartBacklog=null; }
+  }
+
+  // Chart 3 — Tiempo de producción (BOM confirmada → cierre; aproximado con created_at hasta que haya dato exacto)
+  const prodMensualTodo = await getTiemposProduccionMensual();
+  const prodDatos = getTiemposProduccionPeriodo(prodMensualTodo);
+
+  if(prodDatos.length){
+    const prodCron = [...prodDatos].sort(function(a,b){ return (a.anio*12+a.mes)-(b.anio*12+b.mes); });
+    const prodLabels = prodCron.map(function(h){ return MESES_NOMBRES[h.mes]+' '+h.anio; });
+    const prodValores = prodCron.map(function(h){ return Math.round((h.sumaDias/h.cantOPs)*10)/10; });
+    const prodTotalmenteAprox = prodCron.map(function(h){ return h.precisas===0; });
+    const prodColoresFill = prodTotalmenteAprox.map(function(a){ return a ? 'rgba(245,166,35,0.06)' : CHART_COLORS.amberFill; });
+    const prodColoresBorder = prodTotalmenteAprox.map(function(a){ return a ? 'rgba(245,166,35,0.35)' : CHART_COLORS.amber; });
+
+    const totalOPs = prodDatos.reduce(function(s,h){ return s+h.cantOPs; },0);
+    const totalDias = prodDatos.reduce(function(s,h){ return s+h.sumaDias; },0);
+    const totalPrecisas = prodDatos.reduce(function(s,h){ return s+h.precisas; },0);
+    set('dash-prod-prom', totalOPs>0 ? (Math.round((totalDias/totalOPs)*10)/10)+' días' : '— días');
+    set('dash-prod-muestra', totalOPs+' OPs cerradas ('+totalPrecisas+' con medición exacta desde BOM confirmada)');
+
+    if(chartProd) chartProd.destroy();
+    const ctx3 = document.getElementById('chart-produccion');
+    if(ctx3) chartProd = new Chart(ctx3, {
+      type:'bar',
+      data:{
+        labels: prodLabels,
+        datasets:[{ label:'Días promedio de producción', data: prodValores, backgroundColor: prodColoresFill, borderColor: prodColoresBorder, borderWidth:1.5 }]
+      },
+      options: getChartDefaultsCount()
+    });
+  } else {
+    set('dash-prod-prom','— días');
+    set('dash-prod-muestra','0 OPs cerradas');
+    if(chartProd){ chartProd.destroy(); chartProd=null; }
+  }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
