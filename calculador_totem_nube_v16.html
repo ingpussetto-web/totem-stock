@@ -7947,24 +7947,12 @@ async function cargarInfoOP(proyId, orden){
       // Banner Listo para despacho
       html = '<div style="margin-bottom:6px;padding:10px 14px;background:rgba(0,200,150,0.12);border:1px solid var(--green);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'        +'<span style="font-size:16px;">✅</span>'        +'<span style="color:var(--green);font-weight:600;font-size:13px;">Lista para despacho!</span>'        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')        +'<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">'          +'<a href="'+opUrl+'" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;border:1px solid var(--green);border-radius:4px;padding:2px 8px;">Ver OP →</a>'          +'<button onclick="despacharProyecto(\''+proyId+'\')" style="background:var(--green);color:#000;border:none;border-radius:4px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;">✓ Marcar despachado</button>'        +'</div>'      +'</div>'      +playersHtml;
     } else if(enProd){
-      const escaneoCompleto = (op.items_total||0) > 0 && op.items_asignados === op.items_total;
-      if(escaneoCompleto){
-        // Todos los insumos escaneados, pero la OP no fue cerrada desde Producción todavía.
-        // No depende de que Producción apriete ningún botón — es el dato real de op_progreso.
-        html = '<div style="margin-bottom:6px;padding:10px 14px;background:rgba(245,166,35,0.1);border:1px solid var(--amber);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
-          +'<span style="font-size:16px;">🔔</span>'
-          +'<span style="color:var(--amber);font-weight:600;font-size:13px;">Escaneado 100% · '+op.op_numero+' — confirmá finalización de producción</span>'
-          +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
-          +'<a href="'+opUrlBOM+'" target="_blank" style="margin-left:auto;color:var(--amber);font-size:11px;text-decoration:none;border:1px solid var(--amber);border-radius:4px;padding:2px 8px;">Confirmar en Ops Ventas →</a>'
-        +'</div>';
-      } else {
-        html = '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;">'
-          +'<span style="font-size:14px;">⚙️</span>'
-          +'<span style="color:var(--green);font-size:12px;">En producción · '+op.op_numero+' ('+(op.items_asignados||0)+'/'+(op.items_total||0)+' insumos)</span>'
-          +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
-          +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>'
-        +'</div>';
-      }
+      html = '<div style="margin-bottom:6px;padding:7px 12px;background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:14px;">⚙️</span>'
+        +'<span style="color:var(--green);font-size:12px;">En producción · '+op.op_numero+' ('+(op.items_asignados||0)+'/'+(op.items_total||0)+' insumos)</span>'
+        +(color ? '<span style="color:var(--amber);font-size:12px;">● '+color+'</span>' : '')
+        +'<a href="'+opUrl+'" target="_blank" style="margin-left:auto;color:var(--green);text-decoration:none;font-size:10px;">→ Ver OP</a>'
+      +'</div>';
     } else {
       // BOM pendiente o confirmada
       const estadoLabelsOP = {bom_pendiente:'BOM pendiente',bom_confirmada:'BOM confirmada'};

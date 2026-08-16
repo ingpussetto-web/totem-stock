@@ -212,7 +212,6 @@ select.filter:focus{outline:none;border-color:var(--green);}
         <div class="metric amber"><div class="metric-label">BOM pendiente</div><div class="metric-value" id="m-pendiente">—</div></div>
         <div class="metric blue"><div class="metric-label">BOM confirmada</div><div class="metric-value" id="m-confirmada">—</div></div>
         <div class="metric green"><div class="metric-label">En producción</div><div class="metric-value" id="m-produccion">—</div></div>
-        <div class="metric red"><div class="metric-label">🔔 Listas p/confirmar</div><div class="metric-value" id="m-listas-confirmar">—</div></div>
         <div class="metric"><div class="metric-label">Completadas</div><div class="metric-value" id="m-completada">—</div></div>
       </div>
 
@@ -420,7 +419,6 @@ async function loadOPs(){
     document.getElementById('m-pendiente').textContent = ops.filter(o=>o.estado==='bom_pendiente').length;
     document.getElementById('m-confirmada').textContent = ops.filter(o=>o.estado==='bom_confirmada').length;
     document.getElementById('m-produccion').textContent = ops.filter(o=>o.estado==='en_produccion'||o.estado==='iniciada').length;
-    document.getElementById('m-listas-confirmar').textContent = ops.filter(o=>(o.estado==='en_produccion'||o.estado==='iniciada') && o.items_total>0 && o.items_asignados===o.items_total).length;
     document.getElementById('m-completada').textContent = ops.filter(o=>o.estado==='completada').length;
     renderOPs();
   }catch(e){toast('Error: '+e.message);}
@@ -493,11 +491,6 @@ function renderOPCard(o){
         <span>${o.items_asignados}/${o.items_total} insumos asignados</span>
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-    </div>` : ''}
-    ${enProd && o.items_total>0 && o.items_asignados===o.items_total ? `
-    <div style="margin-top:10px;padding:10px 12px;background:rgba(0,229,160,0.08);border:1px solid var(--green-border);border-radius:8px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green);">
-      <span style="font-size:15px;">🔔</span>
-      <span><strong>Confirmar finalización de producción de este proyecto.</strong> Terminó el escaneo de todos los insumos — antes de dar el cierre productivo, consultá con Producción / Sistemas / demás áreas si falta algo.</span>
     </div>` : ''}
   </div>`;
 }
@@ -1461,10 +1454,10 @@ async function cambiarEstado(opId, nuevoEstado){
         const v = p.variantes?.valor ? ` (${p.variantes.valor})` : '';
         return `  • ${p.sku_nombre}${v} — qty ${p.cantidad}`;
       }).join('\n');
-      const msg = `⚠️ Esta OP tiene ${pendientes.length} insumo${pendientes.length>1?'s':''} sin asignar:\n\n${lista}\n\n⚠️ El flujo correcto es cerrar desde Producción.\n¿Confirmás igualmente marcar como completada?`;
+      const msg = `⚠️ Esta OP tiene ${pendientes.length} insumo${pendientes.length>1?'s':''} sin asignar:\n\n${lista}\n\n⚠️ Todavía no terminó el escaneo en Producción.\n¿Confirmás igualmente marcar como completada?`;
       if(!confirm(msg)) return;
     } else {
-      if(!confirm('¿Confirmás marcar como completada esta OP?\n\nNota: el flujo correcto es cerrar desde Producción.')) return;
+      if(!confirm('Se escanearon todos los insumos en Producción.\n\n¿Confirmás la finalización de producción de esta OP?')) return;
     }
 
     // ── Descontar stock de insumos de caja asignados ────────────────────────
@@ -1519,11 +1512,13 @@ async function cambiarEstado(opId, nuevoEstado){
   }
 
   try{
-    await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', {
+    const patchFinal = {
       estado: nuevoEstado,
       notas: nuevoEstado === 'completada' ? 'Cierre desde módulo Ventas — insumos restados automáticamente.' : undefined,
       updated_at: new Date().toISOString()
-    });
+    };
+    if(nuevoEstado === 'completada') patchFinal.fecha_cierre = new Date().toISOString();
+    await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', patchFinal);
     toast(equiposGeneradosVentas.length ? `Estado actualizado ✓ — equipo(s) en stock: ${equiposGeneradosVentas.join(', ')}` : 'Estado actualizado ✓');
     loadOPs();
   }catch(e){toast('Error: '+e.message);}
