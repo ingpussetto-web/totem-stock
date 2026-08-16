@@ -783,21 +783,42 @@ async function iniciarOP(conDesvio){
 function renderBotonesAccion(){
   const el = document.getElementById('botones-accion-op');
   if(!el || !currentOP) return;
-  const esIniciada = currentOP.estado === 'iniciada';
   const total = bomItems.filter(i=>i.incluido!==false).length;
   const asignados = bomItems.filter(i=>i.estado==='asignado').length;
   const completo = total > 0 && asignados === total;
 
-  if(esIniciada){
-    // En producción — mostrar solo Finalizar
+  if(completo){
+    // Escaneo 100% — el inicio ya quedó registrado automáticamente (fecha_primer_escaneo,
+    // y ahora también estado/fecha_inicio), sin depender de que alguien toque "Iniciar".
+    marcarInicioAutomatico();
     el.innerHTML = '<button class="btn solid-green lg" onclick="cerrarOP()">✓ Orden de Producción Finalizada</button>';
   } else {
-    // Asignando insumos — mostrar Reportar faltante + Iniciar Producción
-    const btnIniciar = completo
-      ? '<button class="btn" onclick="iniciarOP()" style="height:38px;font-size:13px;padding:0 18px;background:var(--green);color:#000;border-color:var(--green);font-weight:700;">&#9654; Iniciar Producción</button>'
-      : '<button class="btn" disabled title="Completá todos los insumos antes de iniciar" style="height:38px;font-size:13px;padding:0 18px;background:rgba(255,255,255,0.06);color:var(--text3);border-color:var(--border);cursor:not-allowed;opacity:0.4;">&#9654; Iniciar Producción</button>';
-    el.innerHTML = '<button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>' + btnIniciar;
+    // Todavía faltan insumos por asignar
+    el.innerHTML = '<button class="btn amber" onclick="abrirModalFaltante()">⚠ Reportar faltante</button>';
   }
+}
+
+// Estampa estado='iniciada' + fecha_inicio automáticamente al llegar al 100% de escaneo
+// (reemplaza el click manual de "Iniciar Producción", que quedaba forzado a apretarse
+// siempre al final igual, porque estaba deshabilitado hasta completar el escaneo).
+async function marcarInicioAutomatico(){
+  if(!currentOP || currentOP.estado === 'iniciada' || currentOP.estado === 'completada') return;
+  try{
+    const chk = await api(`ordenes_produccion?id=eq.${currentOP.id}&select=estado,fecha_inicio`);
+    if(chk && chk[0] && chk[0].estado === 'iniciada'){
+      currentOP.estado = 'iniciada';
+      currentOP.fecha_inicio = chk[0].fecha_inicio;
+      return;
+    }
+    const ahora = new Date().toISOString();
+    await api(`ordenes_produccion?id=eq.${currentOP.id}`, 'PATCH', {
+      estado: 'iniciada',
+      fecha_inicio: ahora,
+      updated_at: ahora
+    });
+    currentOP.estado = 'iniciada';
+    currentOP.fecha_inicio = ahora;
+  }catch(e){ /* no bloquear el flujo si esto falla */ }
 }
 
 function actualizarProgreso(){
