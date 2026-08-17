@@ -1953,6 +1953,16 @@ function getCostosNoInventariablesPromedio(){return costosNoInventariablesPromed
 // objetiva que debe usarse en cualquier cálculo de precio/punto de equilibrio.
 function getTotalFijosNeto(){return Math.max(0, getTotalFijos() - getIngresoLicenciasMensual() + getCostosEventualesPromedio() + getCostosNoInventariablesPromedio());}
 
+// Cuenta cuántos meses "reales" transcurrieron desde la compra más antigua considerada
+// hasta hoy (mínimo 1, máximo la ventana de 12). Evita diluir un gasto que todavía no
+// tiene 12 meses de historial real detrás — dividir por 12 cuando solo hay 1 mes de
+// datos subestima brutalmente el promedio mensual real.
+function mesesRealesTranscurridos(fechaMasAntigua, ventanaMeses){
+  if(!fechaMasAntigua) return ventanaMeses;
+  const dias = (Date.now() - fechaMasAntigua.getTime()) / (1000*60*60*24);
+  return Math.max(1, Math.min(ventanaMeses, Math.ceil(dias/30.44)));
+}
+
 async function cargarCostosEventuales(){
   try{
     const ventanaMeses = 12;
@@ -1969,12 +1979,15 @@ async function cargarCostosEventuales(){
     const skuIds = skuIncluidos.map(s=>s.id);
 
     const ocs = await stockAPI('ordenes_compra?estado=in.(aprobada,recibida_parcial,cerrada)&select=id,created_at');
-    const ocIds = (ocs||[]).filter(o=>new Date(o.created_at) >= desde).map(o=>o.id);
+    const ocsEnVentana = (ocs||[]).filter(o=>new Date(o.created_at) >= desde);
+    const ocIds = ocsEnVentana.map(o=>o.id);
     if(!ocIds.length){ costosEventualesPromedio = 0; costosEventualesInfo = {total:0, meses:ventanaMeses, detalle:[]}; return; }
 
-    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&sku_id=in.(${skuIds.join(',')})&select=sku_id,cantidad,precio_unitario_neto,oc_item_asignaciones(id)`);
+    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&sku_id=in.(${skuIds.join(',')})&select=sku_id,cantidad,precio_unitario_neto,oc_id,oc_item_asignaciones(id)`);
     const porSku = {};
     let total = 0;
+    let fechaMasAntigua = null;
+    const fechaPorOc = {}; ocsEnVentana.forEach(o=>{ fechaPorOc[o.id] = new Date(o.created_at); });
     // Las líneas que ya fueron asociadas a proyecto(s) puntual(es) desde Compras
     // ("🔀 Asociar a proyectos") NO entran acá — pasan a ser costo de ese proyecto,
     // no gasto general de la empresa. Solo se promedia lo que quedó como "Toda la empresa".
@@ -1983,12 +1996,15 @@ async function cargarCostosEventuales(){
       const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0);
       total += monto;
       porSku[i.sku_id] = (porSku[i.sku_id]||0) + monto;
+      const f = fechaPorOc[i.oc_id];
+      if(f && (!fechaMasAntigua || f < fechaMasAntigua)) fechaMasAntigua = f;
     });
 
     const detalle = skuIncluidos.map(s=>({nombre:s.nombre, total: porSku[s.id]||0})).filter(d=>d.total>0).sort((a,b)=>b.total-a.total);
 
-    costosEventualesPromedio = total / ventanaMeses;
-    costosEventualesInfo = {total, meses:ventanaMeses, detalle};
+    const mesesReales = mesesRealesTranscurridos(fechaMasAntigua, ventanaMeses);
+    costosEventualesPromedio = total / mesesReales;
+    costosEventualesInfo = {total, meses:mesesReales, detalle};
   }catch(e){
     console.warn('No se pudo cargar costos eventuales:', e.message);
   }
@@ -2011,24 +2027,30 @@ async function cargarCostosNoInventariables(){
     const catServiciosId = catsServicios?.[0]?.id ?? -1;
 
     const ocs = await stockAPI('ordenes_compra?estado=in.(aprobada,recibida_parcial,cerrada)&select=id,created_at');
-    const ocIds = (ocs||[]).filter(o=>new Date(o.created_at) >= desde).map(o=>o.id);
+    const ocsEnVentana = (ocs||[]).filter(o=>new Date(o.created_at) >= desde);
+    const ocIds = ocsEnVentana.map(o=>o.id);
     if(!ocIds.length){ costosNoInventariablesPromedio = 0; costosNoInventariablesInfo = {total:0, meses:ventanaMeses, detalle:[]}; recalcFijos(); if(productoActual) recalcCotizador(); return; }
 
-    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&no_inventariable=eq.true&select=nombre,sku_id,cantidad,precio_unitario_neto,oc_item_asignaciones(id),skus(categoria_id)`);
+    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&no_inventariable=eq.true&select=nombre,sku_id,cantidad,precio_unitario_neto,oc_id,oc_item_asignaciones(id),skus(categoria_id)`);
     const porNombre = {};
     let total = 0;
+    let fechaMasAntigua = null;
+    const fechaPorOc = {}; ocsEnVentana.forEach(o=>{ fechaPorOc[o.id] = new Date(o.created_at); });
     (items||[]).forEach(i=>{
       if(i.oc_item_asignaciones && i.oc_item_asignaciones.length) return; // ya asignado a proyecto(s) puntual(es)
       if(i.skus?.categoria_id === catServiciosId) return; // ya contemplado en cargarCostosEventuales
       const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0);
       total += monto;
       porNombre[i.nombre] = (porNombre[i.nombre]||0) + monto;
+      const f = fechaPorOc[i.oc_id];
+      if(f && (!fechaMasAntigua || f < fechaMasAntigua)) fechaMasAntigua = f;
     });
 
     const detalle = Object.entries(porNombre).map(([nombre,total])=>({nombre,total})).sort((a,b)=>b.total-a.total);
 
-    costosNoInventariablesPromedio = total / ventanaMeses;
-    costosNoInventariablesInfo = {total, meses:ventanaMeses, detalle};
+    const mesesReales = mesesRealesTranscurridos(fechaMasAntigua, ventanaMeses);
+    costosNoInventariablesPromedio = total / mesesReales;
+    costosNoInventariablesInfo = {total, meses:mesesReales, detalle};
   }catch(e){
     console.warn('No se pudo cargar costos de insumos no inventariables:', e.message);
   }
