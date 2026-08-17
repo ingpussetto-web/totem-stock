@@ -2371,7 +2371,8 @@ function renderInsumosTbody(){
     const noBOMBadge = noEnBOM
       ? ' <span title="Este ítem está en la lista del Cotizador pero no aparece en la BOM real de Producción para este producto. Revisalo — puede ser un insumo viejo/reemplazado." style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,94,94,0.12);color:#ff8a8a;border:1px solid rgba(255,94,94,0.3);font-family:monospace;">⚠ no está en BOM real</span>'
       : '';
-    const nombre=(b?b.name:it.key)+(isExtra?' <span style="font-size:10px;color:var(--purple);">+extra</span>':'')+noBOMBadge;
+    const fuenteBadge = ' '+fuenteInsumoBadge(it.key);
+    const nombre=(b?b.name:it.key)+(isExtra?' <span style="font-size:10px;color:var(--purple);">+extra</span>':'')+fuenteBadge+noBOMBadge;
     const sel21=ivaRate===0.21?'selected':'';
     const sel105=ivaRate===0.105?'selected':'';
     const sel0=ivaRate===0?'selected':'';
@@ -2653,6 +2654,32 @@ function getUltimaActualizacion(key){
   return new Date(supaFecha) >= new Date(manual.fecha)
     ? { fecha: supaFecha, usuario: 'Odoo/OC' }
     : manual;
+}
+
+function fuenteInsumoBadge(key){
+  // Indica de dónde sale el precio de este insumo, para saber qué tan confiable es:
+  // 1) OC real (historial_precios con oc_id) — el más confiable, sigue una compra real.
+  // 2) Carga manual (preciosHistorial) — alguien lo tipeó a mano en Gestión de Insumos.
+  // 3) Sin verificar — precio de carga inicial del sistema, nunca actualizado. Candidato
+  //    a chequear contra una referencia externa (Mercado Libre, etc.)
+  const ins = INSUMOS_BASE[key];
+  let histSupa = historialSupabase[key] || null;
+  if(!histSupa && ins && ins.sku_id){
+    histSupa = Object.values(historialSupabase).find(function(h){ return h.sku_id === ins.sku_id; }) || null;
+  }
+  if(histSupa && histSupa.fecha){
+    const f = new Date(histSupa.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    const ocNum = histSupa.ordenes_compra ? histSupa.ordenes_compra.oc_numero : '';
+    const prov = histSupa.proveedores ? histSupa.proveedores.razon_social : '';
+    const detalle = (ocNum?ocNum+' · ':'')+f+(prov?' · '+prov:'');
+    return '<span title="Precio de orden de compra real — '+detalle+'" style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(0,200,150,0.12);color:var(--green);border:1px solid rgba(0,200,150,0.3);font-family:monospace;">✓ OC real</span>';
+  }
+  const ultimaCambio = getUltimaActualizacion(key);
+  if(ultimaCambio){
+    const f = new Date(ultimaCambio.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    return '<span title="Carga manual — sin orden de compra real detrás, actualizado el '+f+'" style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,180,0,0.10);color:var(--amber);border:1px solid rgba(255,180,0,0.3);font-family:monospace;">✎ manual</span>';
+  }
+  return '<span title="Precio de carga inicial del sistema — nunca respaldado por una compra real ni editado a mano. Conviene chequearlo contra una referencia externa (Mercado Libre, etc.)" style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,94,94,0.10);color:#ff8a8a;border:1px solid rgba(255,94,94,0.3);font-family:monospace;">⚠ sin verificar</span>';
 }
 
 function abrirHistorial(key){
