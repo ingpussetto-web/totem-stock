@@ -1409,7 +1409,7 @@ async function loadOCs(){
     // Cargar items para todas las OCs (resumen en card)
     for(const o of ocs){
       try{
-        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,asignacion_proyecto_orden,asignacion_proyecto_cliente,asignacion_op_codigo,skus(categorias(nombre))`);
+        const items = await api(`oc_items?oc_id=eq.${o.id}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(categorias(nombre)),oc_item_asignaciones(proyecto_orden,proyecto_cliente,op_codigo,porcentaje)`);
         o._itemsTodos = items||[];
         // Es una OC de Servicios si TODOS sus ítems son de esa categoría (no se inventaría, no pasa por Recepción)
         o._esServicio = o._itemsTodos.length>0 && o._itemsTodos.every(i=>i.skus?.categorias?.nombre==='Servicios');
@@ -1537,7 +1537,11 @@ function renderOCs(){
       : '';
     // Asignación (solo Servicios): a qué proyecto(s) o "toda la empresa" corresponde el gasto
     const asignacionResumen = o._esServicio && o._itemsTodos?.length
-      ? [...new Set(o._itemsTodos.map(i=>i.asignacion_proyecto_cliente ? (i.asignacion_op_codigo||i.asignacion_proyecto_orden)+' — '+i.asignacion_proyecto_cliente : 'Toda la empresa'))].join(', ')
+      ? [...new Set(o._itemsTodos.map(i=>{
+          const asigs = i.oc_item_asignaciones;
+          if(!asigs || !asigs.length) return 'Toda la empresa';
+          return asigs.map(a=>(a.op_codigo||a.proyecto_orden)+' '+a.porcentaje+'%').join(' + ');
+        }))].join(', ')
       : '';
     return `<div class="oc-card ${o.estado}">
       <div class="oc-header">
@@ -1915,6 +1919,13 @@ async function guardarNuevoInsumo(){
     }
     const skuRes = await api('skus','POST',[{ nombre, codigo, categoria_id: categoriaId, tracking, activo: true }]);
     const nuevoSku = skuRes[0];
+    // Categorías que alimentan el catálogo de costeo del Cotizador (Gabinetes, Pantallas,
+    // MiniPCs, Periféricos, Vidrios, Sistemas táctiles, Electricidad, Totems Terminados,
+    // Insumos menores) — se mapean solas para que este insumo nunca quede afuera del
+    // historial de precios cuando se apruebe una OC. Excluye Servicios (17) a propósito.
+    if([8,9,10,11,12,13,15,16,18].includes(categoriaId)){
+      await api('v14_sku_map','POST',[{ v14_key:'sku_'+nuevoSku.id, sku_id:nuevoSku.id, qty_factor:1 }]).catch(()=>{});
+    }
     let variantes = [];
     if(tieneColores){
       const coloresSeleccionados = [...document.querySelectorAll('.ni-color-check:checked')].map(el=>el.value);
@@ -1982,9 +1993,7 @@ async function agregarLinea(){
     iva_pct:21,
     precio_unitario_neto:0,
     color:'',
-    asignacion_proyecto_orden: null,
-    asignacion_proyecto_cliente: null,
-    asignacion_op_codigo: null,
+    asignaciones: [], // [] = "Toda la empresa". Si no está vacío, % distribuido entre proyectos (suma 100).
     _variantes: variantes,
     _nuevo:true
   });
@@ -2000,22 +2009,122 @@ function esLineaServicio(l){
   return sku?.categorias?.nombre === 'Servicios';
 }
 
-function actualizarTooltipAsignacion(selectEl){
-  const p = proyectosAsignables.find(p=>p.orden===selectEl.value);
-  selectEl.title = p?.detalle || '';
+function resumenAsignacion(l){
+  if(!l.asignaciones || !l.asignaciones.length) return '🏢 Toda la empresa';
+  if(l.asignaciones.length===1) return '🔀 '+l.asignaciones[0].op_codigo+' ('+l.asignaciones[0].porcentaje+'%)';
+  return '🔀 '+l.asignaciones.length+' proyectos: '+l.asignaciones.map(a=>a.op_codigo+' '+a.porcentaje+'%').join(', ');
 }
 
-function asignarLineaProyecto(i, orden){
-  if(!orden){
-    lineas[i].asignacion_proyecto_orden = null;
-    lineas[i].asignacion_proyecto_cliente = null;
-    lineas[i].asignacion_op_codigo = null;
+// ─── MODAL: Asociar a proyectos (split % entre proyectos activos) ──────────
+let asigModalLineaIdx = null;
+
+function abrirModalAsignacionProyectos(i){
+  asigModalLineaIdx = i;
+  const l = lineas[i];
+  const seleccionados = {};
+  (l.asignaciones||[]).forEach(a=>{ seleccionados[a.proyecto_orden] = a.porcentaje; });
+
+  document.getElementById('popup-asig-proy')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'popup-asig-proy';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+
+  const filas = proyectosAsignables.map(p=>{
+    const checked = seleccionados[p.orden]!==undefined;
+    const pct = checked ? seleccionados[p.orden] : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <input type="checkbox" class="asig-chk" data-orden="${p.orden}" data-cliente="${(p.cliente||'').replace(/"/g,'&quot;')}" data-label="${p.label.replace(/"/g,'&quot;')}"
+        ${checked?'checked':''} onchange="toggleAsigProyecto(this)" style="width:16px;height:16px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;color:#e8eaf0;">${p.label} — ${p.cliente}</div>
+        <div style="font-size:10px;color:#7a8099;">${p.detalle||''}</div>
+      </div>
+      <input type="number" class="asig-pct linea-input" data-orden="${p.orden}" value="${pct}" min="0" max="100" placeholder="%" ${checked?'':'disabled'}
+        style="width:64px;" oninput="actualizarSumaAsig()">
+    </div>`;
+  }).join('');
+
+  overlay.innerHTML = `<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;max-width:520px;width:100%;max-height:82vh;overflow-y:auto;">
+    <div style="font-size:10px;color:#3a4055;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Asociar costo a proyectos</div>
+    <div style="font-size:15px;font-weight:600;color:#e8eaf0;margin-bottom:4px;">${l.nombre}</div>
+    <div style="font-size:11px;color:#7a8099;margin-bottom:14px;">Tildá uno o varios proyectos activos y asigná el % del costo que corresponde a cada uno. Si no tildás ninguno, queda como gasto de toda la empresa.</div>
+    <div id="asig-lista">${filas || '<div style="color:#7a8099;font-size:12px;">No hay proyectos activos (aprobados, no terminados) para asignar.</div>'}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;">
+      <button onclick="distribuirIgualAsig()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;">↔ Distribuir igual</button>
+      <span id="asig-suma" style="color:#7a8099;">Suma: 0%</span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+      <button onclick="limpiarAsigProyectos()" style="background:transparent;color:#ff4d6a;border:1px solid #3a2028;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;">Limpiar (toda la empresa)</button>
+      <button onclick="document.getElementById('popup-asig-proy').remove()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;">Cancelar</button>
+      <button onclick="guardarAsigProyectos()" style="background:#2ecc71;color:#08130a;border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(ev){ if(ev.target===overlay) overlay.remove(); });
+  actualizarSumaAsig();
+}
+
+function toggleAsigProyecto(chk){
+  const pctInput = document.querySelector(`.asig-pct[data-orden="${CSS.escape(chk.dataset.orden)}"]`);
+  if(pctInput){
+    pctInput.disabled = !chk.checked;
+    if(!chk.checked) pctInput.value='';
+  }
+  actualizarSumaAsig();
+}
+
+function actualizarSumaAsig(){
+  let suma=0;
+  document.querySelectorAll('.asig-chk:checked').forEach(chk=>{
+    const pctInput = document.querySelector(`.asig-pct[data-orden="${CSS.escape(chk.dataset.orden)}"]`);
+    suma += parseFloat(pctInput?.value)||0;
+  });
+  const el = document.getElementById('asig-suma');
+  if(el){
+    el.textContent = 'Suma: '+suma+'%';
+    el.style.color = suma===100 ? '#2ecc71' : (suma===0 ? '#7a8099' : '#ff4d6a');
+  }
+}
+
+function distribuirIgualAsig(){
+  const chks = [...document.querySelectorAll('.asig-chk:checked')];
+  if(!chks.length) return;
+  const base = Math.floor(100/chks.length);
+  let resto = 100 - base*chks.length;
+  chks.forEach((chk,idx)=>{
+    const pctInput = document.querySelector(`.asig-pct[data-orden="${CSS.escape(chk.dataset.orden)}"]`);
+    if(pctInput) pctInput.value = base + (idx < resto ? 1 : 0);
+  });
+  actualizarSumaAsig();
+}
+
+function limpiarAsigProyectos(){
+  if(asigModalLineaIdx===null) return;
+  lineas[asigModalLineaIdx].asignaciones = [];
+  document.getElementById('popup-asig-proy')?.remove();
+  renderLineas();
+}
+
+function guardarAsigProyectos(){
+  if(asigModalLineaIdx===null) return;
+  const chks = [...document.querySelectorAll('.asig-chk:checked')];
+  if(!chks.length){
+    lineas[asigModalLineaIdx].asignaciones = [];
+    document.getElementById('popup-asig-proy')?.remove();
+    renderLineas();
     return;
   }
-  const p = proyectosAsignables.find(p=>p.orden===orden);
-  lineas[i].asignacion_proyecto_orden = orden;
-  lineas[i].asignacion_proyecto_cliente = p?.cliente || null;
-  lineas[i].asignacion_op_codigo = p?.label || null;
+  let suma=0;
+  const asignaciones = chks.map(chk=>{
+    const pctInput = document.querySelector(`.asig-pct[data-orden="${CSS.escape(chk.dataset.orden)}"]`);
+    const pct = parseFloat(pctInput?.value)||0;
+    suma += pct;
+    return { proyecto_orden: chk.dataset.orden, proyecto_cliente: chk.dataset.cliente, op_codigo: chk.dataset.label, porcentaje: pct };
+  });
+  if(suma!==100){ toast('La suma de porcentajes debe ser 100% (hoy: '+suma+'%)'); return; }
+  lineas[asigModalLineaIdx].asignaciones = asignaciones;
+  document.getElementById('popup-asig-proy')?.remove();
+  renderLineas();
 }
 
 function renderLineas(){
@@ -2055,12 +2164,9 @@ function renderLineas(){
       <button class="linea-del" onclick="quitarLinea(${i})">×</button>
       ${esLineaServicio(l) ? `
       <div style="grid-column:1/-1;margin-top:2px;display:flex;align-items:center;gap:8px;">
-        <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">🧾 Asignar a:</span>
-        <select class="linea-input" style="max-width:320px;" title="${(proyectosAsignables.find(p=>p.orden===l.asignacion_proyecto_orden)?.detalle||'').replace(/"/g,'&quot;')}"
-          onchange="asignarLineaProyecto(${i},this.value);actualizarTooltipAsignacion(this);">
-          <option value="" ${!l.asignacion_proyecto_orden?'selected':''}>Toda la empresa</option>
-          ${proyectosAsignables.map(p=>`<option value="${p.orden}" title="${(p.detalle||'').replace(/"/g,'&quot;')}" ${l.asignacion_proyecto_orden===p.orden?'selected':''}>${p.label} — ${p.cliente}</option>`).join('')}
-        </select>
+        <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">${resumenAsignacion(l)}</span>
+        <button type="button" onclick="abrirModalAsignacionProyectos(${i})"
+          style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">🔀 Asociar a proyectos</button>
       </div>` : ''}
       ${l._variantes && l._variantes.length > 0
         ? `<button onclick="agregarVariante(${i})" title="Agregar otra variante de este insumo"
@@ -2214,20 +2320,34 @@ async function guardarOC(estado, previsualizar=false){
       ocId=res[0].id;
     }
     // Insertar líneas (si hay — un borrador puede guardarse sin líneas todavía)
-    if(lineas.length) await api('oc_items','POST',lineas.map(l=>({
-      oc_id:ocId,
-      sku_id:l.sku_id,
-      nombre:l.nombre,
-      cantidad:l.cantidad,
-      color:l.color||null,
-      precio_unitario_neto:l.precio_unitario_neto||0,
-      precio_unitario_bruto:l.precio_unitario_bruto||0,
-      iva_pct:l.iva_pct,
-      total_neto:(l.precio_unitario_neto||0)*l.cantidad,
-      asignacion_proyecto_orden:l.asignacion_proyecto_orden||null,
-      asignacion_proyecto_cliente:l.asignacion_proyecto_cliente||null,
-      asignacion_op_codigo:l.asignacion_op_codigo||null
-    })));
+    if(lineas.length){
+      const itemsInsertados = await api('oc_items','POST',lineas.map(l=>({
+        oc_id:ocId,
+        sku_id:l.sku_id,
+        nombre:l.nombre,
+        cantidad:l.cantidad,
+        color:l.color||null,
+        precio_unitario_neto:l.precio_unitario_neto||0,
+        precio_unitario_bruto:l.precio_unitario_bruto||0,
+        iva_pct:l.iva_pct,
+        total_neto:(l.precio_unitario_neto||0)*l.cantidad
+      })));
+      // Asociar a proyectos (split %): las filas insertadas vuelven en el mismo orden que 'lineas'
+      const asigPayload = [];
+      (itemsInsertados||[]).forEach((it,idx)=>{
+        const l = lineas[idx];
+        if(l && l.asignaciones && l.asignaciones.length){
+          l.asignaciones.forEach(a=>asigPayload.push({
+            oc_item_id: it.id,
+            proyecto_orden: a.proyecto_orden,
+            proyecto_cliente: a.proyecto_cliente,
+            op_codigo: a.op_codigo,
+            porcentaje: a.porcentaje
+          }));
+        }
+      });
+      if(asigPayload.length) await api('oc_item_asignaciones','POST',asigPayload);
+    }
 
     closeModal('modal-oc');
     toast('OC guardada ✓');
@@ -2352,6 +2472,7 @@ async function registrarHistorialPrecios(ocId){
         precio_neto: i.precio_unitario_neto,
         moneda: moneda,
         tipo_cambio: moneda==='USD' ? tipoCambio : null,
+        iva_pct: i.iva_pct!==undefined && i.iva_pct!==null ? i.iva_pct : null,
         oc_id: ocId,
         proveedor_id: proveedorId,
         fecha: new Date().toISOString().split('T')[0]
@@ -2477,7 +2598,13 @@ async function editarOC(ocId){
     const o=oc[0];
     ocEditandoId=ocId;
     provSeleccionado=o.proveedores;
-    lineas=items.map(it=>({...it,_nuevo:false}));
+    const itemIds=(items||[]).map(it=>it.id);
+    const asigRows = itemIds.length ? await api(`oc_item_asignaciones?oc_item_id=in.(${itemIds.join(',')})&select=*`).catch(()=>[]) : [];
+    lineas=items.map(it=>({
+      ...it,
+      _nuevo:false,
+      asignaciones:(asigRows||[]).filter(a=>a.oc_item_id===it.id).map(a=>({proyecto_orden:a.proyecto_orden,proyecto_cliente:a.proyecto_cliente,op_codigo:a.op_codigo,porcentaje:a.porcentaje}))
+    }));
     document.getElementById('oc-prov-seleccionado').style.display='block';
     document.getElementById('oc-prov-nombre-sel').textContent=o.proveedores?.razon_social||'—';
     document.getElementById('btn-oc-p2').disabled=false;
@@ -3311,7 +3438,7 @@ async function migrarHistorialPrecios(){
         if(!mapeo[item.sku_id]){ totalSinMapeo++; continue; }
         var clave=oc.id+'_'+item.sku_id;
         if(yaRegistrado.has(clave)){ totalOmitidos++; continue; }
-        registros.push({ sku_id:item.sku_id, v14_key:mapeo[item.sku_id], precio_neto:item.precio_unitario_neto, moneda:oc.moneda||'ARS', tipo_cambio:oc.moneda==='USD'?oc.tipo_cambio:(oc.tipo_cambio||null), oc_id:oc.id, proveedor_id:oc.proveedor_id||null, fecha:oc.created_at?oc.created_at.split('T')[0]:new Date().toISOString().split('T')[0] });
+        registros.push({ sku_id:item.sku_id, v14_key:mapeo[item.sku_id], precio_neto:item.precio_unitario_neto, moneda:oc.moneda||'ARS', tipo_cambio:oc.moneda==='USD'?oc.tipo_cambio:(oc.tipo_cambio||null), iva_pct:item.iva_pct!==undefined&&item.iva_pct!==null?item.iva_pct:null, oc_id:oc.id, proveedor_id:oc.proveedor_id||null, fecha:oc.created_at?oc.created_at.split('T')[0]:new Date().toISOString().split('T')[0] });
         yaRegistrado.add(clave);
       }
       if(registros.length){

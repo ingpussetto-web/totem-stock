@@ -503,10 +503,15 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           style="width:100%;background:transparent;border:none;border-bottom:1px solid var(--blue-border,var(--border2));color:var(--blue);font-size:20px;font-weight:600;font-family:inherit;padding:2px 0;" />
         <div class="metric-sub" id="licencias-periodo-label">cargá el neto — si tenés el bruto, dividilo por 1.21</div>
       </div>
+      <div class="metric" style="cursor:pointer;" onclick="toggleDetalleEventuales()">
+        <div class="metric-label">Costos eventuales (prom. 12 meses)</div>
+        <div class="metric-value" id="eventuales-display">$0</div>
+        <div class="metric-sub" id="eventuales-sub">cargando desde Compras...</div>
+      </div>
       <div class="metric">
         <div class="metric-label">Fijos netos a recuperar</div>
         <div class="metric-value" id="fijos-netos-display">$0</div>
-        <div class="metric-sub">fijos − ingreso licencias</div>
+        <div class="metric-sub">fijos − licencias + eventuales</div>
       </div>
       <div class="metric green">
         <div class="metric-label">Coeficiente de fijos</div>
@@ -514,8 +519,12 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <div class="metric-sub">fijos / ventas equipos (<span id="fijos-und-label">—</span> meses)</div>
       </div>
     </div>
+    <div id="detalle-eventuales" style="display:none;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);font-size:12px;color:var(--text3);margin-top:4px;">
+      <div style="color:var(--text);font-weight:600;margin-bottom:6px;">Detalle costos eventuales (últimos 12 meses, desde OC aprobadas en Compras → categoría Servicios)</div>
+      <div id="detalle-eventuales-lista">—</div>
+    </div>
     <div style="padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);font-size:12px;color:var(--text3);margin-top:4px;">
-      El coeficiente se calcula como: suma costos fijos del período ÷ suma ventas de equipos del período. Se aplica sobre el precio de venta de cada equipo en el cotizador. Cargá los meses en <strong style="color:var(--text);">Historial mensual</strong> para activar este cálculo.
+      El coeficiente se calcula como: suma costos fijos del período ÷ suma ventas de equipos del período. Se aplica sobre el precio de venta de cada equipo en el cotizador. Los costos eventuales (reparaciones, importación, viáticos, etc.) se calculan solos a partir de las OC reales de Compras — no se cargan a mano. Cargá los meses en <strong style="color:var(--text);">Historial mensual</strong> para activar este cálculo.
     </div>
   </div>
 
@@ -1733,6 +1742,8 @@ const FIJOS_DEFAULT = [
   {name:"Luz y telefonía",monto:160000},
   {name:"Comida empleados",monto:360000},
   {name:"Otros gastos",monto:200000},
+  {name:"Contadores",monto:371736},
+  {name:"Honorarios financieros",monto:446116},
 
 ];
 
@@ -1745,6 +1756,17 @@ let fijos = FIJOS_DEFAULT.map(f=>({...f}));
 // se usa como base de venta en el coeficiente (precioLista) también está en neto — así que
 // para que la resta sea consistente, este número tiene que ser neto también (bruto ÷ 1.21).
 let ingresoLicenciasManual = 4958678;
+// Costos eventuales (Servicios): promedio móvil de gastos NO recurrentes de la categoría
+// Servicios en Compras (reparaciones, importación, viáticos, etc.), excluyendo los ítems
+// que ya están representados como línea fija recurrente (Honorarios contables, Retiro de
+// socios). Se recalcula solo desde las OC reales — no se carga a mano.
+let costosEventualesPromedio = 0;
+let costosEventualesInfo = null; // {total, meses, detalle:[{nombre,total}]}
+const SKUS_SERVICIOS_EXCLUIDOS_EVENTUALES = ['Honorarios contables','Retiro de socios'];
+// Costos de Compras asociados a un proyecto puntual (vía "🔀 Asociar a proyectos" en
+// Compras) — se suman al costeo real de ESE proyecto en Detalle de Ventas, en vez de
+// ir al pool general de costos eventuales de la empresa.
+let costosAsignadosPorProyecto = {}; // { [proyecto_orden]: montoTotal }
 let productoActual = null;
 let insumosActivos = [];
 let extraInsumos = [];
@@ -1756,9 +1778,86 @@ function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getUndMes(){return parseInt(document.getElementById('unidades-mes')?.value)||15;}
 function getTotalFijos(){return fijos.reduce((s,f)=>s+f.monto,0);}
 function getIngresoLicenciasMensual(){return ingresoLicenciasManual||0;}
-// Fijos netos = estructura fija − ingreso recurrente de licencias. Esta es la base
-// objetiva que debe usarse en cualquier cálculo de precio/punto de equilibrio.
-function getTotalFijosNeto(){return Math.max(0, getTotalFijos() - getIngresoLicenciasMensual());}
+function getCostosEventualesPromedio(){return costosEventualesPromedio||0;}
+// Fijos netos = estructura fija − ingreso recurrente de licencias + promedio de costos
+// eventuales (Servicios no recurrentes). Esta es la base objetiva que debe usarse en
+// cualquier cálculo de precio/punto de equilibrio.
+function getTotalFijosNeto(){return Math.max(0, getTotalFijos() - getIngresoLicenciasMensual() + getCostosEventualesPromedio());}
+
+async function cargarCostosEventuales(){
+  try{
+    const ventanaMeses = 12;
+    const desde = new Date();
+    desde.setMonth(desde.getMonth()-ventanaMeses);
+
+    const cats = await stockAPI('categorias?nombre=eq.Servicios&select=id');
+    if(!cats || !cats[0]){ costosEventualesPromedio = 0; costosEventualesInfo = null; return; }
+    const catId = cats[0].id;
+
+    const skusServicios = await stockAPI(`skus?categoria_id=eq.${catId}&select=id,nombre`);
+    const skuIncluidos = (skusServicios||[]).filter(s=>!SKUS_SERVICIOS_EXCLUIDOS_EVENTUALES.includes(s.nombre));
+    if(!skuIncluidos.length){ costosEventualesPromedio = 0; costosEventualesInfo = {total:0, meses:ventanaMeses, detalle:[]}; return; }
+    const skuIds = skuIncluidos.map(s=>s.id);
+
+    const ocs = await stockAPI('ordenes_compra?estado=in.(aprobada,recibida_parcial,cerrada)&select=id,created_at');
+    const ocIds = (ocs||[]).filter(o=>new Date(o.created_at) >= desde).map(o=>o.id);
+    if(!ocIds.length){ costosEventualesPromedio = 0; costosEventualesInfo = {total:0, meses:ventanaMeses, detalle:[]}; return; }
+
+    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&sku_id=in.(${skuIds.join(',')})&select=sku_id,cantidad,precio_unitario_neto,oc_item_asignaciones(id)`);
+    const porSku = {};
+    let total = 0;
+    // Las líneas que ya fueron asociadas a proyecto(s) puntual(es) desde Compras
+    // ("🔀 Asociar a proyectos") NO entran acá — pasan a ser costo de ese proyecto,
+    // no gasto general de la empresa. Solo se promedia lo que quedó como "Toda la empresa".
+    (items||[]).forEach(i=>{
+      if(i.oc_item_asignaciones && i.oc_item_asignaciones.length) return;
+      const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0);
+      total += monto;
+      porSku[i.sku_id] = (porSku[i.sku_id]||0) + monto;
+    });
+
+    const detalle = skuIncluidos.map(s=>({nombre:s.nombre, total: porSku[s.id]||0})).filter(d=>d.total>0).sort((a,b)=>b.total-a.total);
+
+    costosEventualesPromedio = total / ventanaMeses;
+    costosEventualesInfo = {total, meses:ventanaMeses, detalle};
+  }catch(e){
+    console.warn('No se pudo cargar costos eventuales:', e.message);
+  }
+  recalcFijos();
+  if(productoActual) recalcCotizador();
+}
+
+async function cargarCostosAsignadosProyectos(){
+  try{
+    const asigs = await stockAPI('oc_item_asignaciones?select=oc_item_id,proyecto_orden,porcentaje');
+    if(!asigs || !asigs.length){ costosAsignadosPorProyecto = {}; return; }
+
+    const itemIds = [...new Set(asigs.map(a=>a.oc_item_id))];
+    const items = await stockAPI(`oc_items?id=in.(${itemIds.join(',')})&select=id,cantidad,precio_unitario_neto,oc_id`);
+    const itemMap = {};
+    (items||[]).forEach(i=>{ itemMap[i.id] = i; });
+
+    const ocIds = [...new Set((items||[]).map(i=>i.oc_id))];
+    const ocs = ocIds.length ? await stockAPI(`ordenes_compra?id=in.(${ocIds.join(',')})&select=id,estado`) : [];
+    const ocEstadoMap = {};
+    (ocs||[]).forEach(o=>{ ocEstadoMap[o.id] = o.estado; });
+    const estadosValidos = ['aprobada','recibida_parcial','cerrada'];
+
+    const resultado = {};
+    asigs.forEach(a=>{
+      const item = itemMap[a.oc_item_id];
+      if(!item) return;
+      if(!estadosValidos.includes(ocEstadoMap[item.oc_id])) return;
+      const montoTotal = (parseFloat(item.cantidad)||0) * (parseFloat(item.precio_unitario_neto)||0);
+      const montoAsignado = montoTotal * ((parseFloat(a.porcentaje)||0)/100);
+      resultado[a.proyecto_orden] = (resultado[a.proyecto_orden]||0) + montoAsignado;
+    });
+    costosAsignadosPorProyecto = resultado;
+  }catch(e){
+    console.warn('No se pudo cargar costos asignados por proyecto:', e.message);
+  }
+  if(document.getElementById('page-ventas')?.classList.contains('active')) renderVentas();
+}
 
 // Nuevo método: coeficiente = suma fijos netos 6 meses / suma ventas 6 meses
 function getCoeficienteFijos(){
@@ -1830,7 +1929,7 @@ function showPage(id,el){
   if(el) el.classList.add('active');
   if(id==='equilibrio') recalcPE();
   if(id==='insumos') renderInsumosMgmt();
-  if(id==='fijos') recalcFijos();
+  if(id==='fijos'){ recalcFijos(); cargarCostosEventuales(); }
   if(id==='historial') recalcHistorial();
   if(id==='cotizaciones') renderCotizaciones();
   if(id==='ventas'){
@@ -1848,6 +1947,7 @@ function showPage(id,el){
       filtroEstadoEl._inicializado = true;
     }
     renderVentas();
+    cargarCostosAsignadosProyectos();
   }
   if(id==='licencias') renderLicencias();
   if(id==='dashboard') renderDashboard();
@@ -2286,6 +2386,15 @@ function actualizarChipUsuario(){
 // ─── HISTORIAL DE PRECIOS ────────────────────────────────────────────────────
 let preciosHistorial = {}; // {key: [{fecha, bruto, neto, usd, usuario}]}
 let historialSupabase = {}; // {v14_key: {fecha, proveedor, moneda}} — cargado desde historial_precios
+// Los campos de precio en Gestión de Insumos arrancan bloqueados (de solo lectura) —
+// solo se pueden editar a mano si el usuario tocó "🔓 Carga manual" para ESA fila.
+// Se vuelve a bloquear solo al confirmar el cambio (onchange).
+let insumosDesbloqueados = new Set();
+function toggleDesbloqueoInsumo(key){
+  if(insumosDesbloqueados.has(key)) insumosDesbloqueados.delete(key);
+  else insumosDesbloqueados.add(key);
+  renderInsumosMgmt();
+}
 
 function registrarCambioprecio(key, bruto, neto, usdVal){
   if(!preciosHistorial[key]) preciosHistorial[key] = [];
@@ -2383,6 +2492,7 @@ function updateInsumoFromUSD(key, usdVal){
   const neto = Math.round(bruto / (1 + ivaRate));
   costosOverride[key] = bruto;
   registrarCambioprecio(key, bruto, neto, usdVal);
+  insumosDesbloqueados.delete(key);
   renderInsumosMgmt();
   if(productoActual) recalcCotizador();
   autoSave();
@@ -2396,6 +2506,7 @@ function updateInsumoFromBruto(key, bruto){
   const iva = getIvaInsumo(key);
   const neto = Math.round(bruto / (1+iva));
   registrarCambioprecio(key, bruto, neto, usdVal);
+  insumosDesbloqueados.delete(key);
   renderInsumosMgmt();
   if(productoActual) recalcCotizador();
   autoSave();
@@ -2409,6 +2520,7 @@ function updateInsumoFromNeto(key, neto){
   const usdVal = dolar > 0 ? bruto / dolar : 0;
   costosOverride[key+'_usd'] = Math.round(usdVal * 100) / 100;
   registrarCambioprecio(key, bruto, neto, usdVal);
+  insumosDesbloqueados.delete(key);
   renderInsumosMgmt();
   if(productoActual) recalcCotizador();
   autoSave();
@@ -2416,6 +2528,7 @@ function updateInsumoFromNeto(key, neto){
 
 function updateInsumoIva(key, rate){
   ivaOverride[key] = rate;
+  insumosDesbloqueados.delete(key);
   renderInsumosMgmt();
   if(productoActual) recalcCotizador();
   autoSave();
@@ -2589,8 +2702,9 @@ function renderInsumosMgmt(){
     if(histSupa && histSupa.fecha){
       // Precio de OC real
       const f = new Date(histSupa.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      const ocNum = histSupa.ordenes_compra ? histSupa.ordenes_compra.oc_numero : '';
       const prov = histSupa.proveedores ? histSupa.proveedores.razon_social : '';
-      fechaLabel = f + (prov ? ' · '+prov : '');
+      fechaLabel = (ocNum ? ocNum+' · ' : '') + f + (prov ? ' · '+prov : '');
       fechaColor = '#3a4055';
     } else if(ultimaCambio){
       // Precio cargado manualmente
@@ -2603,32 +2717,39 @@ function renderInsumosMgmt(){
       fechaColor = '#ff4d6a44';
     }
 
+    const desbloqueado = insumosDesbloqueados.has(key);
+    const dis = desbloqueado ? '' : 'disabled';
+    const btnLock = desbloqueado
+      ? '<button class="btn amber" title="Cancelar carga manual" onclick="toggleDesbloqueoInsumo(\''+key+'\')" style="height:26px;padding:0 8px;font-size:11px;">🔒 Cancelar</button>'
+      : '<button class="btn" title="Habilitar carga manual" onclick="toggleDesbloqueoInsumo(\''+key+'\')" style="height:26px;padding:0 8px;font-size:11px;">🔓 Carga manual</button>';
+
     return '<tr>'
       +'<td class="td-name" id="td-name-'+key+'" style="min-width:180px;">'
         +'<div style="font-weight:500;color:var(--text);">'+ins.name+' '+sinDatoBadge+'</div>'
         +'<div class="fecha-update" style="color:'+fechaColor+';">'+fechaLabel+'</div>'
       +'</td>'
       +'<td style="text-align:right;">'
-        +'<input type="number" value="'+Math.round(usdBase*100)/100+'" step="0.01" '
-        +'style="width:100px;text-align:right;font-size:12px;height:28px;" '
+        +'<input type="number" value="'+Math.round(usdBase*100)/100+'" step="0.01" '+dis+' '
+        +'style="width:100px;text-align:right;font-size:12px;height:28px;'+(desbloqueado?'':'opacity:0.55;')+'" '
         +'onchange="updateInsumoFromUSD(\''+key+'\',parseFloat(this.value))" /></td>'
       +'<td style="text-align:right;">'
-        +'<input type="number" value="'+costoReal+'" '
-        +'style="width:130px;text-align:right;font-size:12px;height:28px;" '
+        +'<input type="number" value="'+costoReal+'" '+dis+' '
+        +'style="width:130px;text-align:right;font-size:12px;height:28px;'+(desbloqueado?'':'opacity:0.55;')+'" '
         +'onchange="updateInsumoFromBruto(\''+key+'\',parseFloat(this.value))" /></td>'
       +'<td style="text-align:center;">'
-        +'<select style="height:28px;font-size:11px;padding:2px 4px;" '
+        +'<select style="height:28px;font-size:11px;padding:2px 4px;'+(desbloqueado?'':'opacity:0.55;')+'" '+dis+' '
           +'onchange="updateInsumoIva(\''+key+'\',parseFloat(this.value))">'
           +'<option value="0.21" '+sel21+'>21%</option>'
           +'<option value="0.105" '+sel105+'>10.5%</option>'
           +'<option value="0" '+sel0+'>Sin IVA</option>'
         +'</select></td>'
       +'<td style="text-align:right;">'
-        +'<input type="number" value="'+costoNeto+'" '
-        +'style="width:130px;text-align:right;font-size:12px;height:28px;color:var(--green);border-color:rgba(0,200,150,0.3);" '
+        +'<input type="number" value="'+costoNeto+'" '+dis+' '
+        +'style="width:130px;text-align:right;font-size:12px;height:28px;color:var(--green);border-color:rgba(0,200,150,0.3);'+(desbloqueado?'':'opacity:0.55;')+'" '
         +'onchange="updateInsumoFromNeto(\''+key+'\',parseFloat(this.value))" /></td>'
       +'<td style="text-align:center;"><span class="var-badge '+badgeClass+'">'+badgeText+'</span></td>'
-      +'<td style="text-align:center;display:flex;gap:4px;justify-content:center;">'
+      +'<td style="text-align:center;display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">'
+        +btnLock
         +'<button class="btn" title="Editar nombre" onclick="editarNombreInsumo(\''+key+'\')" '
           +'style="height:26px;padding:0 8px;font-size:11px;">✏</button>'
         +'<button class="btn red" title="Eliminar insumo" onclick="confirmarEliminarInsumo(\''+key+'\')" '
@@ -3279,6 +3400,18 @@ function recalcFijos(){
   set('total-fijos-display',fmt(total));
   const licInput = document.getElementById('ingreso-licencias-input');
   if(licInput && document.activeElement !== licInput) licInput.value = ingresoLicenciasManual;
+  set('eventuales-display', fmt(getCostosEventualesPromedio()));
+  if(costosEventualesInfo){
+    set('eventuales-sub', `$${Math.round(costosEventualesInfo.total).toLocaleString('es-AR')} en ${costosEventualesInfo.meses} meses ÷ ${costosEventualesInfo.meses} — click para detalle`);
+    const listaEl = document.getElementById('detalle-eventuales-lista');
+    if(listaEl){
+      listaEl.innerHTML = costosEventualesInfo.detalle.length
+        ? costosEventualesInfo.detalle.map(d=>`<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>${d.nombre}</span><span style="color:var(--text);">${fmt(d.total)}</span></div>`).join('')
+        : '<div>Sin compras de Servicios (eventuales) en los últimos 12 meses.</div>';
+    }
+  } else {
+    set('eventuales-sub', 'cargando desde Compras...');
+  }
   // If historial has data, recalculate from it; otherwise show placeholder
   if(historial.length>0){
     recalcHistorial();
@@ -3292,6 +3425,10 @@ function recalcFijos(){
   }
 }
 
+function toggleDetalleEventuales(){
+  const el = document.getElementById('detalle-eventuales');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
 function actualizarIngresoLicencias(){
   const val = parseFloat(document.getElementById('ingreso-licencias-input')?.value) || 0;
   ingresoLicenciasManual = Math.max(0, val);
@@ -6109,6 +6246,7 @@ function renderVentas(){
 
   listaEl.innerHTML = lista.map(function(p, idx){
     const totalProy = p.items.reduce(function(s,i){ return s+i.precio*i.cant; },0);
+    const costoAsignadoProy = costosAsignadosPorProyecto[p.orden] || 0;
     const licAsociadas = licencias.filter(function(l){ return matchLicProy(l, p); });
     const itemsHTML = p.items.map(function(it){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:12px;">'
@@ -6305,6 +6443,12 @@ function renderVentas(){
         + itemsHTML
         + licHTML
         + pendientesHTML
+        +(costoAsignadoProy>0
+          ? '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:12px;">'
+              +'<span style="color:var(--amber);">🔀 Costos de Compras asignados a este proyecto</span>'
+              +'<span style="font-family:monospace;color:var(--amber);">'+fmt(costoAsignadoProy)+'</span>'
+            +'</div>'
+          : '')
         +'<div id="op-info-'+p.id+'" style="display:none;margin-top:8px;"></div>'
         +'<div style="display:flex;justify-content:flex-end;padding-top:8px;margin-top:4px;border-top:1px solid var(--border2);">'
           +'<span style="font-size:13px;font-weight:500;font-family:monospace;">Total neto: '+fmt(totalProy)+'</span>'
@@ -6749,11 +6893,13 @@ async function loadFromSheets(){
         if(INSUMOS_BASE[m.v14_key]) INSUMOS_BASE[m.v14_key].sku_id = m.sku_id;
       });
     }
-    // Categorías relevantes para costeo: Gabinetes(8), Pantallas(9), MiniPCs(10), Periféricos(11), Vidrios(12), Electricidad(13)
-    const skuRows = await stockAPI('skus?select=id,nombre,codigo,categoria_id&categoria_id=in.(8,9,10,11,12,13)&activo=eq.true&limit=200');
+    // Categorías relevantes para costeo: Gabinetes(8), Pantallas(9), MiniPCs(10), Periféricos(11),
+    // Vidrios(12), Sistemas táctiles(18), Electricidad(13), Totems Terminados(15), Insumos menores(16)
+    const skuRows = await stockAPI('skus?select=id,nombre,codigo,categoria_id&categoria_id=in.(8,9,10,11,12,13,15,16,18)&activo=eq.true&limit=300');
     if(skuRows && skuRows.length > 0){
-      // Mapeo categoria_id → IVA por defecto
-      const ivaDefecto = {8:0.21, 9:0.21, 10:0.21, 11:0.21, 12:0.105, 13:0.21};
+      // Mapeo categoria_id → IVA por defecto (solo aplica hasta la primera compra real —
+      // verificarPreciosActualizados() lo pisa con el iva_pct real de la OC)
+      const ivaDefecto = {8:0.21, 9:0.21, 10:0.21, 11:0.21, 12:0.105, 13:0.21, 15:0.21, 16:0.21, 18:0.105};
       skuRows.forEach(function(sku){
         // Buscar si ya existe en INSUMOS_BASE por v14_sku_map (via sku_id)
         // Si no existe, agregarlo dinámicamente con precio 0
@@ -7890,6 +8036,8 @@ sincronizarTodoElHistorial();
 setSyncStatus('Conectando...', '#f5a623');
 loadFromSheets();
 // Precios actualizados se aplican al final de loadFromSheets
+cargarCostosEventuales();
+cargarCostosAsignadosProyectos();
 
 
 // ─── CARGAR INFO OP DESDE SUPABASE ───────────────────────────────────────────
@@ -8072,7 +8220,7 @@ async function verificarPreciosActualizados(){
     const key = localStorage.getItem('supa_key');
     if(!url || !key) return;
     // Traer el último precio por v14_key, incluyendo sku_id para match alternativo
-    const historial = await stockAPI('historial_precios?select=v14_key,sku_id,precio_neto,moneda,tipo_cambio,fecha&order=fecha.desc');
+    const historial = await stockAPI('historial_precios?select=v14_key,sku_id,precio_neto,moneda,tipo_cambio,iva_pct,fecha,oc_id,ordenes_compra(oc_numero),proveedores(razon_social)&order=fecha.desc');
     if(!historial || !historial.length) return;
     // Tomar el precio más reciente por v14_key
     const ultimosPorKey = {};
@@ -8099,24 +8247,34 @@ async function verificarPreciosActualizados(){
         historialSupabase[insumoKey] = h;
       }
       if(!insumo || !h.precio_neto) return;
-      const ivaRate = insumo.iva !== undefined ? insumo.iva : 0.21;
+      // IVA real de la OC si quedó registrado (0, 10.5 o 21); si no, el default del insumo.
+      const ivaRate = (h.iva_pct !== undefined && h.iva_pct !== null) ? h.iva_pct/100 : (insumo.iva !== undefined ? insumo.iva : 0.21);
+      insumo.iva = ivaRate;
+      ivaOverride[insumoKey] = ivaRate;
       let precioNetoARS, precioNetoUSD;
       if(h.moneda === 'USD'){
-        // OC en USD: guardar USD y convertir a ARS con el TC de la OC (o el actual si no hay)
+        // OC en USD: guardar USD y convertir a ARS con el TC de la OC (o el actual si no hay) solo como referencia
         precioNetoUSD = h.precio_neto;
         const tc = h.tipo_cambio || dolar; // usa TC de OC si existe, sino el actual
         precioNetoARS = Math.round(h.precio_neto * tc);
       } else {
-        // OC en ARS: precio directo, USD calculado con TC de OC o actual
+        // OC en ARS: precio directo, USD calculado con TC de OC o actual (solo como referencia)
         precioNetoARS = h.precio_neto;
         const tc = h.tipo_cambio || dolar;
         precioNetoUSD = Math.round(h.precio_neto / tc * 100) / 100;
       }
       insumo.costoBase = precioNetoARS;
-      // costosOverride[insumoKey] = precio CON IVA en ARS (renderInsumosMgmt lo divide por 1+iva para mostrar neto)
-      costosOverride[insumoKey] = Math.round(precioNetoARS * (1 + ivaRate));
-      // costosOverride[insumoKey+'_usd'] = precio neto en USD (para mostrar columna USD base)
-      costosOverride[insumoKey+'_usd'] = precioNetoUSD;
+      if(h.moneda === 'USD'){
+        // Compra en USD: dejar que trackee el dólar EN VIVO (getCostoInsumo prioriza el
+        // override ARS por sobre el _usd, así que si dejáramos ambos seteados, el precio
+        // quedaría congelado a la cotización de hoy y nunca más se movería con el dólar).
+        costosOverride[insumoKey+'_usd'] = precioNetoUSD;
+        delete costosOverride[insumoKey];
+      } else {
+        // Compra en ARS: precio fijo en pesos, no depende del dólar.
+        costosOverride[insumoKey] = Math.round(precioNetoARS * (1 + ivaRate));
+        delete costosOverride[insumoKey+'_usd'];
+      }
       actualizados++;
     });
     if(actualizados > 0){
