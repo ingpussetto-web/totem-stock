@@ -1244,7 +1244,7 @@ function renderHistorialPrecios(){
     } else {
       estadoHtml = '<span style="color:var(--green);">✓ Al día</span>';
     }
-    const nombreEsc = r.nombre.replace(/'/g,"\\'");
+    const nombreEsc = r.nombre.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return '<tr style="border-top:1px solid var(--border2);">'
       + '<td style="padding:10px 16px;">'+r.nombre+(r.codigo?' <span style="color:var(--text3);font-size:11px;">'+r.codigo+'</span>':'')+'</td>'
       + '<td style="padding:10px;text-align:center;">'+r.ocsAprobadas+'</td>'
@@ -3199,7 +3199,7 @@ function renderProveedores(){
         <button class="btn sm" onclick="openModalProveedor(false,${p.id})">Editar</button>
       </div>
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
-        <div style="cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation();abrirHistorialProveedor(${p.id},'${(p.razon_social||'').replace(/'/g,"\\'")}')">
+        <div style="cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation();abrirHistorialProveedor(${p.id},'${(p.razon_social||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">
           <span style="font-size:10px;color:var(--text3);display:inline-block;">▶</span>
           🧾 ${cant} compra${cant===1?'':'s'} efectuada${cant===1?'':'s'}
         </div>
