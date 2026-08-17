@@ -291,7 +291,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
       <div class="card">
         <div class="card-title">Insumos — <span id="prod-selected-name" style="color:var(--text);text-transform:none;font-size:13px;letter-spacing:0;">—</span></div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px;padding:6px 10px;background:var(--surface2);border-radius:6px;border-left:2px solid var(--blue);">
-          Desactivar un insumo (ej: Mini PC cuando la pone el cliente) recalcula la ganancia automáticamente manteniendo el precio de lista.
+          Esta tabla es de solo lectura. Para agregar/sacar insumos, editá la <strong style="color:var(--text2);">BOM Maestra</strong> en ops_ventas. Para cambiar un precio, cargá una compra o editalo en <strong style="color:var(--text2);">Gestión de Insumos</strong>. Podés desactivar un insumo (ej: Mini PC cuando la pone el cliente) para recalcular la ganancia manteniendo el precio de lista, sin afectar la composición real.
         </div>
         <table class="insumos-table">
           <thead>
@@ -321,17 +321,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
             </tr>
           </tfoot>
         </table>
-        <div style="margin-top:10px;">
-          <button class="btn green" onclick="showAddInsumo()">+ Agregar insumo adicional</button>
-        </div>
-        <div id="add-insumo-panel" style="display:none;margin-top:10px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
-          <div class="form-row">
-            <select id="extra-insumo-select" style="min-width:240px;"></select>
-            <input type="number" id="extra-qty" value="1" min="1" style="width:60px;" />
-            <button class="btn green" onclick="addExtraInsumo()">Agregar</button>
-            <button class="btn" onclick="document.getElementById('add-insumo-panel').style.display='none'">Cancelar</button>
-          </div>
-        </div>
+        <div id="add-insumo-panel" style="display:none;"></div>
       </div>
 
       <div class="card">
@@ -388,53 +378,11 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
   <!-- INSUMOS -->
   <div class="page" id="page-insumos">
     <div class="page-title">Gestión de insumos</div>
-    <div class="page-sub">Editá USD base, $ bruto o $ neto — los demás campos se actualizan solos. Los nuevos insumos aparecen automáticamente en el cotizador.</div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-      <button class="btn" onclick="importarPrecios()" style="border-color:var(--blue);color:var(--blue);">↑ Importar precios desde Odoo</button>
-      <input type="file" id="import-precios-input" accept=".json" style="display:none;" onchange="procesarImportacionPrecios(this)" />
-      <span style="font-size:11px;color:var(--text3);">Importá el archivo JSON con los precios actualizados.</span>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-bottom:4px;">
-      <span class="badge-odoo">✓ Odoo</span><span style="color:var(--text3);">Dato real de compra</span>
-      <span style="color:var(--border2);">·</span>
-      <span class="badge-excel">📊 Excel</span><span style="color:var(--text3);">Excel original — verificar</span>
-      <span style="color:var(--border2);">·</span>
+    <div class="page-sub">Editá USD base, $ bruto o $ neto — los demás campos se actualizan solos. Los insumos nuevos se dan de alta desde Compras (al crear el SKU) y aparecen acá automáticamente.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-bottom:14px;">
       <span class="badge-manual">✎ Manual</span><span style="color:var(--text3);">Cargado manualmente</span>
       <span style="color:var(--border2);">·</span>
       <span class="badge-sin-dato">⚠ sin dato</span><span style="color:var(--text3);">Pendiente de carga</span>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Agregar nuevo insumo</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:8px;align-items:end;">
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Nombre</div>
-          <input type="text" id="nuevo-nombre" placeholder="ej: Cooler industrial" style="width:100%;" />
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Valor</div>
-          <input type="number" id="nuevo-valor" placeholder="0" style="width:100%;" />
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Moneda</div>
-          <select id="nuevo-moneda" style="width:100%;min-width:0;">
-            <option value="usd">USD</option>
-            <option value="pesos_bruto">$ bruto (con IVA)</option>
-            <option value="pesos_neto">$ neto (sin IVA)</option>
-          </select>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Alíc. IVA</div>
-          <select id="nuevo-iva" style="min-width:80px;">
-            <option value="0.21">21%</option>
-            <option value="0.105">10.5%</option>
-            <option value="0">Sin IVA</option>
-          </select>
-        </div>
-        <div style="padding-bottom:1px;">
-          <button class="btn green" onclick="agregarNuevoInsumo()" style="height:36px;white-space:nowrap;">+ Agregar</button>
-        </div>
-      </div>
     </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
@@ -2092,21 +2040,44 @@ function renderProductoGrid(cat){
   document.getElementById('producto-grid').innerHTML=lista.map(p=>{
     const precioFinal=p.precioListaConMiniPC||p.precioLista;
     const bomBadge = productosConBOMReal.has(p.id)
-      ? '<span title="Este producto tiene una BOM real cargada en Producción — la lista de insumos se puede verificar contra esa base." style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(0,200,150,0.14);color:var(--green);border:1px solid rgba(0,200,150,0.35);font-family:monospace;margin-left:6px;">✓ BOM real</span>'
-      : '';
+      ? '<span title="Este producto tiene una BOM real cargada en Producción — la lista de insumos se puede verificar contra esa base." style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,200,150,0.20);color:var(--green);border:1px solid rgba(0,200,150,0.5);font-family:monospace;margin-top:4px;">✓ BOM REAL</span>'
+      : '<span title="Este producto todavía no tiene una BOM real cargada en Producción — el costeo usa la lista aproximada." style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(255,94,94,0.14);color:#ff8a8a;border:1px solid rgba(255,94,94,0.4);font-family:monospace;margin-top:4px;">⚠ SIN BOM REAL</span>';
     return `<div class="producto-card ${productoActual&&productoActual.id===p.id?'selected':''}" onclick="selectProducto('${p.id}')">
-      <div class="prod-name">${p.name}${bomBadge}</div>
+      <div class="prod-name">${p.name}</div>
+      <div>${bomBadge}</div>
       <div class="prod-precio">${fmt(Math.round(precioFinal*1.105))} c/IVA</div>
       <div class="prod-cat">${p.categoria}</div>
     </div>`;
   }).join('');
 }
 
+// Traduce las filas reales de bom_maestra (sku_id) a la clave interna de INSUMOS_BASE
+// que usa el motor de costeo (getCostoInsumo). Es la fuente única de composición para
+// cualquier producto que ya tenga BOM real — reemplaza a la lista aproximada de PRODUCTOS[].
+function resolverInsumosDesdeBOM(bomReal){
+  const skuIdToKey = {};
+  Object.entries(INSUMOS_BASE).forEach(function([k,v]){ if(v.sku_id) skuIdToKey[v.sku_id]=k; });
+  return bomReal.map(function(r){
+    let key = (r.sku_id && skuIdToKey[r.sku_id]) ? skuIdToKey[r.sku_id] : null;
+    if(!key){
+      // SKU todavía no sincronizado en INSUMOS_BASE (recién creado) — crear entrada on-the-fly
+      key = r.sku_id ? 'sku_'+r.sku_id : ('bom_'+r.id);
+      if(!INSUMOS_BASE[key]){
+        INSUMOS_BASE[key] = { name: r.nombre, costoBase:0, iva:0.21, sku_id: r.sku_id||null, fromSupabase:true };
+      }
+    }
+    return { key: key, qty: r.qty||1, activo:true, _fromBOM:true };
+  });
+}
+
 function selectProducto(id){
   productoActual=PRODUCTOS.find(p=>p.id===id);
   if(!productoActual) return;
   extraInsumos=[];
-  insumosActivos=productoActual.insumos.map(i=>({...i,activo:true}));
+  const bomRealParaInsumos = bomMaestraPorProducto[productoActual.id];
+  insumosActivos = (bomRealParaInsumos && bomRealParaInsumos.length)
+    ? resolverInsumosDesdeBOM(bomRealParaInsumos)
+    : productoActual.insumos.map(i=>({...i,activo:true}));
   document.getElementById('prod-selected-name').textContent=productoActual.name;
   document.getElementById('cotizador-detalle').style.display='block';
 
@@ -2144,12 +2115,12 @@ function selectProducto(id){
     bomEl.style.background = 'rgba(0,200,150,0.10)';
     bomEl.style.border = '1px solid rgba(0,200,150,0.3)';
     bomEl.style.color = 'var(--green)';
-    bomEl.textContent = '✓ Este producto tiene BOM real en Producción (' + bomReal.length + ' insumos). Los ítems de abajo marcados con ⚠ están en esta lista pero no en la BOM real — revisalos.';
+    bomEl.textContent = '✓ Este producto tiene BOM real en Producción (' + bomReal.length + ' insumos) — la lista de abajo se toma directo de ahí. Para agregar/sacar insumos, editá la BOM Maestra en ops_ventas.';
   } else {
     bomEl.style.background = 'rgba(255,94,94,0.08)';
     bomEl.style.border = '1px solid rgba(255,94,94,0.25)';
     bomEl.style.color = '#ff8a8a';
-    bomEl.textContent = '⚠ Este producto todavía no tiene una BOM real cargada en Producción — esta lista es aproximada, no verificada contra una compra/armado real.';
+    bomEl.textContent = '⚠ Este producto todavía no tiene una BOM real cargada en Producción — se muestra la lista aproximada (no editable) hasta que le armes su BOM Maestra en ops_ventas.';
   }
 
   renderInsumosTbody();
@@ -2188,28 +2159,18 @@ function renderInsumosTbody(){
     const usdBase = costosOverride[key+'_usd'] !== undefined
       ? Math.round(costosOverride[key+'_usd']*100)/100
       : (b ? Math.round((b.costoBase/BASE_DOLAR)*100)/100 : 0);
+    const ivaLabel = ivaRate===0.21?'IVA 21%':ivaRate===0.105?'IVA 10.5%':'Sin IVA';
     return '<tr class="'+cls+'">'
-      +'<td><input type="checkbox" '+chk+' onchange="toggleInsumo('+idx+')" /></td>'
+      +'<td><input type="checkbox" '+chk+' onchange="toggleInsumo('+idx+')" title="Incluir/excluir de esta cotización puntual — no modifica la composición ni el precio real." /></td>'
       +'<td class="td-name">'+nombre+'</td>'
       +'<td style="text-align:center;font-size:12px;color:var(--text3);">x'+qty+'</td>'
-      // USD base editable
-      +'<td><input type="number" value="'+usdBase+'" step="0.01" '
-        +'style="width:82px;text-align:right;font-size:12px;height:26px;color:var(--blue);" '
-        +'onchange="updateInsumoFromUSD(\''+key+'\',parseFloat(this.value))" /></td>'
-      +'<td><select style="height:26px;font-size:11px;padding:2px 4px;min-width:80px;" '
-        +'onchange="overrideIva(\''+key+'\',parseFloat(this.value));renderInsumosTbody();recalcCotizador();">'
-        +'<option value="0.21" '+sel21+'>IVA 21%</option>'
-        +'<option value="0.105" '+sel105+'>IVA 10.5%</option>'
-        +'<option value="0" '+sel0+'>Sin IVA</option>'
-      +'</select></td>'
-      +'<td><input type="number" class="cost-input" value="'+costoUnit+'" '
-        +'style="width:110px;" onchange="updateInsumoFromBruto(\''+key+'\',parseFloat(this.value))" /></td>'
-      +'<td><input type="number" class="cost-input" value="'+costoNeto+'" '
-        +'style="width:100px;color:var(--green);" onchange="updateInsumoFromNeto(\''+key+'\',parseFloat(this.value))" /></td>'
+      // Todo de solo lectura — el precio se edita en Gestión de Insumos / cargando una OC.
+      +'<td style="text-align:right;font-size:12px;color:var(--text3);">'+usdBase+'</td>'
+      +'<td style="font-size:11px;color:var(--text3);">'+ivaLabel+'</td>'
+      +'<td style="text-align:right;font-size:12px;color:var(--text3);">'+fmt(costoUnit)+'</td>'
+      +'<td style="text-align:right;font-size:12px;color:var(--text3);">'+fmt(costoNeto)+'</td>'
       +'<td class="td-total">'+(activo?fmt(totalBruto):'—')+'</td>'
-      +'<td style="text-align:center;">'
-        +'<button class="btn red" title="Quitar de este producto" onclick="quitarInsumoDelProducto('+idx+')">✕</button>'
-      +'</td>'
+      +'<td></td>'
     +'</tr>';
   });
   tbody.innerHTML=rows.join('');
@@ -2366,100 +2327,6 @@ function addExtraInsumo(){
 }
 
 // Gestión de insumos
-
-// ─── IMPORTAR PRECIOS DESDE ODOO ─────────────────────────────────────────────
-function importarPrecios(){
-  document.getElementById('import-precios-input').click();
-}
-
-function procesarImportacionPrecios(input){
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e){
-    try {
-      const data = JSON.parse(e.target.result);
-      if(!data.actualizaciones){ alert('Archivo inválido.'); return; }
-
-      let actualizados = 0, nuevos = 0, omitidos = 0;
-
-      // Update existing insumos
-      data.actualizaciones.forEach(function(u){
-        if(INSUMOS_BASE[u.key]){
-          costosOverride[u.key] = u.bruto;
-          if(u.iva !== undefined) ivaOverride[u.key] = u.iva;
-          INSUMOS_FUENTE[u.key] = u.fuente || 'manual';
-          const netoImp = u.iva ? Math.round(u.bruto/(1+u.iva)) : u.bruto;
-          const usdImp = dolar > 0 ? u.bruto/dolar : 0;
-          registrarCambioprecio(u.key, u.bruto, netoImp, usdImp);
-          actualizados++;
-        } else {
-          omitidos++;
-        }
-      });
-
-      // Add new custom insumos
-      if(data.nuevos_insumos){
-        data.nuevos_insumos.forEach(function(n){
-          if(!INSUMOS_BASE[n.key]){
-            INSUMOS_BASE[n.key] = {
-              name: n.name,
-              costoBase: Math.round(n.bruto / dolar * 1420),
-              iva: n.iva || 0.21
-            };
-            costosOverride[n.key] = n.bruto;
-            ivaOverride[n.key] = n.iva || 0.21;
-            INSUMOS_FUENTE[n.key] = n.fuente || 'odoo';
-            nuevos++;
-          }
-        });
-      }
-
-      // Process deletions
-      let eliminados = 0;
-      if(data.eliminar){
-        data.eliminar.forEach(function(e){
-          if(INSUMOS_BASE[e.key]){
-            delete INSUMOS_BASE[e.key];
-            delete costosOverride[e.key];
-            delete costosOverride[e.key+'_usd'];
-            delete ivaOverride[e.key];
-            // Remove from all products
-            PRODUCTOS.forEach(function(p){
-              p.insumos = p.insumos.filter(function(i){ return i.key !== e.key; });
-            });
-            eliminados++;
-          }
-        });
-      }
-
-      // Refresh cotizador if product selected
-      if(productoActual){
-        insumosActivos = insumosActivos.filter(function(i){ return INSUMOS_BASE[i.key]; });
-        renderInsumosTbody();
-      }
-
-      renderInsumosMgmt();
-      if(productoActual) recalcCotizador();
-      autoSave();
-
-      const sinDatos = data.sin_datos_odoo || [];
-      alert(
-        '✓ Importación de precios exitosa:\n\n' +
-        '  • ' + actualizados + ' insumos actualizados\n' +
-        '  • ' + nuevos + ' insumos nuevos agregados\n' +
-        (eliminados > 0 ? '  • ' + eliminados + ' insumos eliminados del sistema\n' : '') +
-        (omitidos > 0 ? '  • ' + omitidos + ' omitidos (no encontrados)\n' : '') +
-        (sinDatos.length > 0 ? '\n· ' + sinDatos.length + ' insumos pendientes para productos futuros.' : '')
-      );
-    } catch(err){
-      alert('Error al leer el archivo: ' + err.message);
-    }
-    input.value = '';
-  };
-  reader.readAsText(file);
-}
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── USUARIO ─────────────────────────────────────────────────────────────────
 let usuarioActual = '';
@@ -2650,72 +2517,6 @@ function updateInsumoIva(key, rate){
   renderInsumosMgmt();
   if(productoActual) recalcCotizador();
   autoSave();
-}
-
-function agregarNuevoInsumo(){
-  const nombre = document.getElementById('nuevo-nombre').value.trim();
-  const valor = parseFloat(document.getElementById('nuevo-valor').value)||0;
-  const moneda = document.getElementById('nuevo-moneda').value;
-  const iva = parseFloat(document.getElementById('nuevo-iva').value);
-
-  if(!nombre || valor <= 0){
-    alert('Completá el nombre y el valor del insumo.');
-    return;
-  }
-
-  // Generate key from name
-  const key = 'custom_' + nombre.toLowerCase()
-    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
-    .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
-    .replace(/[úùü]/g,'u').replace(/ñ/g,'n')
-    .replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');
-
-  if(INSUMOS_BASE[key]){
-    alert('Ya existe un insumo con ese nombre. Usá un nombre diferente.');
-    return;
-  }
-
-  // Calculate costoBase in pesos bruto at current dolar
-  let costoBase, usdBase;
-  if(moneda === 'usd'){
-    usdBase = valor;
-    costoBase = Math.round(valor * BASE_DOLAR * (1 + iva));
-  } else if(moneda === 'pesos_bruto'){
-    costoBase = Math.round(valor / dolar * BASE_DOLAR * (1 + iva));
-    usdBase = valor / dolar;
-    costoBase = Math.round(usdBase * BASE_DOLAR * (1 + iva));
-  } else { // pesos_neto
-    const bruto = Math.round(valor * (1 + iva));
-    usdBase = bruto / dolar;
-    costoBase = Math.round(usdBase * BASE_DOLAR * (1 + iva));
-  }
-
-  // Add to INSUMOS_BASE
-  INSUMOS_BASE[key] = { name: nombre, costoBase: Math.round(costoBase), iva: iva };
-
-  // Set current price override based on actual dolar
-  if(moneda === 'usd'){
-    costosOverride[key+'_usd'] = valor;
-    costosOverride[key] = Math.round(valor * dolar * (1 + iva));
-  } else if(moneda === 'pesos_bruto'){
-    costosOverride[key] = Math.round(valor);
-    costosOverride[key+'_usd'] = Math.round(valor / dolar * 100) / 100;
-  } else {
-    const bruto = Math.round(valor * (1 + iva));
-    costosOverride[key] = bruto;
-    costosOverride[key+'_usd'] = Math.round(bruto / dolar * 100) / 100;
-  }
-  ivaOverride[key] = iva;
-
-  // Clear form
-  document.getElementById('nuevo-nombre').value = '';
-  document.getElementById('nuevo-valor').value = '';
-
-  renderInsumosMgmt();
-  // Refresh cotizador dropdown if open
-  if(productoActual){ renderInsumosTbody(); recalcCotizador(); }
-  autoSave();
-  alert('Insumo "'+nombre+'" agregado correctamente.');
 }
 
 function confirmarEliminarInsumo(key){
