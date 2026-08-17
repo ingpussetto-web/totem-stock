@@ -239,6 +239,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
   <div class="nav-section">Herramientas</div>
   <div class="nav-item active" onclick="showPage('cotizador',this)"><span>⚙</span> Cotizador por producto</div>
   <div class="nav-item" onclick="showPage('insumos',this)"><span>📦</span> Gestión de insumos</div>
+  <div class="nav-item" onclick="showPage('precios-comparar',this)"><span>🔍</span> Comparar precios de lista</div>
   <div class="nav-item" onclick="showPage('fijos',this)"><span>📋</span> Costos fijos</div>
   <div class="nav-item" onclick="showPage('historial',this)"><span>📊</span> Historial mensual</div>
   <div class="nav-item" onclick="showPage('equilibrio',this)"><span>⚖</span> Punto de equilibrio</div>
@@ -423,6 +424,29 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <tbody id="insumos-mgmt-tbody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- COMPARAR PRECIOS DE LISTA -->
+  <div class="page" id="page-precios-comparar">
+    <div class="page-title">Comparar precios de lista</div>
+    <div class="page-sub">Solo lectura / staging: cargá acá el precio real que estás cobrando hoy por cada equipo y compará contra lo que tiene cargado el sistema. Esto NO cambia el precio de lista que usa el Cotizador — es una auditoría, hasta que decidamos migrar a esto como fuente definitiva.</div>
+    <div class="card">
+      <table class="insumos-table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th style="width:110px;text-align:right;">Sistema hoy (USD neto)</th>
+            <th style="width:110px;text-align:right;">Sistema hoy (USD c/IVA)</th>
+            <th style="width:120px;">Precio real (USD neto)</th>
+            <th style="width:90px;">IVA</th>
+            <th style="width:110px;text-align:right;">Diferencia</th>
+            <th style="width:70px;text-align:right;">%</th>
+            <th style="width:150px;"></th>
+          </tr>
+        </thead>
+        <tbody id="precios-comparar-tbody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -1757,6 +1781,159 @@ async function cargarBOMMaestra(){
   }
   if(productoActual) renderInsumosTbody();
 }
+
+// ─── Comparar precios de lista (staging, no toca el motor de cotización) ───────
+let preciosRealesPorProducto = {}; // { [producto_v14]: {precio_usd_neto, iva_pct, updated_at} }
+// ─── Precio de venta aplicado (SÍ es el que usa el motor de cotización una vez que
+// se confirma desde "Comparar precios" con el botón "Aplicar") ────────────────
+let precioVentaAplicado = {}; // { [producto_v14]: {precio_usd_neto, iva_pct, precio_anterior_usd} }
+
+async function cargarPrecioVentaAplicado(){
+  try{
+    const rows = await stockAPI('precio_venta_aplicado?select=producto_v14,precio_usd_neto,iva_pct,precio_anterior_usd,updated_at');
+    const porProducto = {};
+    (rows||[]).forEach(r=>{ porProducto[r.producto_v14] = r; });
+    precioVentaAplicado = porProducto;
+  }catch(e){
+    console.warn('No se pudo cargar precio_venta_aplicado:', e.message);
+  }
+  if(productoActual) recalcCotizador();
+  if(document.getElementById('cat-tabs')){
+    const activeTab = document.querySelector('.cat-tab.active');
+    renderProductoGrid(activeTab ? activeTab.textContent : 'Todos');
+  }
+  if(document.getElementById('page-precios-comparar')?.classList.contains('active')) renderCompararPrecios();
+}
+
+async function aplicarPrecioVenta(productoId){
+  const staging = preciosRealesPorProducto[productoId];
+  if(!staging || !staging.precio_usd_neto){ alert('Cargá primero el precio real en el campo de la fila.'); return; }
+  const p = PRODUCTOS.find(pr=>pr.id===productoId);
+  if(!p) return;
+  const conMini = !!p.precioListaConMiniPC;
+  const usdSistemaActual = conMini ? (p._usdConMini!==undefined?p._usdConMini:p._usd) : p._usd;
+  const yaAplicado = precioVentaAplicado[productoId];
+  const previoParaMostrar = yaAplicado ? yaAplicado.precio_usd_neto : usdSistemaActual;
+  if(!confirm('¿Aplicar USD '+staging.precio_usd_neto+' neto como el nuevo precio de venta de "'+p.name+'"?\n\nPrecio anterior: USD '+previoParaMostrar+'\n\nEsto cambia el precio que usa el Cotizador (y los márgenes) para este producto, hasta que lo revertas.')) return;
+  try{
+    await stockAPI('precio_venta_aplicado?producto_v14=eq.'+encodeURIComponent(productoId), 'DELETE').catch(()=>{});
+    await stockAPI('precio_venta_aplicado', 'POST', [{
+      producto_v14: productoId,
+      precio_usd_neto: staging.precio_usd_neto,
+      iva_pct: staging.iva_pct,
+      precio_anterior_usd: previoParaMostrar,
+      aplicado_por: (typeof usuarioActual!=='undefined'&&usuarioActual) ? usuarioActual : null,
+      updated_at: new Date().toISOString()
+    }]);
+    precioVentaAplicado[productoId] = { producto_v14:productoId, precio_usd_neto:staging.precio_usd_neto, iva_pct:staging.iva_pct, precio_anterior_usd:previoParaMostrar };
+  }catch(e){
+    alert('Error aplicando el precio: '+e.message);
+    return;
+  }
+  renderCompararPrecios();
+  // Saltar al Cotizador con este producto seleccionado para ver el desglose actualizado.
+  showPage('cotizador', document.querySelector('.nav-item[onclick*="cotizador"]'));
+  selectProducto(productoId);
+}
+
+async function revertirPrecioVenta(productoId){
+  const p = PRODUCTOS.find(pr=>pr.id===productoId);
+  if(!confirm('¿Volver al precio de sistema para "'+(p?p.name:productoId)+'"? Se borra el precio aplicado manualmente.')) return;
+  try{
+    await stockAPI('precio_venta_aplicado?producto_v14=eq.'+encodeURIComponent(productoId), 'DELETE').catch(()=>{});
+  }catch(e){}
+  delete precioVentaAplicado[productoId];
+  renderCompararPrecios();
+  if(productoActual && productoActual.id===productoId) recalcCotizador();
+}
+
+async function cargarPreciosReales(){
+  try{
+    const rows = await stockAPI('precios_lista_real?select=producto_v14,precio_usd_neto,iva_pct,updated_at');
+    const porProducto = {};
+    (rows||[]).forEach(r=>{ porProducto[r.producto_v14] = r; });
+    preciosRealesPorProducto = porProducto;
+  }catch(e){
+    console.warn('No se pudo cargar precios_lista_real:', e.message);
+  }
+  if(document.getElementById('page-precios-comparar')?.classList.contains('active')) renderCompararPrecios();
+}
+
+function renderCompararPrecios(){
+  const tbody = document.getElementById('precios-comparar-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = PRODUCTOS.map(function(p){
+    const conMini = !!p.precioListaConMiniPC;
+    const usdNetoSistema = conMini ? (p._usdConMini!==undefined?p._usdConMini:p._usd) : p._usd;
+    const usdConIvaSistema = usdNetoSistema * 1.105;
+    const real = preciosRealesPorProducto[p.id];
+    const realNeto = real ? parseFloat(real.precio_usd_neto) : '';
+    const ivaPct = real ? parseFloat(real.iva_pct) : 10.5;
+    let diffCell = '<td style="text-align:right;color:var(--text3);">—</td><td style="text-align:right;color:var(--text3);">—</td>';
+    if(real){
+      const diff = realNeto - usdNetoSistema;
+      const diffPct = usdNetoSistema>0 ? (diff/usdNetoSistema*100) : 0;
+      const color = Math.abs(diffPct) < 0.5 ? 'var(--text3)' : (diff>0 ? 'var(--green)' : '#ff8a8a');
+      const sign = diff>0 ? '+' : '';
+      diffCell = '<td style="text-align:right;color:'+color+';font-family:\'DM Mono\',monospace;">'+sign+'USD '+diff.toFixed(1)+'</td>'
+        +'<td style="text-align:right;color:'+color+';font-family:\'DM Mono\',monospace;">'+sign+diffPct.toFixed(1)+'%</td>';
+    }
+    const aplicado = precioVentaAplicado[p.id];
+    let accionCell;
+    if(aplicado){
+      accionCell = '<td style="text-align:right;">'
+        +'<span title="Precio de venta aplicado — reemplaza al del sistema en el Cotizador" style="display:inline-block;font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(0,200,150,0.14);color:var(--green);border:1px solid rgba(0,200,150,0.35);font-family:monospace;margin-right:4px;">✓ Aplicado</span>'
+        +'<button class="btn" style="height:24px;padding:0 8px;font-size:10px;" onclick="revertirPrecioVenta(\''+p.id+'\')">Revertir</button>'
+      +'</td>';
+    } else {
+      accionCell = '<td style="text-align:right;">'
+        +(real ? '<button class="btn green" style="height:24px;padding:0 8px;font-size:10px;" onclick="aplicarPrecioVenta(\''+p.id+'\')">→ Aplicar</button>' : '')
+      +'</td>';
+    }
+    return '<tr>'
+      +'<td class="td-name">'+p.name+(conMini?' <span style="font-size:9px;color:var(--text3);">(c/Mini PC)</span>':'')+'</td>'
+      +'<td style="text-align:right;font-family:\'DM Mono\',monospace;color:var(--text3);">'+usdNetoSistema.toFixed(1)+'</td>'
+      +'<td style="text-align:right;font-family:\'DM Mono\',monospace;color:var(--text3);">'+usdConIvaSistema.toFixed(1)+'</td>'
+      +'<td><input type="number" step="0.01" value="'+realNeto+'" placeholder="—" style="width:100px;" onchange="guardarPrecioReal(\''+p.id+'\',this.value)"></td>'
+      +'<td><select onchange="guardarPrecioReal(\''+p.id+'\',null,parseFloat(this.value))" style="height:28px;font-size:11px;">'
+        +'<option value="21" '+(ivaPct===21?'selected':'')+'>21%</option>'
+        +'<option value="10.5" '+(ivaPct===10.5?'selected':'')+'>10.5%</option>'
+        +'<option value="0" '+(ivaPct===0?'selected':'')+'>Sin IVA</option>'
+      +'</select></td>'
+      +diffCell
+      +accionCell
+    +'</tr>';
+  }).join('');
+}
+
+async function guardarPrecioReal(productoId, nuevoValor, nuevoIva){
+  const existente = preciosRealesPorProducto[productoId];
+  const precio_usd_neto = nuevoValor !== null && nuevoValor !== undefined ? (parseFloat(nuevoValor)||0) : (existente ? existente.precio_usd_neto : 0);
+  const iva_pct = nuevoIva !== undefined ? nuevoIva : (existente ? existente.iva_pct : 10.5);
+  if(!precio_usd_neto || precio_usd_neto<=0){
+    if(existente){
+      try{ await stockAPI('precios_lista_real?producto_v14=eq.'+encodeURIComponent(productoId), 'DELETE'); }catch(e){}
+      delete preciosRealesPorProducto[productoId];
+      renderCompararPrecios();
+    }
+    return;
+  }
+  try{
+    // stockAPI no soporta upsert (resolution=merge-duplicates), así que hacemos
+    // borrar-e-insertar para evitar el choque con la primary key producto_v14.
+    await stockAPI('precios_lista_real?producto_v14=eq.'+encodeURIComponent(productoId), 'DELETE').catch(()=>{});
+    await stockAPI('precios_lista_real', 'POST', [{
+      producto_v14: productoId, precio_usd_neto, iva_pct,
+      actualizado_por: (typeof usuarioActual!=='undefined'&&usuarioActual) ? usuarioActual : null,
+      updated_at: new Date().toISOString()
+    }]);
+  }catch(e){
+    console.warn('No se pudo guardar precio real:', e.message);
+  }
+  preciosRealesPorProducto[productoId] = { producto_v14: productoId, precio_usd_neto, iva_pct };
+  renderCompararPrecios();
+}
+
 let productoActual = null;
 let insumosActivos = [];
 let extraInsumos = [];
@@ -1948,6 +2125,8 @@ function miniPCActiva(){
 
 function getPrecioLista(){
   if(!productoActual) return 0;
+  const aplicado = precioVentaAplicado[productoActual.id];
+  if(aplicado) return Math.round(parseFloat(aplicado.precio_usd_neto) * dolar);
   const conMini=miniPCActiva();
   if(conMini && productoActual.precioListaConMiniPC) return productoActual.precioListaConMiniPC;
   return productoActual.precioLista;
@@ -1961,6 +2140,7 @@ function showPage(id,el){
   if(el) el.classList.add('active');
   if(id==='equilibrio') recalcPE();
   if(id==='insumos') renderInsumosMgmt();
+  if(id==='precios-comparar') renderCompararPrecios();
   if(id==='fijos'){ recalcFijos(); cargarCostosEventuales(); cargarCostosNoInventariables(); }
   if(id==='historial') recalcHistorial();
   if(id==='cotizaciones') renderCotizaciones();
@@ -2038,7 +2218,8 @@ function filterCat(cat,el){
 function renderProductoGrid(cat){
   const lista=cat==='Todos'?PRODUCTOS:PRODUCTOS.filter(p=>p.categoria===cat);
   document.getElementById('producto-grid').innerHTML=lista.map(p=>{
-    const precioFinal=p.precioListaConMiniPC||p.precioLista;
+    const aplicadoGrid = precioVentaAplicado[p.id];
+    const precioFinal = aplicadoGrid ? Math.round(parseFloat(aplicadoGrid.precio_usd_neto)*dolar) : (p.precioListaConMiniPC||p.precioLista);
     const bomBadge = productosConBOMReal.has(p.id)
       ? '<span title="Este producto tiene una BOM real cargada en Producción — la lista de insumos se puede verificar contra esa base." style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(0,200,150,0.20);color:var(--green);border:1px solid rgba(0,200,150,0.5);font-family:monospace;margin-top:4px;">✓ BOM REAL</span>'
       : '<span title="Este producto todavía no tiene una BOM real cargada en Producción — el costeo usa la lista aproximada." style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(255,94,94,0.14);color:#ff8a8a;border:1px solid rgba(255,94,94,0.4);font-family:monospace;margin-top:4px;">⚠ SIN BOM REAL</span>';
@@ -2121,6 +2302,27 @@ function selectProducto(id){
     bomEl.style.border = '1px solid rgba(255,94,94,0.25)';
     bomEl.style.color = '#ff8a8a';
     bomEl.textContent = '⚠ Este producto todavía no tiene una BOM real cargada en Producción — se muestra la lista aproximada (no editable) hasta que le armes su BOM Maestra en ops_ventas.';
+  }
+
+  // Aviso si el precio de venta fue reemplazado manualmente desde "Comparar precios de lista".
+  let precioAplicadoEl = document.getElementById('precio-aplicado-banner');
+  if(!precioAplicadoEl){
+    precioAplicadoEl = document.createElement('div');
+    precioAplicadoEl.id = 'precio-aplicado-banner';
+    precioAplicadoEl.style.cssText = 'padding:8px 14px;border-radius:6px;font-size:12px;margin-bottom:10px;display:none;';
+    const detalle = document.getElementById('cotizador-detalle');
+    if(detalle) detalle.prepend(precioAplicadoEl);
+  }
+  const aplicadoActual = precioVentaAplicado[productoActual.id];
+  if(aplicadoActual){
+    precioAplicadoEl.style.display = 'block';
+    precioAplicadoEl.style.background = 'rgba(0,200,150,0.10)';
+    precioAplicadoEl.style.border = '1px solid rgba(0,200,150,0.3)';
+    precioAplicadoEl.style.color = 'var(--green)';
+    precioAplicadoEl.innerHTML = '✓ Precio de venta actualizado manualmente: USD '+aplicadoActual.precio_usd_neto+' neto (antes USD '+aplicadoActual.precio_anterior_usd+') — '
+      + '<button class="btn" style="height:22px;padding:0 8px;font-size:10px;" onclick="revertirPrecioVenta(\''+productoActual.id+'\')">Revertir al precio de sistema</button>';
+  } else {
+    precioAplicadoEl.style.display = 'none';
   }
 
   renderInsumosTbody();
@@ -2219,7 +2421,9 @@ function recalcCotizador(){
 
   // Precio lista — trabajamos siempre sin IVA para ganancia
   const precioListaNeto=getPrecioLista();
-  const ivaVentas=precioListaNeto*0.105;
+  const aplicadoParaIva = productoActual ? precioVentaAplicado[productoActual.id] : null;
+  const ivaVentasRate = aplicadoParaIva ? (parseFloat(aplicadoParaIva.iva_pct)/100) : 0.105;
+  const ivaVentas=precioListaNeto*ivaVentasRate;
   const precioListaConIva=precioListaNeto+ivaVentas;
 
   const coef = getCoeficienteFijos();
@@ -7988,6 +8192,8 @@ cargarCostosEventuales();
 cargarCostosNoInventariables();
 cargarCostosAsignadosProyectos();
 cargarBOMMaestra();
+cargarPreciosReales();
+cargarPrecioVentaAplicado();
 
 
 // ─── CARGAR INFO OP DESDE SUPABASE ───────────────────────────────────────────
