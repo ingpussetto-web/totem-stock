@@ -1994,6 +1994,7 @@ async function agregarLinea(){
     precio_unitario_neto:0,
     color:'',
     asignaciones: [], // [] = "Toda la empresa". Si no está vacío, % distribuido entre proyectos (suma 100).
+    no_inventariable:false, // insumo que no sale en ninguna BOM (pegamento, burletes, etc.) — no descuenta stock ni se imputa a un equipo puntual
     _variantes: variantes,
     _nuevo:true
   });
@@ -2007,6 +2008,12 @@ async function agregarLinea(){
 function esLineaServicio(l){
   const sku = skus.find(s=>s.id===l.sku_id);
   return sku?.categorias?.nombre === 'Servicios';
+}
+
+function toggleNoInventariable(i,val){
+  lineas[i].no_inventariable = val;
+  if(!val) lineas[i].asignaciones = []; // al destildar, vuelve a "no aplica" (deja de contemplarse en ningún costeo)
+  renderLineas();
 }
 
 function resumenAsignacion(l){
@@ -2167,7 +2174,17 @@ function renderLineas(){
         <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">${resumenAsignacion(l)}</span>
         <button type="button" onclick="abrirModalAsignacionProyectos(${i})"
           style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">🔀 Asociar a proyectos</button>
-      </div>` : ''}
+      </div>` : `
+      <div style="grid-column:1/-1;margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3);cursor:pointer;">
+          <input type="checkbox" ${l.no_inventariable?'checked':''} onchange="toggleNoInventariable(${i},this.checked)" style="width:13px;height:13px;">
+          No inventariable (no está en ninguna BOM)
+        </label>
+        ${l.no_inventariable ? `
+        <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;">${resumenAsignacion(l)}</span>
+        <button type="button" onclick="abrirModalAsignacionProyectos(${i})"
+          style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">🔀 Asociar a proyectos</button>` : ''}
+      </div>`}
       ${l._variantes && l._variantes.length > 0
         ? `<button onclick="agregarVariante(${i})" title="Agregar otra variante de este insumo"
             style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;margin-left:2px;">+var</button>`
@@ -2211,6 +2228,8 @@ function agregarVariante(i){
     iva_pct: l.iva_pct||21,
     precio_unitario_neto: l.precio_unitario_neto||0,
     color: '',
+    asignaciones: [],
+    no_inventariable: l.no_inventariable||false,
     _variantes: l._variantes,
     _nuevo: true
   });
@@ -2330,7 +2349,8 @@ async function guardarOC(estado, previsualizar=false){
         precio_unitario_neto:l.precio_unitario_neto||0,
         precio_unitario_bruto:l.precio_unitario_bruto||0,
         iva_pct:l.iva_pct,
-        total_neto:(l.precio_unitario_neto||0)*l.cantidad
+        total_neto:(l.precio_unitario_neto||0)*l.cantidad,
+        no_inventariable:l.no_inventariable||false
       })));
       // Asociar a proyectos (split %): las filas insertadas vuelven en el mismo orden que 'lineas'
       const asigPayload = [];
