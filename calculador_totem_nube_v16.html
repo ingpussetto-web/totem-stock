@@ -5143,9 +5143,19 @@ function abrirVentanaImpresion(cotObj){
   ventana.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nombreArchivo+'</title>'
     +'<style>'+estilos+' body{background:#fff;padding:0;margin:0;} .no-print{display:none!important;} @media print{@page{margin:1cm;} body{margin:0;padding:0;}}</style>'
     +'</head><body><div class="cot-preview">'+cotHTML+'</div>'
-    +'<script>window.onafterprint=function(){window.close();}; window.print();<\/script>'
     +'</body></html>');
   ventana.document.close();
+  // Reforzar el título después del close() — algunos navegadores no llegan a tomar el <title>
+  // del document.write() a tiempo si window.print() se dispara desde un <script> inline en el
+  // mismo documento, y el PDF termina guardándose sin nombre. Se controla el print() desde acá
+  // (la ventana opener) con el título ya confirmado, y con un pequeño delay de margen.
+  ventana.document.title = nombreArchivo;
+  ventana.onafterprint = function(){ ventana.close(); };
+  setTimeout(function(){
+    ventana.document.title = nombreArchivo;
+    ventana.focus();
+    ventana.print();
+  }, 300);
 }
 
 function imprimirCotizacionActual(){
