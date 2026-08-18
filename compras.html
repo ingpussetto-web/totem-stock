@@ -2537,6 +2537,25 @@ async function getDolarActual(){
   }catch(e){ return null; }
 }
 
+// Las líneas de Servicios / Costos Fijos que viajan mezcladas en una OC junto con insumos
+// físicos (ej: "Costos servicios de importación" en la misma OC que vidrios importados) no
+// tienen nada que recibir físicamente — no son stock. Si no se marcan como recibidas acá, al
+// abrir Recepción quedan mezcladas con los ítems reales y terminan generando stock fantasma
+// de un servicio. Se marcan como 100% recibidas en el momento de aprobar, así ni siquiera
+// aparecen en la pantalla de Recepción — solo los ítems físicos pasan por ese flujo.
+async function marcarServiciosYCostosFijosComoRecibidos(ocId){
+  try{
+    const items = await api(`oc_items?oc_id=eq.${ocId}&select=id,cantidad,cantidad_recibida,skus(categorias(nombre))`);
+    const aMarcar = (items||[]).filter(i=>{
+      const cat = i.skus?.categorias?.nombre;
+      return (cat==='Servicios' || cat==='Costos Fijos') && (i.cantidad_recibida||0) < i.cantidad;
+    });
+    for(const it of aMarcar){
+      await api(`oc_items?id=eq.${it.id}`,'PATCH',{cantidad_recibida:it.cantidad});
+    }
+  }catch(e){ console.warn('marcarServiciosYCostosFijosComoRecibidos:', e.message); }
+}
+
 async function aprobarOC(){
   if(!ocAprobandoId) return;
   if(!confirm('¿Confirmar aprobación de esta OC? Pasará a estado "Aprobada" y quedará en espera de recepción.')) return;
@@ -2550,6 +2569,7 @@ async function aprobarOC(){
     }
     await api(`ordenes_compra?id=eq.${ocAprobandoId}`,'PATCH', patch);
     await registrarHistorialPrecios(ocAprobandoId);
+    await marcarServiciosYCostosFijosComoRecibidos(ocAprobandoId);
     closeModal('modal-preview');
     toast('OC aprobada ✓');
     loadOCs();
@@ -2567,6 +2587,7 @@ async function aprobarOCDirecto(ocId){
     }
     await api(`ordenes_compra?id=eq.${ocId}`,'PATCH', patch);
     await registrarHistorialPrecios(ocId);
+    await marcarServiciosYCostosFijosComoRecibidos(ocId);
     toast('OC aprobada ✓');
     loadOCs();
   }catch(e){toast('Error: '+e.message);}

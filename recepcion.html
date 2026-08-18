@@ -526,9 +526,25 @@ async function abrirRecepcion(ocId){
     ocActual = ocActual[0];
 
     // Items sin precio — solo nombre, cantidad, color y SKU
-    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking,categoria_id)`);
-    // Filtrar solo items con saldo pendiente (excluir los ya recibidos completamente)
-    itemsActual = (todosItems||[]).filter(i => (i.cantidad - (i.cantidad_recibida||0)) > 0);
+    const todosItems = await api(`oc_items?oc_id=eq.${ocId}&select=id,nombre,cantidad,cantidad_recibida,color,sku_id,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre))`);
+    // Las líneas de Servicios/Costos Fijos que viajan mezcladas en una OC con insumos físicos
+    // (ej: "Costos servicios de importación" junto a un pedido de vidrios) no son stock — no
+    // pasan por Recepción. Red de seguridad: si por algún motivo no quedaron marcadas como
+    // recibidas al aprobar la OC, se marcan acá y se excluyen de la pantalla.
+    const itemsNoFisicos = (todosItems||[]).filter(i=>{
+      const cat = i.skus?.categorias?.nombre;
+      return (cat==='Servicios' || cat==='Costos Fijos') && (i.cantidad_recibida||0) < i.cantidad;
+    });
+    for(const it of itemsNoFisicos){
+      await api(`oc_items?id=eq.${it.id}`,'PATCH',{cantidad_recibida:it.cantidad}).catch(()=>{});
+    }
+    // Filtrar solo items físicos con saldo pendiente (excluir los ya recibidos completamente
+    // y los de Servicios/Costos Fijos, que nunca pasan por acá)
+    itemsActual = (todosItems||[]).filter(i => {
+      const cat = i.skus?.categorias?.nombre;
+      if(cat==='Servicios' || cat==='Costos Fijos') return false;
+      return (i.cantidad - (i.cantidad_recibida||0)) > 0;
+    });
 
     document.getElementById('rec-title').textContent = 'Recepcionando ' + ocActual.oc_numero;
     document.getElementById('rec-sub').textContent = itemsActual.length + ' insumos · ' + new Date(ocActual.created_at).toLocaleDateString('es-AR');
