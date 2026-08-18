@@ -151,6 +151,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
       <div class="nav-item" onclick="showPage('personal')">
         <span class="icon">👤</span> Asignación a personal
       </div>
+      <div class="nav-item" onclick="showPage('prestamos')">
+        <span class="icon">🔄</span> Préstamos a proveedores
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('config')">
         <span class="icon">⚙</span> Configuración
@@ -352,6 +355,33 @@ tr:hover td{background:rgba(255,255,255,0.015);}
               <tbody id="ap-tbody"><tr><td colspan="8"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
             </table>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRÉSTAMOS A PROVEEDORES -->
+    <div class="page" id="page-prestamos">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Préstamos a proveedores</div>
+          <div class="page-sub">Insumos que salen temporalmente (análisis, ingeniería, revisión) y vuelven</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <select class="filter" id="pp-estado" onchange="renderPrestamosProveedor()">
+          <option value="activos">Activos + vencidos</option>
+          <option value="vencidos">Solo vencidos</option>
+          <option value="todos">Todos (incluye devueltos)</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn green" onclick="openModalPrestamo()">+ Nuevo préstamo</button>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Proveedor</th><th>Ítem</th><th>Motivo</th><th>Fecha préstamo</th><th>Devolución estimada</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="pp-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -565,6 +595,67 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   </div>
 </div>
 
+<!-- MODAL NUEVO PRÉSTAMO A PROVEEDOR -->
+<div class="modal-bg" id="modal-prestamo">
+  <div class="modal">
+    <div class="modal-title"><span>Nuevo préstamo a proveedor</span><button class="modal-close" onclick="closeModal('modal-prestamo')">×</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Insumo que sale temporalmente (análisis, ingeniería, revisión) y va a volver</div>
+
+    <div class="form-group">
+      <label class="form-label">Proveedor *</label>
+      <select class="form-select" id="pp-proveedor-sel" onchange="togglePrestamoNuevoProveedor()"></select>
+    </div>
+    <div id="pp-nuevo-proveedor-wrap" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;">
+      <div class="form-group"><label class="form-label">Razón social *</label><input class="form-input" id="pp-prov-razon" placeholder="Ej: Gabinetes SA"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">CUIT</label><input class="form-input" id="pp-prov-cuit" placeholder="20-12345678-9"></div>
+        <div class="form-group"><label class="form-label">Contacto</label><input class="form-input" id="pp-prov-contacto"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="pp-prov-tel"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="pp-prov-mail"></div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Ítem a prestar *</label>
+      <select class="form-select" id="pp-item-sel"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Motivo *</label>
+      <textarea class="form-input" id="pp-motivo" placeholder="Ej: revisión de diseño de gabinete para nueva versión"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fecha tentativa de devolución</label>
+      <input class="form-input" type="date" id="pp-fecha-est">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-prestamo')">Cancelar</button>
+      <button class="btn green" onclick="savePrestamo()">Registrar préstamo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REGISTRAR DEVOLUCIÓN DE PRÉSTAMO -->
+<div class="modal-bg" id="modal-prestamo-devolucion">
+  <div class="modal">
+    <div class="modal-title"><span>Registrar devolución</span><button class="modal-close" onclick="closeModal('modal-prestamo-devolucion')">×</button></div>
+    <div class="form-group">
+      <label class="form-label">Condición de devolución *</label>
+      <select class="form-select" id="ppd-condicion">
+        <option value="bueno">Buen estado — vuelve a stock disponible</option>
+        <option value="con_observaciones">Con observaciones — vuelve a stock, revisar</option>
+        <option value="danado">Dañado — pasa a en reparación</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Notas</label><textarea class="form-input" id="ppd-notas" placeholder="Observaciones de la devolución..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-prestamo-devolucion')">Cancelar</button>
+      <button class="btn green" onclick="confirmarDevolucionPrestamo()">Confirmar devolución</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -581,6 +672,9 @@ let asignacionesAreaData = [];
 let fallasData = [];
 let asignacionesPersonalData = [];
 let unidadesInsumoDisponibles = []; // unidades de stock (tabla "unidades") en estado 'stock'
+let proveedoresData = [];
+let prestamosProveedorData = [];
+let unidadesPrestablesData = [];
 let stockRowsAsigPersonal = []; // filas de stock (por cantidad) cacheadas para el modal de asignación a personal
 
 // ─── API ───────────────────────────────────────────────────────────────────
@@ -627,6 +721,7 @@ function showPage(id){
   if(id==='bienes') loadBienesPage();
   if(id==='fallas') loadFallasPage();
   if(id==='personal') loadPersonalPage();
+  if(id==='prestamos') loadPrestamosPage();
 }
 
 function showTab(section, tab){
@@ -1599,6 +1694,135 @@ async function devolverAsigPersonal(id){
     }
     toast('Devolución registrada');
     await loadPersonalPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── PRÉSTAMOS A PROVEEDORES ────────────────────────────────────────────────
+function badgePrestamo(p){
+  if(p.estado==='devuelto') return '<span class="badge qty">Devuelto</span>';
+  const vencido = p.fecha_devolucion_estimada && p.fecha_devolucion_estimada < new Date().toISOString().slice(0,10);
+  return vencido ? '<span class="badge sin">⚠ Vencido</span>' : '<span class="badge uid">Activo</span>';
+}
+
+async function loadPrestamosPage(){
+  await Promise.all([loadProveedoresData(), loadPrestamosProveedor()]);
+  renderPrestamosProveedor();
+}
+
+async function loadProveedoresData(){
+  proveedoresData = await api('proveedores?select=id,razon_social,cuit,contacto,telefono,mail&order=razon_social.asc').catch(()=>[]);
+}
+
+async function loadPrestamosProveedor(){
+  prestamosProveedorData = await api('prestamos_proveedor?select=*,proveedores(razon_social),unidades(uid,sku_id,skus(codigo,nombre))&order=created_at.desc').catch(()=>[]);
+}
+
+function renderPrestamosProveedor(){
+  const fil = document.getElementById('pp-estado')?.value||'activos';
+  const hoy = new Date().toISOString().slice(0,10);
+  let rows = prestamosProveedorData.filter(p=>{
+    if(fil==='todos') return true;
+    if(fil==='vencidos') return p.estado==='activo' && p.fecha_devolucion_estimada && p.fecha_devolucion_estimada < hoy;
+    return p.estado==='activo'; // activos (incluye vencidos)
+  });
+  const tbody = document.getElementById('pp-tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">🔄</div>No hay préstamos registrados</div></td></tr>`; return; }
+  tbody.innerHTML = rows.map(p=>{
+    const item = p.unidades ? `${p.unidades.skus?.codigo||''} ${p.unidades.skus?.nombre||''} · ${p.unidades.uid||'s/UID'}` : `#${p.unidad_id}`;
+    return `<tr>
+      <td class="td-main">${p.proveedores?.razon_social||'—'}</td>
+      <td class="td-mono" style="font-size:11px">${item}</td>
+      <td style="font-size:12px">${p.motivo||'—'}</td>
+      <td class="td-mono">${p.fecha_prestamo||'—'}</td>
+      <td class="td-mono">${p.fecha_devolucion_estimada||'—'}</td>
+      <td>${badgePrestamo(p)}</td>
+      <td class="td-actions">${p.estado==='activo'?`<button class="btn sm amber" onclick="abrirDevolucionPrestamo(${p.id})">Registrar devolución</button>`:''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function togglePrestamoNuevoProveedor(){
+  const esNuevo = document.getElementById('pp-proveedor-sel').value==='__nuevo__';
+  document.getElementById('pp-nuevo-proveedor-wrap').style.display = esNuevo ? 'block' : 'none';
+}
+
+async function openModalPrestamo(){
+  const sel = document.getElementById('pp-proveedor-sel');
+  sel.innerHTML = proveedoresData.map(p=>`<option value="${p.id}">${p.razon_social}</option>`).join('')
+    + '<option value="__nuevo__">+ Crear nuevo proveedor...</option>';
+  document.getElementById('pp-nuevo-proveedor-wrap').style.display='none';
+  ['pp-prov-razon','pp-prov-cuit','pp-prov-contacto','pp-prov-tel','pp-prov-mail','pp-motivo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pp-fecha-est').value='';
+
+  const itemSel = document.getElementById('pp-item-sel');
+  itemSel.innerHTML = '<option value="">Cargando...</option>';
+  unidadesPrestablesData = await api('unidades?estado=eq.stock&select=id,uid,sku_id,skus(codigo,nombre)').catch(()=>[]);
+  itemSel.innerHTML = unidadesPrestablesData.map(u=>`<option value="${u.id}">${u.skus?.codigo||''} ${u.skus?.nombre||''} · ${u.uid||'s/UID'}</option>`).join('') || '<option value="">Sin unidades en stock</option>';
+
+  openModal('modal-prestamo');
+}
+
+async function savePrestamo(){
+  const provRaw = document.getElementById('pp-proveedor-sel').value;
+  const unidadId = document.getElementById('pp-item-sel').value;
+  const motivo = document.getElementById('pp-motivo').value.trim();
+  const fechaEst = document.getElementById('pp-fecha-est').value || null;
+  if(!provRaw || !unidadId){ toast('Completá proveedor e ítem'); return; }
+  if(!motivo){ toast('Completá el motivo del préstamo'); return; }
+
+  try{
+    let proveedorId = provRaw;
+    if(provRaw==='__nuevo__'){
+      const razon = document.getElementById('pp-prov-razon').value.trim();
+      if(!razon){ toast('Ingresá la razón social del nuevo proveedor'); return; }
+      const payload = {
+        razon_social: razon,
+        cuit: document.getElementById('pp-prov-cuit').value.trim()||null,
+        contacto: document.getElementById('pp-prov-contacto').value.trim()||null,
+        telefono: document.getElementById('pp-prov-tel').value.trim()||null,
+        mail: document.getElementById('pp-prov-mail').value.trim()||null
+      };
+      const creado = await api('proveedores','POST',payload);
+      proveedorId = creado?.[0]?.id;
+      if(!proveedorId){ toast('No se pudo crear el proveedor'); return; }
+    }
+
+    await api('prestamos_proveedor','POST',{
+      proveedor_id: Number(proveedorId), unidad_id: Number(unidadId), motivo,
+      fecha_devolucion_estimada: fechaEst
+    });
+    await api(`unidades?id=eq.${unidadId}`,'PATCH',{estado:'prestado_proveedor'});
+    toast('Préstamo registrado');
+    closeModal('modal-prestamo');
+    await loadPrestamosPage();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+let prestamoADevolver = null;
+function abrirDevolucionPrestamo(id){
+  prestamoADevolver = prestamosProveedorData.find(p=>p.id===id);
+  if(!prestamoADevolver) return;
+  document.getElementById('ppd-condicion').value='bueno';
+  document.getElementById('ppd-notas').value='';
+  openModal('modal-prestamo-devolucion');
+}
+
+async function confirmarDevolucionPrestamo(){
+  if(!prestamoADevolver) return;
+  const condicion = document.getElementById('ppd-condicion').value;
+  const notas = document.getElementById('ppd-notas').value.trim()||null;
+  try{
+    await api(`prestamos_proveedor?id=eq.${prestamoADevolver.id}`,'PATCH',{
+      estado:'devuelto', fecha_devolucion_real: new Date().toISOString().slice(0,10),
+      condicion_devolucion: condicion, notas_devolucion: notas
+    });
+    await api(`unidades?id=eq.${prestamoADevolver.unidad_id}`,'PATCH',{
+      estado: condicion==='danado' ? 'en_reparacion' : 'stock'
+    });
+    toast('Devolución registrada');
+    closeModal('modal-prestamo-devolucion');
+    prestamoADevolver = null;
+    await loadPrestamosPage();
   }catch(e){ toast('Error: '+e.message); }
 }
 
