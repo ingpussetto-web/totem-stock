@@ -317,6 +317,12 @@ textarea.form-input{resize:vertical;min-height:70px;}
           <option value="cerrada">Cerrada</option>
           <option value="cancelada">Cancelada</option>
         </select>
+        <select class="filter" id="oc-pago" onchange="renderOCs()">
+          <option value="">Todos los pagos</option>
+          <option value="pendiente">💰 Pendientes de pago</option>
+          <option value="pago_parcial">Pago parcial</option>
+          <option value="pagada">Pagada</option>
+        </select>
         <div class="spacer"></div>
         <button class="btn" onclick="loadOCs()">↻ Actualizar</button>
       </div>
@@ -1448,6 +1454,7 @@ async function loadOCs(){
 function renderOCs(){
   const search=document.getElementById('oc-search')?.value.toLowerCase()||'';
   const estadoFil=document.getElementById('oc-estado')?.value||'';
+  const pagoFil=document.getElementById('oc-pago')?.value||'';
   let rows=[...ocs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).filter(o=>{
     if(search&&!o.oc_numero?.toLowerCase().includes(search)&&!o.proveedores?.razon_social?.toLowerCase().includes(search)) return false;
     if(estadoFil==='color_pendiente'){
@@ -1455,6 +1462,13 @@ function renderOCs(){
       return o._itemsPendientes?.some(i=>i.color==='A definir');
     }
     if(estadoFil&&o.estado!==estadoFil) return false;
+    if(pagoFil==='pendiente'){
+      // "Pendientes de pago" = pendiente o pago parcial, con saldo real > 0, excluyendo
+      // borradores y canceladas (esas no generan obligación de pago).
+      const saldo = o._saldoPendiente ?? Number(o.total_bruto) ?? 0;
+      if(o.estado==='cancelada' || o.estado==='borrador') return false;
+      if(o.pago_estado==='pagada' || saldo<=0.01) return false;
+    } else if(pagoFil && o.pago_estado!==pagoFil){ return false; }
     return true;
   });
   const el=document.getElementById('ocs-list');
@@ -3507,6 +3521,10 @@ async function identificarSinMapeo(){
     escribir('Leyendo v14_sku_map...');
     const mapRaw = await api('v14_sku_map?select=sku_id,v14_key');
     const skusMapeados = new Set((mapRaw||[]).map(function(m){return m.sku_id;}));
+    escribir('Leyendo categorías de SKUs...');
+    const todosSkus = await api('skus?select=id,categorias(nombre)');
+    const catPorSku = {};
+    (todosSkus||[]).forEach(function(s){ catPorSku[s.id] = s.categorias ? s.categorias.nombre : ''; });
     escribir('Buscando items sin mapeo...\n');
     var sinMapeo=[];
     for(var i=0;i<ocs.length;i++){
@@ -3524,16 +3542,32 @@ async function identificarSinMapeo(){
     sinMapeo.forEach(function(r){ if(!porSku[r.sku_id]) porSku[r.sku_id]=r; });
     var lista=Object.values(porSku);
     if(!lista.length){ escribir('OK Todos los items con precio tienen su v14_key mapeado.'); return; }
-    escribir('Se encontraron '+lista.length+' SKUs distintos sin mapeo:\n');
-    escribir('SKU_ID  | Nombre insumo                              | Precio neto     | OC');
-    escribir('--------|--------------------------------------------|-----------------|----------');
-    lista.forEach(function(r){
-      var id=String(r.sku_id).padEnd(7);
-      var nom=(r.nombre||'').substring(0,42).padEnd(42);
-      var prec=('$'+Number(r.precio).toLocaleString('es-AR')).padEnd(15);
-      escribir(id+' | '+nom+' | '+prec+' | '+r.oc);
-    });
-    escribir('\nSi el insumo existe en el cotizador -> agregar fila en v14_sku_map.');
+    // Servicios y Costos Fijos son categorías que a propósito NUNCA se mapean a v14_sku_map
+    // (no son insumos de ninguna BOM) — se separan del resto para no generar falsa alarma.
+    var CATS_ESPERABLES = ['Servicios','Costos Fijos'];
+    var esperables = lista.filter(function(r){ return CATS_ESPERABLES.includes(catPorSku[r.sku_id]); });
+    var atencion = lista.filter(function(r){ return !CATS_ESPERABLES.includes(catPorSku[r.sku_id]); });
+    escribir('Se encontraron '+lista.length+' SKUs distintos sin mapeo v14 ('+atencion.length+' a revisar, '+esperables.length+' esperables — Servicios/Costos Fijos).\n');
+    if(atencion.length){
+      escribir('── A REVISAR (podrían ser insumos reales de una BOM) ──');
+      escribir('SKU_ID  | Nombre insumo                              | Precio neto     | OC');
+      escribir('--------|--------------------------------------------|-----------------|----------');
+      atencion.forEach(function(r){
+        var id=String(r.sku_id).padEnd(7);
+        var nom=(r.nombre||'').substring(0,42).padEnd(42);
+        var prec=('$'+Number(r.precio).toLocaleString('es-AR')).padEnd(15);
+        escribir(id+' | '+nom+' | '+prec+' | '+r.oc);
+      });
+      escribir('');
+    }
+    if(esperables.length){
+      escribir('── ESPERABLES (Servicios / Costos Fijos, no necesitan v14_sku_map) ──');
+      esperables.forEach(function(r){
+        escribir(String(r.sku_id).padEnd(7)+' | '+(r.nombre||'')+' ['+catPorSku[r.sku_id]+']');
+      });
+      escribir('');
+    }
+    escribir('Si el insumo "a revisar" existe en el cotizador -> agregar fila en v14_sku_map.');
     escribir('Si no existe en el cotizador -> se puede ignorar.');
   }catch(e){ escribir('Error: '+e.message); }
 }
