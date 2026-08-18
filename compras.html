@@ -1437,8 +1437,10 @@ async function loadOCs(){
         else o.pago_estado = 'pago_parcial';
       });
     }catch(e){ ocs.forEach(o=>{ o._pagos=[]; o._totalPagado=0; o._saldoPendiente=Number(o.total_bruto)||0; }); }
-    // Calcular pendientes para OCs parciales (sin queries extra)
-    for(const o of ocs.filter(x=>x.estado==='recibida_parcial')){
+    // Calcular pendientes para OCs parciales y aprobadas (sin queries extra).
+    // "Aprobada" también debe entrar acá: si tiene un gabinete "A definir", está
+    // pendiente de definir color aunque todavía no haya llegado ninguna recepción.
+    for(const o of ocs.filter(x=>x.estado==='recibida_parcial'||x.estado==='aprobada')){
       o._itemsPendientes = (o._itemsTodos||[]).filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
     }
     document.getElementById('m-borrador').textContent = ocs.filter(o=>o.estado==='borrador').length;
