@@ -659,8 +659,10 @@ async function abrirBOM(opId){
     if(!allSkus.length){
       allSkus = await api('skus?select=id,codigo,nombre,categoria_id,tracking,categorias(nombre)&activo=eq.true&order=nombre.asc');
     }
-    // Mostrar todos los insumos de categoría Periféricos como extras opcionales
-    const skusExtra = allSkus.filter(s => s.categorias?.nombre === 'Periféricos');
+    // Mostrar como extras opcionales los insumos de categorías accesorias
+    // (Periféricos, Electricidad, y los accesorios de Mini PCs como la fuente).
+    const CATEGORIAS_INSUMO_EXTRA = ['Periféricos','Electricidad','Mini PCs'];
+    const skusExtra = allSkus.filter(s => CATEGORIAS_INSUMO_EXTRA.includes(s.categorias?.nombre));
     // Cargar stock para cada extra
     const extrasConStock = await Promise.all(skusExtra.map(async s=>{
       let stockExtra = 0;
