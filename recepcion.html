@@ -385,8 +385,9 @@ async function loadPendientes(){
       const items = await api(`oc_items?oc_id=eq.${oc.id}&select=id,nombre,cantidad,cantidad_recibida,color,skus(categorias(nombre))`);
       oc._items = items||[];
       oc._pendientes = items?.reduce((s,i)=>s+(i.cantidad-(i.cantidad_recibida||0)),0)||0;
-      // Las OCs de Servicios (honorarios, viáticos, etc.) no se inventarían — no esperan recepción física
-      oc._esServicio = items?.length>0 && items.every(i=>i.skus?.categorias?.nombre==='Servicios');
+      // Las OCs de Servicios (honorarios, viáticos, etc.) y Costos Fijos (sueldos, alquiler,
+      // luz, etc.) no se inventarían — no esperan recepción física, se cierran directo en Compras
+      oc._esServicio = items?.length>0 && items.every(i=>i.skus?.categorias?.nombre==='Servicios' || i.skus?.categorias?.nombre==='Costos Fijos');
     }
     ocs = ocs.filter(o=>!o._esServicio);
 

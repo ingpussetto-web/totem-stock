@@ -1943,7 +1943,32 @@ let ivaOverride = {}; // key -> iva rate override (0, 0.105, 0.21)
 function fmt(n){return '$'+Math.round(n).toLocaleString('es-AR');}
 function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getUndMes(){return parseInt(document.getElementById('unidades-mes')?.value)||15;}
-function getTotalFijos(){return fijos.reduce((s,f)=>s+f.monto,0);}
+
+// Historial real de compras (Compras → categoría "Costos Fijos") por sku_id, cargado por
+// cargarFijosVinculados(). Cada ítem de `fijos` que tenga f.sku_id vinculado deja de ser un
+// número estático: su valor "vigente" para una fecha dada es la compra real más reciente con
+// fecha <= esa fecha (carry-forward). Si nunca hubo compra real (o el ítem no está vinculado),
+// se usa f.monto como venía siendo hasta ahora.
+let fijosHistorialPorSku = {}; // {sku_id: [{fecha, precio_neto, iva_pct, oc_numero}, ...]} ordenado desc por fecha
+
+function valorEfectivoFijo(f, refDate){
+  if(f.sku_id && fijosHistorialPorSku[f.sku_id] && fijosHistorialPorSku[f.sku_id].length){
+    const ref = refDate || new Date();
+    const vigente = fijosHistorialPorSku[f.sku_id].find(function(r){ return new Date(r.fecha+'T00:00:00') <= ref; });
+    if(vigente){
+      const ivaRate = vigente.iva_pct!==undefined && vigente.iva_pct!==null ? vigente.iva_pct/100 : 0;
+      return Math.round(vigente.precio_neto * (1 + ivaRate));
+    }
+  }
+  return f.monto;
+}
+// fuenteEfectivaFijo: para mostrar el badge "Cargado por OC — fecha" en renderFijos()
+function fuenteEfectivaFijo(f, refDate){
+  if(!f.sku_id || !fijosHistorialPorSku[f.sku_id] || !fijosHistorialPorSku[f.sku_id].length) return null;
+  const ref = refDate || new Date();
+  return fijosHistorialPorSku[f.sku_id].find(function(r){ return new Date(r.fecha+'T00:00:00') <= ref; }) || null;
+}
+function getTotalFijos(refDate){return fijos.reduce((s,f)=>s+valorEfectivoFijo(f, refDate),0);}
 function getIngresoLicenciasMensual(){return ingresoLicenciasManual||0;}
 function getCostosEventualesPromedio(){return costosEventualesPromedio||0;}
 function getCostosNoInventariablesPromedio(){return costosNoInventariablesPromedio||0;}
@@ -1951,7 +1976,7 @@ function getCostosNoInventariablesPromedio(){return costosNoInventariablesPromed
 // eventuales (Servicios no recurrentes) + promedio de insumos no inventariables (no
 // están en ninguna BOM, no se les puede seguir el consumo por equipo). Esta es la base
 // objetiva que debe usarse en cualquier cálculo de precio/punto de equilibrio.
-function getTotalFijosNeto(){return Math.max(0, getTotalFijos() - getIngresoLicenciasMensual() + getCostosEventualesPromedio() + getCostosNoInventariablesPromedio());}
+function getTotalFijosNeto(refDate){return Math.max(0, getTotalFijos(refDate) - getIngresoLicenciasMensual() + getCostosEventualesPromedio() + getCostosNoInventariablesPromedio());}
 
 // Cuenta cuántos meses "reales" transcurrieron desde la compra más antigua considerada
 // hasta hoy (mínimo 1, máximo la ventana de 12). Evita diluir un gasto que todavía no
@@ -2056,6 +2081,43 @@ async function cargarCostosNoInventariables(){
   }
   recalcFijos();
   if(productoActual) recalcCotizador();
+}
+
+// Trae el historial real de compras (historial_precios) para los ítems de la lista de Costos
+// Fijos que estén vinculados a un SKU de Compras (fijos[].sku_id). Se usa para reemplazar el
+// número manual por el valor real más reciente, con carry-forward si un mes no se cargó nada.
+async function cargarFijosVinculados(){
+  try{
+    const skuIds = [...new Set(fijos.map(function(f){ return f.sku_id; }).filter(Boolean))];
+    if(!skuIds.length){ fijosHistorialPorSku = {}; recalcFijos(); recalcHistorial(); return; }
+    const rows = await stockAPI(`historial_precios?sku_id=in.(${skuIds.join(',')})&select=sku_id,fecha,precio_neto,iva_pct,oc_id,ordenes_compra(oc_numero)&order=fecha.desc`);
+    const porSku = {};
+    (rows||[]).forEach(function(r){
+      if(!porSku[r.sku_id]) porSku[r.sku_id] = [];
+      porSku[r.sku_id].push(r);
+    });
+    fijosHistorialPorSku = porSku;
+  }catch(e){
+    console.warn('No se pudo cargar el historial de Costos Fijos vinculados:', e.message);
+  }
+  renderFijos();
+  recalcFijos();
+  recalcHistorial();
+  if(productoActual) recalcCotizador();
+}
+
+// Trae los SKUs disponibles en la categoría "Costos Fijos" de Compras, para el picker de
+// vinculación en renderFijos().
+let skusCostosFijos = [];
+async function cargarSkusCostosFijos(){
+  try{
+    const cats = await stockAPI('categorias?nombre=eq.Costos Fijos&select=id');
+    if(!cats || !cats[0]) return;
+    const rows = await stockAPI(`skus?categoria_id=eq.${cats[0].id}&select=id,nombre&order=nombre.asc`);
+    skusCostosFijos = rows||[];
+  }catch(e){
+    console.warn('No se pudo cargar SKUs de Costos Fijos:', e.message);
+  }
 }
 
 async function cargarCostosAsignadosProyectos(){
@@ -2163,7 +2225,7 @@ function showPage(id,el){
   if(id==='equilibrio') recalcPE();
   if(id==='insumos') renderInsumosMgmt();
   if(id==='precios-comparar') renderCompararPrecios();
-  if(id==='fijos'){ recalcFijos(); cargarCostosEventuales(); cargarCostosNoInventariables(); }
+  if(id==='fijos'){ recalcFijos(); cargarCostosEventuales(); cargarCostosNoInventariables(); cargarFijosVinculados(); }
   if(id==='historial') recalcHistorial();
   if(id==='cotizaciones') renderCotizaciones();
   if(id==='ventas'){
@@ -2989,13 +3051,62 @@ function editarNombreInsumo(key){
 
 // Costos fijos
 function renderFijos(){
-  document.getElementById('fijos-list').innerHTML=fijos.map((f,i)=>`
-    <div class="fijo-row">
+  document.getElementById('fijos-list').innerHTML=fijos.map((f,i)=>{
+    const fuente = fuenteEfectivaFijo(f);
+    const valorEfectivo = valorEfectivoFijo(f);
+    let valorHTML, vinculoHTML;
+    if(fuente){
+      const fch = new Date(fuente.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      const ocNum = fuente.ordenes_compra ? fuente.ordenes_compra.oc_numero : '';
+      valorHTML = `<span class="fijo-input" style="display:inline-flex;align-items:center;justify-content:flex-end;color:var(--text);font-family:monospace;">${fmt(valorEfectivo)}</span>`;
+      vinculoHTML = `<span title="Cargado por Orden de Compra — ${ocNum?ocNum+' · ':''}${fch}" style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(0,200,150,0.12);color:var(--green);border:1px solid rgba(0,200,150,0.3);font-family:monospace;white-space:nowrap;">✓ OC — ${fch}</span>
+        <button class="btn" title="Desvincular de Compras y volver a carga manual" onclick="desvincularFijo(${i})" style="height:22px;width:22px;padding:0;font-size:11px;line-height:1;">🔓</button>`;
+    } else if(f.sku_id){
+      // Vinculado pero todavía sin ninguna compra real cargada — sigue mostrando el manual como fallback
+      valorHTML = `<input type="number" class="fijo-input" value="${f.monto}" onchange="fijos[${i}].monto=parseFloat(this.value)||0;recalcFijos();recalcCotizador();autoSave();" />`;
+      vinculoHTML = `<span title="Vinculado a Compras pero todavía sin ninguna OC cargada — se usa el valor manual hasta que se registre la primera compra" style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,180,0,0.10);color:var(--amber);border:1px solid rgba(255,180,0,0.3);font-family:monospace;white-space:nowrap;">🔗 vinculado, sin OC aún</span>
+        <button class="btn" title="Desvincular de Compras" onclick="desvincularFijo(${i})" style="height:22px;width:22px;padding:0;font-size:11px;line-height:1;">🔓</button>`;
+    } else {
+      valorHTML = `<input type="number" class="fijo-input" value="${f.monto}" onchange="fijos[${i}].monto=parseFloat(this.value)||0;recalcFijos();recalcCotizador();autoSave();" />`;
+      vinculoHTML = `<button type="button" title="Vincular este ítem a un SKU de la categoría Costos Fijos en Compras, para que el valor se actualice solo con cada orden de compra real" onclick="abrirVincularFijo(${i})" style="background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;white-space:nowrap;">🔗 Vincular a Compras</button>`;
+    }
+    return `<div class="fijo-row" style="flex-wrap:wrap;gap:6px;">
       <span class="fijo-name">${f.name}</span>
-      <input type="number" class="fijo-input" value="${f.monto}" onchange="fijos[${i}].monto=parseFloat(this.value)||0;recalcFijos();recalcCotizador();" />
-      <button class="btn red" onclick="fijos.splice(${i},1);renderFijos();recalcFijos();recalcCotizador();">quitar</button>
-    </div>`).join('');
+      ${valorHTML}
+      <span style="display:flex;align-items:center;gap:4px;">${vinculoHTML}</span>
+      <button class="btn red" onclick="fijos.splice(${i},1);renderFijos();recalcFijos();recalcCotizador();autoSave();">quitar</button>
+    </div>`;
+  }).join('');
   recalcFijos();
+}
+
+async function abrirVincularFijo(i){
+  if(!skusCostosFijos.length) await cargarSkusCostosFijos();
+  if(!skusCostosFijos.length){
+    alert('Todavía no hay ningún insumo creado en Compras dentro de la categoría "Costos Fijos".\n\nAndá a Compras → Nueva Orden de Compra → categoría "Costos Fijos" → "+ Nuevo insumo", creá el ítem (por ejemplo "Luz y telefonía"), y después volvé acá para vincularlo.');
+    return;
+  }
+  const opciones = skusCostosFijos.map(function(s){ return s.id+' = '+s.nombre; }).join('\n');
+  const elegido = prompt('Elegí el ID del SKU de Compras a vincular con "'+fijos[i].name+'":\n\n'+opciones);
+  if(!elegido) return;
+  const skuId = parseInt(elegido);
+  const sku = skusCostosFijos.find(function(s){ return s.id===skuId; });
+  if(!sku){ alert('ID inválido.'); return; }
+  fijos[i].sku_id = skuId;
+  renderFijos();
+  recalcFijos();
+  recalcCotizador();
+  autoSave();
+  await cargarFijosVinculados();
+}
+
+function desvincularFijo(i){
+  if(!confirm('¿Desvincular "'+fijos[i].name+'" de Compras? Vuelve a usar el valor manual.')) return;
+  fijos[i].sku_id = null;
+  renderFijos();
+  recalcFijos();
+  recalcCotizador();
+  autoSave();
 }
 // ─── SINCRONIZACIÓN VENTAS → HISTORIAL ───────────────────────────────────────
 function calcularHistorialDesdeVentas(mes, anio){
@@ -3230,7 +3341,7 @@ function recalcHistorial(){
               +'</span>'
             +'</td>'
             +'<td style="text-align:right;font-family:monospace;font-weight:500;">'+fmt(total)+'</td>'
-            +'<td style="text-align:right;font-family:monospace;color:var(--amber);">'+(h.factEquipos>0?((getTotalFijos()/h.factEquipos*100).toFixed(1)+'%'):'—')+'</td>'
+            +'<td style="text-align:right;font-family:monospace;color:var(--amber);">'+(h.factEquipos>0?((getTotalFijos(new Date(h.anio,h.mes,0))/h.factEquipos*100).toFixed(1)+'%'):'—')+'</td>'
             +'<td style="text-align:center;"><button class="btn red" onclick="eliminarMesHistorial('+i+')">✕</button></td>'
           +'</tr>';
         }).join('')
@@ -3258,8 +3369,15 @@ function recalcHistorial(){
   // Calcular coeficiente: suma fijos NETOS período / suma ventas equipos período
   // (fijos netos = estructura fija − ingreso mensual de licencias, para que el precio
   // que le carga el coeficiente a cada equipo sea objetivo y no ignore ese ingreso)
+  // Los ítems de Costos Fijos vinculados a Compras (fijos[].sku_id) usan su valor REAL
+  // vigente en CADA mes del período (carry-forward desde la última OC real a esa fecha) en
+  // vez de repetir el total de hoy — igual que ya se hace con las ventas reales por mes.
+  // Los ítems no vinculados siguen aportando su monto manual actual (constante) como antes.
   const ingresoLic = getIngresoLicenciasMensual();
-  const sumaFijosNetos = getTotalFijosNeto() * datos.length;
+  const sumaFijosNetos = datos.reduce(function(s,h){
+    const finMes = new Date(h.anio, h.mes, 0); // último día de ese mes
+    return s + getTotalFijosNeto(finMes);
+  },0);
   const sumaVentasEq = datos.reduce(function(s,h){ return s+h.factEquipos; },0);
   window._coeficienteFijos = sumaVentasEq > 0 ? sumaFijosNetos / sumaVentasEq : 0.05;
 
@@ -7030,10 +7148,10 @@ async function loadFromSheets(){
     }
 
     // ── Costos fijos ───────────────────────────────────────────────────────
-    const fijosRows = await stockAPI('fijos_cotizador?select=name,monto&order=id.asc');
+    const fijosRows = await stockAPI('fijos_cotizador?select=name,monto,sku_id&order=id.asc');
     if(fijosRows && fijosRows.length > 0){
       fijos = fijosRows.map(function(r){
-        return { name: r.name, monto: parseFloat(r.monto)||0 };
+        return { name: r.name, monto: parseFloat(r.monto)||0, sku_id: r.sku_id||null };
       });
     }
 
@@ -7170,7 +7288,7 @@ async function saveToSheets(){
     // Borrar y reinsertar (más simple que hacer upsert por nombre)
     await stockAPI('fijos_cotizador?id=gt.0', 'DELETE');
     if(fijos.length > 0){
-      await stockAPI('fijos_cotizador', 'POST', fijos.map(function(f){ return { name: f.name, monto: f.monto }; }));
+      await stockAPI('fijos_cotizador', 'POST', fijos.map(function(f){ return { name: f.name, monto: f.monto, sku_id: f.sku_id||null }; }));
     }
 
     // ── Config ─────────────────────────────────────────────────────────────
@@ -8243,6 +8361,8 @@ cargarCostosAsignadosProyectos();
 cargarBOMMaestra();
 cargarPreciosReales();
 cargarPrecioVentaAplicado();
+cargarSkusCostosFijos();
+cargarFijosVinculados();
 
 
 // ─── CARGAR INFO OP DESDE SUPABASE ───────────────────────────────────────────
