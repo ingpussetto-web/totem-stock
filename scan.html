@@ -32,6 +32,8 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .estado-card.producido{background:var(--surface2);border:1px solid var(--border2);}
 .estado-card.baja{background:var(--red-dim);border:1px solid var(--red-border);}
 .estado-card.notfound{background:var(--red-dim);border:1px solid var(--red-border);}
+.estado-card.asignado-personal{background:var(--blue-dim);border:1px solid var(--blue-border);}
+.estado-card.transferido-personal{background:var(--surface2);border:1px solid var(--border2);}
 
 .estado-icon{font-size:36px;margin-bottom:8px;}
 .estado-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;font-family:'DM Mono',monospace;margin-bottom:4px;}
@@ -40,6 +42,8 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .estado-card.producido .estado-label{color:var(--text3);}
 .estado-card.baja .estado-label{color:var(--red);}
 .estado-card.notfound .estado-label{color:var(--red);}
+.estado-card.asignado-personal .estado-label{color:var(--blue);}
+.estado-card.transferido-personal .estado-label{color:var(--text3);}
 
 /* Info del insumo */
 .insumo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
@@ -252,6 +256,10 @@ async function init(){
       await renderReservado();
     } else if(unidadActual.estado === 'producido'){
       renderProducido();
+    } else if(unidadActual.estado === 'asignado_personal'){
+      renderAsignadoPersonal();
+    } else if(unidadActual.estado === 'transferido_personal'){
+      renderTransferidoPersonal();
     } else {
       renderBaja();
     }
@@ -533,14 +541,53 @@ function renderBaja(){
   `;
 }
 
+function renderAsignadoPersonal(){
+  const u = unidadActual;
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card asignado-personal">
+      <div class="estado-icon">👤</div>
+      <div class="estado-label">Asignado a personal</div>
+    </div>
+    <div class="insumo-card">
+      <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
+      <div class="insumo-uid">${esc(u.uid)}</div>
+    </div>
+    <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">
+      Este insumo sigue siendo de la empresa, en uso interno por un empleado.
+      Ver detalle en Bienes y Personal → Asignación a personal.
+    </div>
+  `;
+}
+
+function renderTransferidoPersonal(){
+  const u = unidadActual;
+  document.getElementById('container').innerHTML = `
+    <div class="estado-card transferido-personal">
+      <div class="estado-icon">📤</div>
+      <div class="estado-label">Transferido a personal</div>
+    </div>
+    <div class="insumo-card">
+      <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
+      <div class="insumo-uid">${esc(u.uid)}</div>
+    </div>
+    <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">
+      Este insumo ya no es propiedad de la empresa — se le entregó de forma definitiva a un empleado.
+    </div>
+  `;
+}
+
 let cajaSkuActual = null;
 let cajaStockRow = null;
 let cajaReservado = 0;
 let cajaStockRowsAll = [];      // todas las filas de stock (por variante)
 let cajaAsignadosActivos = [];  // op_bom_items asignados en OPs activas
+let cajaVariantesData = [];     // [{id, valor}] — nombres de las variantes con stock de este SKU
+let _gruposDisponibles = {};    // groupKey -> [{variante_id, valor, disponible}] — colores elegibles cuando el requerimiento no especifica color
 
 async function renderCaja(sku){
   cajaSkuActual = sku;
+  cajaVariantesData = [];
+  _gruposDisponibles = {};
 
   // Traer stock por variante
   cajaStockRowsAll = await api(`stock?sku_id=eq.${sku.id}&select=id,cantidad,variante_id`).catch(()=>[]);
@@ -600,6 +647,7 @@ async function renderCaja(sku){
   if(variantesEnStock.length > 0){
     const varIds = variantesEnStock.map(r => r.variante_id);
     const variantesData = await api(`variantes?id=in.(${varIds.join(',')})&select=id,valor`).catch(()=>[]);
+    cajaVariantesData = variantesData||[];
     const filasColores = variantesEnStock.map(r => {
       const v = (variantesData||[]).find(vd => vd.id === r.variante_id);
       const d = dispDeVariante(r.variante_id);
@@ -624,9 +672,22 @@ async function renderCaja(sku){
         const asignados = total - pendientes.length;
         const completo = pendientes.length === 0;
         const pct = total > 0 ? Math.round((asignados / total) * 100) : 0;
-        const d = dispDeVariante(variante_id);
-        const hayStock = d.disponible > 0;
-        const firstPending = pendientes[0];
+        // Si el requerimiento no especifica color y el SKU sí tiene colores reales en stock,
+        // no lo limitamos a la fila "sin variante" (que casi nunca tiene stock real) — se
+        // puede cubrir con cualquier color disponible, a elegir al momento de asignar.
+        const necesitaColor = variante_id == null && variantesEnStock.length > 0;
+        let hayStock, variantesElegibles = null;
+        if(necesitaColor){
+          variantesElegibles = variantesEnStock.map(r => {
+            const v = cajaVariantesData.find(vd => vd.id === r.variante_id);
+            return { variante_id: r.variante_id, valor: v?.valor||'?', disponible: dispDeVariante(r.variante_id).disponible };
+          }).filter(v => v.disponible > 0);
+          hayStock = variantesElegibles.length > 0;
+        } else {
+          hayStock = dispDeVariante(variante_id).disponible > 0;
+        }
+        const groupKey = `${op.id}_${variante_id||'null'}`;
+        if(variantesElegibles) _gruposDisponibles[groupKey] = variantesElegibles;
         const colorBar = completo ? 'var(--green)' : 'var(--amber)';
         return `
         <div style="border:1px solid ${completo?'var(--green-border)':'var(--border2)'};border-radius:var(--radius);padding:14px;margin-bottom:10px;background:${completo?'var(--green-dim)':'var(--surface2)'};">
@@ -651,13 +712,14 @@ async function renderCaja(sku){
               ? `<button
                   data-pending-ids="${pendientes.map(p=>p.id).join(',')}"
                   data-varianteid="${variante_id||''}"
+                  data-groupkey="${groupKey}"
                   data-opnum="${esc(op.op_numero)}"
                   data-cliente="${esc(op.cliente)}"
                   data-total="${total}"
                   data-asignados="${asignados}"
                   onclick="abrirAsigCajaSheet(this)"
                   style="width:100%;padding:11px;background:var(--green);border:none;border-radius:6px;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">
-                  → Asignar unidades — faltan ${pendientes.length}
+                  ${necesitaColor ? '→ Elegir color y asignar' : '→ Asignar unidades'} — faltan ${pendientes.length}
                 </button>`
               : `<div style="text-align:center;font-size:12px;color:var(--red);padding:4px 0;">Sin stock disponible</div>`
           }
@@ -696,12 +758,14 @@ let _sheetPendienteIds = [];
 let _sheetVarId = null;
 let _sheetAsignados = 0;
 let _sheetTotal = 0;
+let _sheetVariantesElegibles = null; // si no es null, hay que elegir color por unidad
 
 function abrirAsigCajaSheet(btn){
   _sheetPendienteIds = btn.dataset.pendingIds.split(',').map(Number);
   _sheetVarId = btn.dataset.varianteid ? parseInt(btn.dataset.varianteid) : null;
   _sheetAsignados = parseInt(btn.dataset.asignados);
   _sheetTotal = parseInt(btn.dataset.total);
+  _sheetVariantesElegibles = btn.dataset.groupkey ? (_gruposDisponibles[btn.dataset.groupkey]||null) : null;
 
   document.getElementById('asig-caja-title').textContent = btn.dataset.cliente;
   document.getElementById('asig-caja-sub').textContent = btn.dataset.opnum;
@@ -723,22 +787,34 @@ function renderSheetLista(){
   lista.innerHTML = _sheetPendienteIds.length
     ? _sheetPendienteIds.map((bomId, i) => {
         const num = _sheetAsignados + i + 1;
-        return `<div id="sheet-row-${bomId}" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);">
+        // Sin color fijo en el requerimiento pero con colores reales disponibles: hay que
+        // elegir de cuál se descuenta — no existe un color "correcto" por defecto.
+        const botones = _sheetVariantesElegibles
+          ? _sheetVariantesElegibles.map(v => `
+              <button onclick="asignarUnaDesdeSheet(${bomId}, ${v.variante_id})"
+                style="background:var(--green);border:none;border-radius:6px;padding:9px 14px;color:#000;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;flex-shrink:0;">
+                ${esc(v.valor)} (${v.disponible})
+              </button>`).join('')
+          : `<button onclick="asignarUnaDesdeSheet(${bomId})"
+              style="background:var(--green);border:none;border-radius:6px;padding:9px 18px;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;flex-shrink:0;">
+              ✓ Asignar
+            </button>`;
+        return `<div id="sheet-row-${bomId}" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);flex-wrap:wrap;gap:8px;">
           <div>
             <div style="font-size:14px;font-weight:600;">Unidad ${num} de ${_sheetTotal}</div>
             <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">${cajaSkuActual?.nombre||''}</div>
           </div>
-          <button onclick="asignarUnaDesdeSheet(${bomId})"
-            style="background:var(--green);border:none;border-radius:6px;padding:9px 18px;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;flex-shrink:0;">
-            ✓ Asignar
-          </button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">${botones}</div>
         </div>`;
       }).join('')
     : `<div style="text-align:center;color:var(--green);padding:24px;font-size:15px;font-weight:700;">✓ Todos asignados</div>`;
 }
 
-async function asignarUnaDesdeSheet(bomId){
-  const varianteId = _sheetVarId;
+async function asignarUnaDesdeSheet(bomId, varianteIdElegida){
+  // varianteIdElegida: solo se pasa cuando el requerimiento no tenía color fijo y el usuario
+  // eligió de cuál color descontar (ver botones en renderSheetLista). Si no, se usa el color
+  // fijo del grupo (_sheetVarId).
+  const varianteId = varianteIdElegida !== undefined ? varianteIdElegida : _sheetVarId;
   const stockRowVar = varianteId != null
     ? (cajaStockRowsAll||[]).find(r => r.variante_id === varianteId)
     : (cajaStockRowsAll||[]).find(r => r.variante_id == null) || cajaStockRowsAll?.[0];
@@ -750,11 +826,15 @@ async function asignarUnaDesdeSheet(bomId){
   if((stockRowVar.cantidad||0) - reservadoVar <= 0){ toast('Sin stock disponible'); return; }
 
   const row = document.getElementById(`sheet-row-${bomId}`);
-  const btnEl = row?.querySelector('button');
-  if(btnEl){ btnEl.disabled = true; btnEl.textContent = '...'; }
+  const botones = row?.querySelectorAll('button');
+  if(botones) botones.forEach(b => { b.disabled = true; });
 
   try{
-    await api('op_bom_items?id=eq.'+bomId, 'PATCH', {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'});
+    // Si el requerimiento no tenía color fijo (_sheetVarId null) y se eligió uno, se guarda
+    // ese color en el ítem — deja de ser ambiguo, queda registrado para etiquetas/trazabilidad.
+    const patchBom = {estado:'asignado', uid_asignado: cajaSkuActual.codigo+'-CAJA'};
+    if(_sheetVarId == null && varianteId != null) patchBom.variante_id = varianteId;
+    await api('op_bom_items?id=eq.'+bomId, 'PATCH', patchBom);
     await api('stock?id=eq.'+stockRowVar.id, 'PATCH', {cantidad_reservada: reservadoVar + 1});
 
     // Actualizar estado local
@@ -775,7 +855,7 @@ async function asignarUnaDesdeSheet(bomId){
     }
   }catch(e){
     toast('Error: '+e.message);
-    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '✓ Asignar'; }
+    if(botones) botones.forEach(b => { b.disabled = false; });
   }
 }
 
