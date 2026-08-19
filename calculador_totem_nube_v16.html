@@ -339,6 +339,17 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <div class="bk-row"><span class="bk-label">Margen operativo sobre precio de lista</span><span class="bk-val green" id="bk-margen-real">0%</span></div>
           <div class="bk-row"><span class="bk-label">Equivalente en USD</span><span class="bk-val" id="bk-ganancia-usd">USD 0</span></div>
 
+          <div style="display:flex;align-items:center;gap:8px;padding:12px 0 4px;">
+            <button class="btn" onclick="guardarSnapshotMargen()" style="font-size:11px;padding:5px 10px;">📌 Guardar en historial</button>
+            <span style="font-size:10px;color:var(--text3);" id="hist-margen-btn-hint"></span>
+          </div>
+          <div onclick="toggleHistorialMargen()" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:8px 0;">
+            <span id="historial-margen-arrow">▸</span> Evolución de margen de este producto <span id="historial-margen-count"></span>
+          </div>
+          <div id="historial-margen-detalle" style="display:none;padding-bottom:8px;">
+            <div id="historial-margen-lista"></div>
+          </div>
+
           <div onclick="toggleBloqueIva()" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:16px 0 8px;">
             <span id="bloque-iva-arrow">▸</span> Posición de IVA de este producto — informativo, no se usa en el cálculo
           </div>
@@ -736,7 +747,18 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         </div>
       </div>
 
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;margin:12px 0 8px;">Ítems</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 8px;">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;">Ítems</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:11px;color:var(--text3);">IVA hardware (equipo, periféricos, transporte, etc.):</label>
+          <select id="cot-iva-hardware" onchange="cotIvaHardwarePct=parseFloat(this.value);renderCotItemsTemp();calcPagoMontos();" style="font-size:11px;height:26px;">
+            <option value="0.105" selected>10,5%</option>
+            <option value="0.21">21%</option>
+            <option value="0">Sin IVA</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">Se aplica a todo el hardware de la cotización (equipo, Mini PC, periféricos, transporte, parametrización, ploteo). La licencia de software mantiene su propio tratamiento de IVA, independiente de esta selección.</div>
       <div id="cot-items-lista"></div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-top:8px;align-items:end;">
         <div>
@@ -1946,6 +1968,13 @@ let extraInsumos = [];
 let costosOverride = {};
 let ivaOverride = {}; // key -> iva rate override (0, 0.105, 0.21)
 
+// Historial de ganancia operativa por producto — snapshots manuales tomados desde
+// el Cotizador (botón "Guardar en historial"), para poder ver cómo se mueve el
+// margen de cada producto con el tiempo (ej. baja el costo de insumos → sube la
+// ganancia, y ahí se puede decidir bajar precio manteniendo margen mínimo).
+let historialMargenesData = [];
+let ultimoCalculoMargen = null; // último snapshot calculado en recalcCotizador(), listo para guardar
+
 function fmt(n){return '$'+Math.round(n).toLocaleString('es-AR');}
 function fmtUSD(n){return 'USD '+Math.round(n).toLocaleString('es-AR');}
 function getUndMes(){return parseInt(document.getElementById('unidades-mes')?.value)||15;}
@@ -2351,6 +2380,7 @@ function selectProducto(id){
   productoActual=PRODUCTOS.find(p=>p.id===id);
   if(!productoActual) return;
   extraInsumos=[];
+  cargarHistorialMargen(productoActual.id);
   const bomRealParaInsumos = bomMaestraPorProducto[productoActual.id];
   insumosActivos = (bomRealParaInsumos && bomRealParaInsumos.length)
     ? resolverInsumosDesdeBOM(bomRealParaInsumos)
@@ -2612,6 +2642,23 @@ function recalcCotizador(){
   window._lastPrecioFinal=precioListaConIva;
   window._lastGananciaOp=gananciaOperativa;
   window._lastResultadoReal=resultadoReal;
+
+  // Snapshot listo para guardar en el historial de márgenes (botón manual)
+  ultimoCalculoMargen = {
+    producto_id: productoActual.id,
+    producto_nombre: productoActual.name,
+    precio_lista_neto: Math.round(precioListaNeto),
+    precio_lista_con_iva: Math.round(precioListaConIva),
+    costo_var_neto: Math.round(costoVarNeto),
+    costo_var_bruto: Math.round(costoVarBruto),
+    coef_fijos: coef,
+    fijo_prorr: Math.round(fijoProrr),
+    costo_total_neto: Math.round(costoTotalNeto),
+    ganancia_operativa: Math.round(gananciaOperativa),
+    margen_pct: Math.round(margenReal*10)/10,
+    dolar_ref: dolar||null
+  };
+  set('hist-margen-btn-hint', 'guarda una foto de hoy para "'+productoActual.name+'"');
 }
 
 // Extra insumos
@@ -3763,6 +3810,82 @@ function toggleBloqueIva(){
   el.style.display = abierto ? 'none' : 'block';
   if(arrow) arrow.textContent = abierto ? '▸' : '▾';
 }
+
+// ─── HISTORIAL DE MÁRGENES POR PRODUCTO ─────────────────────────────────────
+// Snapshots manuales del margen de un producto en el tiempo. Sirve para ver
+// objetivamente si al bajar el costo de insumos conviene quedarse con la mayor
+// ganancia, o bajar el precio de venta manteniendo un margen mínimo aceptable.
+async function cargarHistorialMargen(productoId){
+  const wrap = document.getElementById('historial-margen-lista');
+  if(wrap) wrap.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px 0;">Cargando...</div>';
+  try{
+    historialMargenesData = await stockAPI(`historial_margenes_producto?producto_id=eq.${productoId}&select=*&order=fecha.desc,id.desc`) || [];
+  }catch(e){
+    historialMargenesData = [];
+    console.warn('No se pudo cargar historial de márgenes:', e.message);
+  }
+  renderHistorialMargen();
+}
+
+function renderHistorialMargen(){
+  const wrap = document.getElementById('historial-margen-lista');
+  const countEl = document.getElementById('historial-margen-count');
+  if(!wrap) return;
+  if(countEl) countEl.textContent = historialMargenesData.length ? '('+historialMargenesData.length+')' : '';
+  if(!historialMargenesData.length){
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px 0;">Todavía no hay snapshots guardados para este producto. Usá el botón "📌 Guardar en historial" de arriba.</div>';
+    return;
+  }
+  wrap.innerHTML = historialMargenesData.map(function(h, idx){
+    const anterior = historialMargenesData[idx+1]; // el siguiente en la lista (desc) = más viejo
+    let deltaHTML = '';
+    if(anterior){
+      const deltaMargen = Math.round((h.margen_pct - anterior.margen_pct)*10)/10;
+      const deltaGanancia = Math.round(h.ganancia_operativa - anterior.ganancia_operativa);
+      const signo = deltaMargen>=0 ? '+' : '';
+      const color = deltaMargen>0 ? 'var(--green)' : deltaMargen<0 ? 'var(--red)' : 'var(--text3)';
+      deltaHTML = `<span style="font-size:10px;color:${color};margin-left:6px;">(${signo}${deltaMargen}pp · ${signo}${fmt(deltaGanancia)})</span>`;
+    }
+    const fch = new Date(h.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:12px;">
+      <div>
+        <span style="font-family:'DM Mono',monospace;color:var(--text3);">${fch}</span>
+        <span style="margin-left:10px;">Precio: ${fmt(h.precio_lista_neto)}</span>
+        <span style="margin-left:10px;">Costo: ${fmt(h.costo_total_neto)}</span>
+      </div>
+      <div style="text-align:right;">
+        <span style="font-weight:600;color:${h.ganancia_operativa>=0?'var(--green)':'var(--red)'};">${fmt(h.ganancia_operativa)}</span>
+        <span style="color:var(--text3);margin-left:6px;">(${h.margen_pct}%)</span>
+        ${deltaHTML}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function guardarSnapshotMargen(){
+  if(!ultimoCalculoMargen){ alert('Seleccioná un producto primero.'); return; }
+  try{
+    await stockAPI('historial_margenes_producto', 'POST', [ultimoCalculoMargen]);
+    await cargarHistorialMargen(ultimoCalculoMargen.producto_id);
+    const panel = document.getElementById('historial-margen-detalle');
+    if(panel) panel.style.display = 'block';
+    const arrow = document.getElementById('historial-margen-arrow');
+    if(arrow) arrow.textContent = '▾';
+    alert('✓ Guardado en el historial de márgenes de "'+ultimoCalculoMargen.producto_nombre+'".');
+  }catch(e){
+    alert('Error guardando el snapshot: '+e.message);
+  }
+}
+
+function toggleHistorialMargen(){
+  const el = document.getElementById('historial-margen-detalle');
+  const arrow = document.getElementById('historial-margen-arrow');
+  if(!el) return;
+  const abierto = el.style.display !== 'none';
+  el.style.display = abierto ? 'none' : 'block';
+  if(arrow) arrow.textContent = abierto ? '▸' : '▾';
+}
+
 function toggleDetalleEventuales(){
   const el = document.getElementById('detalle-eventuales');
   if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
@@ -3854,6 +3977,7 @@ function recalcPE(){
 // ─── MÓDULO COTIZACIONES ─────────────────────────────────────────────────────
 let cotizaciones = [];
 let cotItemsTemp = [];
+let cotIvaHardwarePct = 0.105; // IVA aplicado a hardware (equipo, periféricos, transporte, param, ploteo) de la cotización en edición. La licencia de software NO usa esta variable — mantiene su propio tratamiento.
 
 // ─── COTIZACIONES SUPABASE SYNC ──────────────────────────────────────────────
 async function cotSupaSave(c){
@@ -4165,6 +4289,9 @@ function restaurarPagoValores(c){
 
 function abrirNuevaCotizacion(editId){
   cotItemsTemp = [];
+  cotIvaHardwarePct = 0.105;
+  const ivaHwEl = document.getElementById('cot-iva-hardware');
+  if(ivaHwEl) ivaHwEl.value = '0.105';
   let _cLoadedParaPago = null;
   const modal = document.getElementById('modal-cotizacion');
   if(!modal) return;
@@ -4188,6 +4315,8 @@ function abrirNuevaCotizacion(editId){
     document.getElementById('cot-sistema').value = c.sistema;
     document.getElementById('cot-validez').value = c.validez||15;
     document.getElementById('cot-notas').value = c.notas||'';
+    cotIvaHardwarePct = (c.ivaHardwarePct!==undefined && c.ivaHardwarePct!==null) ? c.ivaHardwarePct : 0.105;
+    if(ivaHwEl) ivaHwEl.value = String(cotIvaHardwarePct);
     // Cargar items excluyendo adicionales que se restauran desde checkboxes
     cotItemsTemp = c.items ? c.items.filter(function(i){
       return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom'].includes(i.prodId);
@@ -4412,8 +4541,9 @@ function calcularDescuentoCot(c){
   const sel = c.descuentoSel||{};
   const lineas = obtenerLineasDescontables(c.items).filter(function(l){ return sel[l.key]; });
   if(!lineas.length) return {activo:false, monto:0, pct:0, lineas:[]};
+  const ivaHwRate = (c.ivaHardwarePct!==undefined && c.ivaHardwarePct!==null) ? c.ivaHardwarePct : 0.105;
   const baseNeto = lineas.reduce(function(s,l){ return s + l.precio*l.cant; },0);
-  const monto = Math.round(baseNeto * 1.105 * c.descuentoPct/100);
+  const monto = Math.round(baseNeto * (1+ivaHwRate) * c.descuentoPct/100);
   return {activo:true, monto, pct:c.descuentoPct, lineas};
 }
 
@@ -4421,18 +4551,19 @@ function renderCotItemsTemp(){
   const el = document.getElementById('cot-items-lista');
   if(!el) return;
   if(cotItemsTemp.length===0){ el.innerHTML='<div class="empty" style="padding:6px 0;">— Sin ítems.</div>'; renderDescuentoChecklist(); return; }
+  const ivaLabelHw = cotIvaHardwarePct===0.21?'IVA 21%':cotIvaHardwarePct===0?'Sin IVA':'IVA 10.5%';
   el.innerHTML = '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:4px;">'
     +'<thead><tr>'
     +'<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">#</th>'
     +'<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">Nombre para el cliente</th>'
     +'<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">Cant.</th>'
     +'<th style="text-align:right;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">Neto unit.</th>'
-    +'<th style="text-align:right;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">IVA 10.5%</th>'
+    +'<th style="text-align:right;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">'+ivaLabelHw+'</th>'
     +'<th style="text-align:right;padding:4px 6px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);">Total</th>'
     +'<th style="border-bottom:1px solid var(--border);width:30px;"></th>'
     +'</tr></thead><tbody>'
     + cotItemsTemp.map(function(it,i){
-        const iva = Math.round(it.precio*it.cant*0.105);
+        const iva = Math.round(it.precio*it.cant*cotIvaHardwarePct);
         const total = Math.round(it.precio*it.cant + iva);
         const eqRow = '<tr>'
           +'<td style="padding:5px 6px;color:var(--text3);">'+(i+1)+'</td>'
@@ -4461,7 +4592,7 @@ function renderCotItemsTemp(){
           const opciones = '<option value="">— Seleccionar modelo —</option>'+MINIPC_MODELOS.map(function(m){
             return '<option value="'+m.key+'" data-precio="'+m.precio+'" '+(mpc.key===m.key?'selected':'')+'>'+m.nombre+'</option>';
           }).join('');
-          const ivaPC = Math.round((mpc.precio||0)*it.cant*0.105);
+          const ivaPC = Math.round((mpc.precio||0)*it.cant*cotIvaHardwarePct);
           const totalPC = Math.round((mpc.precio||0)*it.cant + ivaPC);
           minipcRow = '<tr style="background:rgba(77,159,255,0.04);">'
             +'<td style="padding:4px 6px;color:var(--text3);font-size:10px;">↳</td>'
@@ -4489,7 +4620,7 @@ function renderCotItemsTemp(){
           otrosRows = OTROS_PERIFERICOS.map(function(per){
             const p = it.otrosPerifericos[per.key] || {activo:false, cant:1, precio:per.precio};
             it.otrosPerifericos[per.key] = p;
-            const ivaP = p.activo ? Math.round(p.precio*p.cant*0.105) : 0;
+            const ivaP = p.activo ? Math.round(p.precio*p.cant*cotIvaHardwarePct) : 0;
             const totalP = p.activo ? Math.round(p.precio*p.cant + ivaP) : 0;
             return '<tr style="background:rgba(255,179,64,0.04);">'              +'<td style="padding:4px 6px;color:var(--text3);font-size:10px;">↳</td>'              +'<td style="padding:4px 6px;font-size:12px;color:var(--text2);">'                +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'                  +'<input type="checkbox" '+(p.activo?'checked':'')+' onchange="togglePerifericoExtra('+i+',\''+per.key+'\',this.checked)" style="width:13px;height:13px;" />'                  +per.nombre                +'</label>'              +'</td>'              +'<td style="padding:4px 6px;text-align:center;">'                +(p.activo ? '<input type="number" value="'+p.cant+'" min="1" style="width:50px;height:24px;font-size:11px;text-align:center;" onchange="actualizarPerifericoExtra('+i+',\''+per.key+'\',\'cant\',this.value)" />' : '<span style="color:var(--text3);font-size:11px;">—</span>')              +'</td>'              +'<td style="padding:4px 6px;text-align:right;">'                +(p.activo ? '<input type="number" value="'+p.precio+'" min="0" style="width:110px;height:24px;font-size:11px;text-align:right;font-family:monospace;" onchange="actualizarPerifericoExtra('+i+',\''+per.key+'\',\'precio\',this.value)" />' : '<span style="color:var(--text3);font-size:11px;">—</span>')              +'</td>'              +'<td style="padding:4px 6px;text-align:right;font-family:monospace;color:var(--text3);font-size:11px;">'+(p.activo?fmt(ivaP):'—')+'</td>'              +'<td style="padding:4px 6px;text-align:right;font-family:monospace;font-size:11px;font-weight:500;">'+(p.activo?fmt(totalP):'—')+'</td>'              +'<td></td>'            +'</tr>';
           }).join('');
@@ -4641,15 +4772,16 @@ function calcPagoMontos(){
   }
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
   if(c.param && c.paramMonto) subtotal += c.paramMonto;
-  if(c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') subtotal += c.licMonto;
-  let totalConIva = subtotal + Math.round(subtotal * 0.105);
+  // La licencia mantiene su propio IVA (10.5%), independiente del selector de hardware
+  const licNetoIncluido = (c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') ? c.licMonto : 0;
+  let totalConIva = subtotal + Math.round(subtotal * cotIvaHardwarePct) + licNetoIncluido + Math.round(licNetoIncluido * 0.105);
   // Descuento en vivo (según lo tildado ahora en el modal, no lo guardado)
   const descActivo = !!document.getElementById('cot-descuento-check')?.checked;
   const descPct = parseFloat(document.getElementById('cot-descuento-pct')?.value)||0;
   if(descActivo && descPct){
     const lineasDesc = obtenerLineasDescontables(itemsBase).filter(function(l){ return cotDescuentoSel[l.key]; });
     const baseDescNeto = lineasDesc.reduce(function(s,l){ return s + l.precio*l.cant; },0);
-    const montoDescuento = Math.round(baseDescNeto * 1.105 * descPct/100);
+    const montoDescuento = Math.round(baseDescNeto * (1+cotIvaHardwarePct) * descPct/100);
     totalConIva -= montoDescuento;
   }
   const pctSenia = parseFloat(document.getElementById('pago-senia-pct')?.value) || 0;
@@ -4704,6 +4836,7 @@ function getCotizacionData(estado){
     validez: parseInt(document.getElementById('cot-validez').value)||15,
     notas: document.getElementById('cot-notas').value.trim(),
     items: [...cotItemsTemp],
+    ivaHardwarePct: cotIvaHardwarePct,
     transporte: tieneTransporte,
     transporteMonto: tieneTransporte ? parseFloat(document.getElementById('cot-transporte-monto').value)||0 : 0,
 
@@ -4775,26 +4908,32 @@ function generarPreviewHTML(c){
   const fecha = new Date(c.fecha||Date.now()).toLocaleDateString('es-AR');
   const validezFecha = new Date(Date.now()+c.validez*86400000).toLocaleDateString('es-AR');
 
-  // Calculate totals
-  let subtotalNeto = c.items.reduce(function(s,i){
+  // Calculate totals — el hardware usa la tasa elegida en el selector de IVA de la
+  // cotización (c.ivaHardwarePct); la licencia mantiene su propio 10.5% aparte.
+  const ivaHwRate = (c.ivaHardwarePct!==undefined && c.ivaHardwarePct!==null) ? c.ivaHardwarePct : 0.105;
+  const ivaLabelHw = ivaHwRate===0.21?'IVA 21%':ivaHwRate===0?'Sin IVA':'IVA 10,5%';
+  let subtotalHardwareNeto = c.items.reduce(function(s,i){
     let base = (i.precio*i.cant) + (i.minipc ? i.minipc.precio*i.cant : 0);
     if(i.otrosPerifericos){
       Object.values(i.otrosPerifericos).forEach(function(p){ if(p.activo) base += (p.precio||0)*(p.cant||1); });
     }
     return s + base;
   },0);
-  if(c.transporte && c.transporteMonto) subtotalNeto += c.transporteMonto;
-  if(c.param && c.paramMonto) subtotalNeto += c.paramMonto;
+  if(c.transporte && c.transporteMonto) subtotalHardwareNeto += c.transporteMonto;
+  if(c.param && c.paramMonto) subtotalHardwareNeto += c.paramMonto;
   // ploteo y seteo ya están incluidos en c.items
-  if(c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') subtotalNeto += c.licMonto;
-  const totalIva = Math.round(subtotalNeto*0.105);
+  const licNetoIncluido = (c.licencia && c.licEnPresupuesto && c.licMonto && c.licMoneda!=='usd') ? c.licMonto : 0;
+  const subtotalNeto = subtotalHardwareNeto + licNetoIncluido;
+  const ivaHardware = Math.round(subtotalHardwareNeto*ivaHwRate);
+  const ivaLicencia = Math.round(licNetoIncluido*0.105);
+  const totalIva = ivaHardware + ivaLicencia;
   const totalConIva = subtotalNeto + totalIva;
   const desc = calcularDescuentoCot(c);
   const totalConIvaFinal = totalConIva - desc.monto;
 
   // Items rows
   const itemsHTML = c.items.map(function(it,i){
-    const iva = Math.round(it.precio*it.cant*0.105);
+    const iva = Math.round(it.precio*it.cant*ivaHwRate);
     const total = it.precio*it.cant + iva;
     let rows = '<tr>'
       +'<td style="padding:7px 10px;">'+it.nombre+'</td>'
@@ -4805,7 +4944,7 @@ function generarPreviewHTML(c){
     +'</tr>';
     // Agregar fila de Mini PC si existe
     if(it.minipc && it.minipc.precio){
-      const ivaPC = Math.round(it.minipc.precio*it.cant*0.105);
+      const ivaPC = Math.round(it.minipc.precio*it.cant*ivaHwRate);
       const totalPC = it.minipc.precio*it.cant + ivaPC;
       rows += '<tr style="background:#f9f9fb;">'
         +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+it.minipc.nombre+'</td>'
@@ -4826,7 +4965,7 @@ function generarPreviewHTML(c){
         const key = entry[0]; const p = entry[1];
         if(!p.activo) return;
         const nombre = NOMBRES_PERIFERICOS[key] || key;
-        const ivaPer = Math.round((p.precio||0)*(p.cant||1)*0.105);
+        const ivaPer = Math.round((p.precio||0)*(p.cant||1)*ivaHwRate);
         const totalPer = (p.precio||0)*(p.cant||1) + ivaPer;
         rows += '<tr style="background:#f9f9fb;">'
           +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+nombre+'</td>'
@@ -4845,8 +4984,8 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;font-style:italic;">Servicio de transporte</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.transporteMonto)+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.transporteMonto*0.105))+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.transporteMonto+Math.round(c.transporteMonto*0.105))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.transporteMonto*ivaHwRate))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.transporteMonto+Math.round(c.transporteMonto*ivaHwRate))+'</td>'
     +'</tr>' : (c.transporte ? '<tr style="background:#f5f7fa;">'
     +'<td style="padding:7px 10px;font-style:italic;" colspan="4">Servicio de transporte — Incluido, sin cargo</td>'
     +'<td style="padding:7px 10px;text-align:right;font-weight:600;">$0</td>'
@@ -4856,15 +4995,15 @@ function generarPreviewHTML(c){
     +'<td style="padding:7px 10px;font-style:italic;">Parametrización de software</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.paramMonto)+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.paramMonto*0.105))+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.paramMonto+Math.round(c.paramMonto*0.105))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.paramMonto*ivaHwRate))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.paramMonto+Math.round(c.paramMonto*ivaHwRate))+'</td>'
     +'</tr>' : '';
   const ploteoRow = c.ploteo && c.ploteoMonto ? '<tr style="background:#f5f7fa;">'
     +'<td style="padding:7px 10px;">Ploteo personalizado</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.ploteoMonto)+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.ploteoMonto*0.105))+'</td>'
-    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.ploteoMonto+Math.round(c.ploteoMonto*0.105))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.ploteoMonto*ivaHwRate))+'</td>'
+    +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(c.ploteoMonto+Math.round(c.ploteoMonto*ivaHwRate))+'</td>'
     +'</tr>' : '';
 
   // Fila de licencia en tabla (solo si licEnPresupuesto y moneda ARS)
@@ -4945,7 +5084,7 @@ function generarPreviewHTML(c){
   +'<table class="cot-table">'
     +'<thead><tr>'
       +'<th>Descripción</th><th style="text-align:center;">Cant.</th>'
-      +'<th style="text-align:right;">Neto Unit.</th><th style="text-align:right;">IVA 10,5%</th>'
+      +'<th style="text-align:right;">Neto Unit.</th><th style="text-align:right;">IVA</th>'
       +'<th style="text-align:right;">Total</th>'
     +'</tr></thead>'
     +'<tbody>'+itemsHTML+transpRow+paramRow+ploteoRow+licRow+descRow+'</tbody>'
@@ -4953,7 +5092,7 @@ function generarPreviewHTML(c){
   +'<div class="cot-total-row">'
     +'<div class="cot-total-box">'
       +'<div style="font-size:11px;opacity:0.85;margin-bottom:3px;">Subtotal neto: '+fmt2(subtotalNeto)+'</div>'
-      +'<div style="font-size:11px;opacity:0.85;margin-bottom:8px;">IVA (10,5%): '+fmt2(totalIva)+'</div>'
+      +'<div style="font-size:11px;opacity:0.85;margin-bottom:8px;">IVA: '+fmt2(totalIva)+'</div>'
       +(desc.activo && desc.monto>0 ? '<div style="font-size:11px;opacity:0.9;margin-bottom:8px;">Descuento ('+desc.pct+'%): -'+fmt2(desc.monto)+'</div>' : '')
       +'<div class="cot-total-label">Total proyecto</div>'
       +'<div class="cot-total-val">'+fmt2(totalConIvaFinal)+'</div>'
@@ -6068,7 +6207,8 @@ function renderCotizaciones(){
 
   listaEl.innerHTML = lista.map(function(c){
     const totalNeto = c.items.reduce(function(s,i){ return s+i.precio*i.cant; },0);
-    const totalConIva = Math.round(totalNeto*1.105);
+    const ivaHwRateLista = (c.ivaHardwarePct!==undefined && c.ivaHardwarePct!==null) ? c.ivaHardwarePct : 0.105;
+    const totalConIva = Math.round(totalNeto*(1+ivaHwRateLista));
     const fecha = new Date(c.fecha||Date.now()).toLocaleDateString('es-AR');
     const equipos = (c.items||[]).filter(function(i){ return i.cat==='equipo'; });
     const equipoNombre = equipos.length>0 ? (equipos[0].nombre || equipos[0].desc || '') : '';
@@ -6140,7 +6280,9 @@ function enviarWhatsApp(){
   },0);
   const transporteNeto = (c.transporte && c.transporteMonto) ? c.transporteMonto : 0;
   const paramNeto = (c.param && c.paramMonto) ? c.paramMonto : 0;
-  const totalConIva = Math.round((totalNeto + transporteNeto + paramNeto) * 1.105);
+  const ivaHwRate = (c.ivaHardwarePct!==undefined && c.ivaHardwarePct!==null) ? c.ivaHardwarePct : 0.105;
+  const ivaHwLabel = ivaHwRate===0.21?'21%':ivaHwRate===0?'0%':'10,5%';
+  const totalConIva = Math.round((totalNeto + transporteNeto + paramNeto) * (1+ivaHwRate));
   const desc = calcularDescuentoCot(c);
   const totalConIvaFinal = totalConIva - desc.monto;
 
@@ -6165,12 +6307,12 @@ function enviarWhatsApp(){
     lector_qr:         'Lector QR inalámbrico'
   };
   c.items.forEach(function(it, i){
-    const total = Math.round(it.precio * it.cant * 1.105);
+    const total = Math.round(it.precio * it.cant * (1+ivaHwRate));
     msg += (i+1) + '. ' + it.nombre;
     if(it.cant > 1) msg += ' (x' + it.cant + ')';
     msg += ' → $' + total.toLocaleString('es-AR') + ' c/IVA\n';
     if(it.minipc && it.minipc.precio){
-      const totalPC = Math.round(it.minipc.precio * it.cant * 1.105);
+      const totalPC = Math.round(it.minipc.precio * it.cant * (1+ivaHwRate));
       msg += '   ↳ ' + it.minipc.nombre + ' → $' + totalPC.toLocaleString('es-AR') + ' c/IVA\n';
     }
     if(it.otrosPerifericos){
@@ -6178,18 +6320,18 @@ function enviarWhatsApp(){
         const key = entry[0]; const p = entry[1];
         if(!p.activo) return;
         const nombre = NOMBRES_PERIFERICOS_WA[key] || key;
-        const totalPer = Math.round((p.precio||0) * (p.cant||1) * 1.105);
+        const totalPer = Math.round((p.precio||0) * (p.cant||1) * (1+ivaHwRate));
         msg += '   ↳ ' + nombre + ' → $' + totalPer.toLocaleString('es-AR') + ' c/IVA\n';
       });
     }
   });
 
   if(c.param && c.paramMonto){
-    msg += '• Parametrización de software → $' + Math.round(c.paramMonto*1.105).toLocaleString('es-AR') + ' c/IVA\n';
+    msg += '• Parametrización de software → $' + Math.round(c.paramMonto*(1+ivaHwRate)).toLocaleString('es-AR') + ' c/IVA\n';
   }
 
   if(c.transporte && c.transporteMonto){
-    msg += '• Transporte → $' + Math.round(c.transporteMonto*1.105).toLocaleString('es-AR') + '\n';
+    msg += '• Transporte → $' + Math.round(c.transporteMonto*(1+ivaHwRate)).toLocaleString('es-AR') + '\n';
   } else if(c.transporte){
     msg += '• Transporte incluido. Sin cargo\n';
   } else {
@@ -6199,7 +6341,7 @@ function enviarWhatsApp(){
   if(desc.activo && desc.monto>0){
     msg += '\n🏷️ *Descuento (' + desc.pct + '%)* — ' + desc.lineas.map(function(l){ return l.desc.replace(/^↳\s*/,''); }).join(', ') + ' → -$' + Math.round(desc.monto).toLocaleString('es-AR') + '\n';
   }
-  msg += '\n💰 *TOTAL: $' + totalConIvaFinal.toLocaleString('es-AR') + '* (IVA 10,5% incluido)\n\n';
+  msg += '\n💰 *TOTAL: $' + totalConIvaFinal.toLocaleString('es-AR') + '* (IVA ' + ivaHwLabel + ' incluido)\n\n';
 
   if(c.licencia && c.licDesc){
     msg += '🔑 *Licencia de software:*\n';
