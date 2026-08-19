@@ -181,6 +181,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
             <div class="page-sub">Seleccioná una orden para asignar insumos</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="filtro-busqueda" oninput="aplicarFiltros()" placeholder="🔍 Buscar cliente, producto u OP..." style="height:32px;font-size:12px;padding:0 10px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;width:220px;">
             <select id="filtro-vista" onchange="aplicarFiltros()" style="height:32px;font-size:12px;padding:0 8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;">
               <option value="vigentes">⚙ Vigentes</option>
               <option value="terminadas">✅ Terminadas</option>
@@ -344,6 +345,7 @@ function showPage(id){
 function volverAOPs(){
   currentOP = null;
   bomItems = [];
+  soloLecturaOP = false;
   document.getElementById('nav-detalle').style.display='none';
   showPage('ops');
   loadOPs();
@@ -406,6 +408,7 @@ function poblarFiltroMes(){
 function aplicarFiltros(){
   const vista = document.getElementById('filtro-vista')?.value || 'vigentes';
   const mes   = document.getElementById('filtro-mes')?.value || '';
+  const busqueda = (document.getElementById('filtro-busqueda')?.value || '').trim().toLowerCase();
 
   let lista = todasLasOPs;
 
@@ -422,6 +425,15 @@ function aplicarFiltros(){
     lista = lista.filter(o=>{
       const d = new Date(o.created_at);
       return d.getFullYear() === parseInt(y) && (d.getMonth()+1) === parseInt(mo);
+    });
+  }
+
+  // Filtro búsqueda por texto libre (cliente, producto, N° de OP)
+  if(busqueda){
+    lista = lista.filter(o=>{
+      const codigoInterno = docOpCodigos[o.v14_orden] || '';
+      const campos = [o.cliente, o.producto_nombre, o.op_numero, o.v14_orden, codigoInterno];
+      return campos.some(c => (c||'').toLowerCase().includes(busqueda));
     });
   }
 
@@ -474,8 +486,8 @@ function renderOPs(lista, vista){
     const fecha = new Date(fechaRef).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
     const esTerminada = o.estado === 'completada';
     const borderColor = esTerminada ? 'var(--text3)' : 'var(--green)';
-    const clickable = esTerminada ? '' : `onclick="abrirOP(${o.id})"`;
-    const cursor = esTerminada ? 'default' : 'pointer';
+    const clickable = `onclick="abrirOP(${o.id})"`;
+    const cursor = 'pointer';
     return `<div class="op-card" ${clickable} style="border-left-color:${borderColor};cursor:${cursor};opacity:${esTerminada?'0.75':'1'};">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
@@ -524,89 +536,98 @@ async function marcarPrimerEscaneo(){
 }
 
 // ─── ABRIR OP ───────────────────────────────────────────────
+let soloLecturaOP = false;
+
 async function abrirOP(opId){
   try{
-    currentOP = ops.find(o=>o.id===opId);
+    currentOP = ops.find(o=>o.id===opId) || todasLasOPs.find(o=>o.id===opId);
     if(!currentOP) return;
+    soloLecturaOP = currentOP.estado === 'completada';
 
     // Cargar BOM items (solo incluidos)
     bomItems = await api(`op_bom_items?op_id=eq.${opId}&incluido=eq.true&sku_id=not.is.null&select=*,skus(codigo,nombre,tracking,familia_id,categorias(nombre)),variantes(valor)&order=id.asc`);
 
-    // Cargar alertas activas de faltantes para esta OP
-    // Mapa de stock UID por sku_id (para detectar faltantes sin alerta)
     window.stockUidMap = {};
-    try{
-      const uidSkuIds = [...new Set(bomItems.filter(i=>i.skus?.tracking==='uid').map(i=>i.sku_id).filter(Boolean))];
-      if(uidSkuIds.length){
-        const udsStock = await api('unidades?sku_id=in.('+uidSkuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
-        uidSkuIds.forEach(id=>{ window.stockUidMap[id] = 0; });
-        (udsStock||[]).forEach(u=>{ window.stockUidMap[u.sku_id] = (window.stockUidMap[u.sku_id]||0)+1; });
-      }
-    }catch(e){ console.warn('stockUidMap:', e); }
-
     skusConAlerta = new Set();
-    try{
-      const alertas = await api(`alertas_gerencia?tipo=eq.faltante_generacion_op&op_id=eq.${opId}&leida=eq.false&select=id,sku_id`);
-      if(alertas?.length){
-        // Verificar stock actual de cada SKU alertado
-        const skuIds = [...new Set(alertas.map(a=>a.sku_id).filter(Boolean))];
 
-        // Para insumos de cantidad: usar tabla stock directamente
-        const stockRows = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
-        const stockMap = {};
-        (stockRows||[]).forEach(s=>{ stockMap[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
-
-        // Para UIDs: contar unidades en stock
-        const unidadesItems = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
-        const uidMap = {};
-        (unidadesItems||[]).forEach(u=>{ uidMap[u.sku_id] = (uidMap[u.sku_id]||0)+1; });
-
-        // Limpiar alertas donde ya hay stock
-        const aLimpiar = alertas.filter(a => {
-          const disp = (stockMap[a.sku_id]||0) + (uidMap[a.sku_id]||0);
-          return disp > 0;
-        });
-        if(aLimpiar.length){
-          await Promise.all(aLimpiar.map(a => api('alertas_gerencia?id=eq.'+a.id,'PATCH',{leida:true}).catch(()=>{})));
+    // Los chequeos de stock/faltantes son solo para OPs activas — en una OP
+    // terminada ya está todo asignado y esos datos no aportan nada, así que
+    // nos ahorramos las queries y vamos directo a mostrar el detalle.
+    if(!soloLecturaOP){
+      // Cargar alertas activas de faltantes para esta OP
+      // Mapa de stock UID por sku_id (para detectar faltantes sin alerta)
+      try{
+        const uidSkuIds = [...new Set(bomItems.filter(i=>i.skus?.tracking==='uid').map(i=>i.sku_id).filter(Boolean))];
+        if(uidSkuIds.length){
+          const udsStock = await api('unidades?sku_id=in.('+uidSkuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
+          uidSkuIds.forEach(id=>{ window.stockUidMap[id] = 0; });
+          (udsStock||[]).forEach(u=>{ window.stockUidMap[u.sku_id] = (window.stockUidMap[u.sku_id]||0)+1; });
         }
+      }catch(e){ console.warn('stockUidMap:', e); }
 
-        // Solo agregar al set los que siguen sin stock
-        alertas.filter(a => !aLimpiar.find(l=>l.id===a.id))
-               .forEach(a=>{ if(a.sku_id) skusConAlerta.add(a.sku_id); });
-      }
-    }catch(e){ console.warn('Error cargando alertas:', e.message); }
+      try{
+        const alertas = await api(`alertas_gerencia?tipo=eq.faltante_generacion_op&op_id=eq.${opId}&leida=eq.false&select=id,sku_id`);
+        if(alertas?.length){
+          // Verificar stock actual de cada SKU alertado
+          const skuIds = [...new Set(alertas.map(a=>a.sku_id).filter(Boolean))];
 
-    // Verificar stock de items cantidad pendientes (sin depender de alertas)
-    try{
-      // Obtener items pendientes de cantidad con su variante_id
-      const cantItems = bomItems.filter(i=>i.skus?.tracking==='cantidad' && i.estado!=='asignado' && i.sku_id);
-      const cantSkuIds = [...new Set(cantItems.map(i=>i.sku_id))];
-      if(cantSkuIds.length){
-        const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,variante_id,cantidad').catch(()=>[]);
-        // Calcular reservado real desde op_bom_items (solo escaneados)
-        const asignadosRealesRaw = cantSkuIds.length
-          ? await api('op_bom_items?sku_id=in.('+cantSkuIds.join(',')+')'+'&uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id,ordenes_produccion(estado)').catch(()=>[])
-          : [];
-        // Solo contar OPs activas para determinar disponible
-        const _estadosActivosProd = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
-        const asignadosReales = (asignadosRealesRaw||[]).filter(a => _estadosActivosProd.includes(a.ordenes_produccion?.estado));
-        // Verificar cada item con su variante específica
-        cantItems.forEach(item=>{
-          const fila = stockCant.find(s=>{
-            if(s.sku_id !== item.sku_id) return false;
-            if(item.variante_id) return s.variante_id === item.variante_id;
-            return !s.variante_id;
+          // Para insumos de cantidad: usar tabla stock directamente
+          const stockRows = await api('stock?sku_id=in.('+skuIds.join(',')+')'+'&select=sku_id,cantidad,cantidad_reservada').catch(()=>[]);
+          const stockMap = {};
+          (stockRows||[]).forEach(s=>{ stockMap[s.sku_id] = (s.cantidad||0) - (s.cantidad_reservada||0); });
+
+          // Para UIDs: contar unidades en stock
+          const unidadesItems = await api('unidades?sku_id=in.('+skuIds.join(',')+')'+'&estado=eq.stock&select=sku_id').catch(()=>[]);
+          const uidMap = {};
+          (unidadesItems||[]).forEach(u=>{ uidMap[u.sku_id] = (uidMap[u.sku_id]||0)+1; });
+
+          // Limpiar alertas donde ya hay stock
+          const aLimpiar = alertas.filter(a => {
+            const disp = (stockMap[a.sku_id]||0) + (uidMap[a.sku_id]||0);
+            return disp > 0;
           });
-          const escaneados = (asignadosReales||[]).filter(a=>{
-            if(a.sku_id !== item.sku_id) return false;
-            if(item.variante_id) return a.variante_id === item.variante_id;
-            return !a.variante_id;
-          }).length;
-          const disp = fila ? (fila.cantidad||0) - escaneados : -1;
-          if(disp <= 0) skusConAlerta.add(item.sku_id);
-        });
-      }
-    }catch(e){ console.warn('Stock cantidad check:', e); }
+          if(aLimpiar.length){
+            await Promise.all(aLimpiar.map(a => api('alertas_gerencia?id=eq.'+a.id,'PATCH',{leida:true}).catch(()=>{})));
+          }
+
+          // Solo agregar al set los que siguen sin stock
+          alertas.filter(a => !aLimpiar.find(l=>l.id===a.id))
+                 .forEach(a=>{ if(a.sku_id) skusConAlerta.add(a.sku_id); });
+        }
+      }catch(e){ console.warn('Error cargando alertas:', e.message); }
+
+      // Verificar stock de items cantidad pendientes (sin depender de alertas)
+      try{
+        // Obtener items pendientes de cantidad con su variante_id
+        const cantItems = bomItems.filter(i=>i.skus?.tracking==='cantidad' && i.estado!=='asignado' && i.sku_id);
+        const cantSkuIds = [...new Set(cantItems.map(i=>i.sku_id))];
+        if(cantSkuIds.length){
+          const stockCant = await api('stock?sku_id=in.('+cantSkuIds.join(',')+')'+'&select=sku_id,variante_id,cantidad').catch(()=>[]);
+          // Calcular reservado real desde op_bom_items (solo escaneados)
+          const asignadosRealesRaw = cantSkuIds.length
+            ? await api('op_bom_items?sku_id=in.('+cantSkuIds.join(',')+')'+'&uid_asignado=not.is.null&estado=eq.asignado&select=sku_id,variante_id,ordenes_produccion(estado)').catch(()=>[])
+            : [];
+          // Solo contar OPs activas para determinar disponible
+          const _estadosActivosProd = ['iniciada','bom_pendiente','bom_confirmada','en_produccion'];
+          const asignadosReales = (asignadosRealesRaw||[]).filter(a => _estadosActivosProd.includes(a.ordenes_produccion?.estado));
+          // Verificar cada item con su variante específica
+          cantItems.forEach(item=>{
+            const fila = stockCant.find(s=>{
+              if(s.sku_id !== item.sku_id) return false;
+              if(item.variante_id) return s.variante_id === item.variante_id;
+              return !s.variante_id;
+            });
+            const escaneados = (asignadosReales||[]).filter(a=>{
+              if(a.sku_id !== item.sku_id) return false;
+              if(item.variante_id) return a.variante_id === item.variante_id;
+              return !a.variante_id;
+            }).length;
+            const disp = fila ? (fila.cantidad||0) - escaneados : -1;
+            if(disp <= 0) skusConAlerta.add(item.sku_id);
+          });
+        }
+      }catch(e){ console.warn('Stock cantidad check:', e); }
+    }
 
     // Mostrar header
     const esIniciada = currentOP.estado === 'iniciada';
@@ -619,9 +640,11 @@ async function abrirOP(opId){
             <div class="op-detail-producto">${currentOP.producto_nombre} × ${currentOP.cantidad}</div>
             ${currentOP.color_gabinete?`<div class="op-detail-color">● Color gabinete: ${currentOP.color_gabinete}</div>`:''}
           </div>
-          ${esIniciada
-            ? '<div style="font-size:11px;color:var(--green);font-family:\'DM Mono\',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">&#9679; En curso</div>'
-            : ''
+          ${soloLecturaOP
+            ? '<div style="font-size:11px;color:var(--text3);font-family:\'DM Mono\',monospace;padding:4px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border2);">🔒 Solo lectura · Orden finalizada</div>'
+            : esIniciada
+              ? '<div style="font-size:11px;color:var(--green);font-family:\'DM Mono\',monospace;padding:4px 10px;background:var(--green-dim);border-radius:6px;border:1px solid var(--green-border);">&#9679; En curso</div>'
+              : ''
           }
         </div>
       </div>`;
@@ -630,10 +653,19 @@ async function abrirOP(opId){
     document.getElementById('nav-detalle').style.display='flex';
     document.getElementById('nav-op-label').textContent = currentOP.op_numero;
 
+    // En solo lectura ocultamos el escáner y las acciones de edición —
+    // solo interesa ver qué se asignó a cada componente. Mostramos todos
+    // los ítems (no solo pendientes), ya que en una OP terminada no hay
+    // pendientes: lo que importa acá es repasar qué se usó.
+    document.getElementById('scan-area').style.display = soloLecturaOP ? 'none' : '';
+    document.getElementById('toggle-label').parentElement.style.display = soloLecturaOP ? 'none' : '';
+    verSoloFaltantes = !soloLecturaOP;
+    document.getElementById('toggle-label').textContent = verSoloFaltantes ? 'Ver todos' : 'Solo pendientes';
+
     actualizarProgreso();
     renderChecklist();
     showPage('detalle');
-    document.getElementById('scan-input').focus();
+    if(!soloLecturaOP) document.getElementById('scan-input').focus();
   }catch(e){toast('Error: '+e.message);}
 }
 
@@ -783,6 +815,12 @@ async function iniciarOP(conDesvio){
 function renderBotonesAccion(){
   const el = document.getElementById('botones-accion-op');
   if(!el || !currentOP) return;
+
+  if(soloLecturaOP){
+    el.innerHTML = '';
+    return;
+  }
+
   const total = bomItems.filter(i=>i.incluido!==false).length;
   const asignados = bomItems.filter(i=>i.estado==='asignado').length;
   const completo = total > 0 && asignados === total;
@@ -830,10 +868,10 @@ function actualizarProgreso(){
   document.getElementById('prog-pct').textContent = pct+'%';
   renderBotonesAccion();
 
-  // Mostrar faltantes si hay
+  // Mostrar faltantes si hay (no aplica en solo lectura)
   const faltantes = bomItems.filter(i=>i.incluido!==false && i.estado==='pendiente');
   const alertEl = document.getElementById('faltantes-alert');
-  if(faltantes.length && asignados > 0){
+  if(!soloLecturaOP && faltantes.length && asignados > 0){
     alertEl.style.display='block';
     alertEl.innerHTML = `<div class="alert-faltantes">
       <div class="alert-title">⚠ ${faltantes.length} insumo${faltantes.length>1?'s':''} pendiente${faltantes.length>1?'s':''}</div>
@@ -856,11 +894,15 @@ function renderCheckItem(item, estado, variante){
       </div>
       <div class="check-qty">×${item.qty}</div>
       ${estado==='a_desmontar'
-        ? `<span style="background:var(--red);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✕ A desmontar</span>
-           <button class="btn" style="height:24px;font-size:10px;padding:0 8px;border-color:var(--red);color:var(--red);" onclick="confirmarDesmontaje(${item.id})">Confirmar desmontaje</button>`
+        ? (soloLecturaOP
+            ? `<span style="background:var(--red);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✕ A desmontar</span>`
+            : `<span style="background:var(--red);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✕ A desmontar</span>
+           <button class="btn" style="height:24px;font-size:10px;padding:0 8px;border-color:var(--red);color:var(--red);" onclick="confirmarDesmontaje(${item.id})">Confirmar desmontaje</button>`)
         : estado==='asignado'
         ? `<span style="background:var(--green);color:#000;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">✓ Asignado</span>
            <button style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:2px 6px;" onclick="toggleDetalleAsig(${item.id}, '${item.uid_asignado}')">▾</button>`
+        : soloLecturaOP
+          ? `<span style="background:var(--surface2);color:var(--text3);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;border:1px solid var(--border2);">○ Sin asignar</span>`
         : (skusConAlerta.has(item.sku_id) || (item.skus?.tracking === 'uid' && item.sku_id in window.stockUidMap && window.stockUidMap[item.sku_id] === 0))
           ? `<span style="background:rgba(255,179,64,0.15);color:var(--amber);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,179,64,0.3);">⚠ Faltante · Compras notificado</span>`
           : `<button class="btn" style="height:24px;font-size:10px;padding:0 8px;" onclick="focusScanInput('${item.nombre}')">Asignar</button>`
