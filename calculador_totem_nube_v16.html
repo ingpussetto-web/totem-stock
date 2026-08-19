@@ -339,16 +339,22 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <div class="bk-row"><span class="bk-label">Margen operativo sobre precio de lista</span><span class="bk-val green" id="bk-margen-real">0%</span></div>
           <div class="bk-row"><span class="bk-label">Equivalente en USD</span><span class="bk-val" id="bk-ganancia-usd">USD 0</span></div>
 
-          <div style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:16px 0 8px;">Bloque 2 — Posición IVA del período</div>
-          <div class="bk-row"><span class="bk-label">IVA ventas cobrado (débito fiscal 10.5%)</span><span class="bk-val" id="bk-iva-ventas">$0</span></div>
-          <div class="bk-row"><span class="bk-label">IVA compras pagado (crédito fiscal)</span><span class="bk-val green" id="bk-iva-compras">$0</span></div>
-          <div class="bk-row total"><span class="bk-label" id="bk-posicion-label">A pagar a AFIP</span><span class="bk-val red" id="bk-posicion-iva">$0</span></div>
+          <div onclick="toggleBloqueIva()" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:16px 0 8px;">
+            <span id="bloque-iva-arrow">▸</span> Posición de IVA de este producto — informativo, no se usa en el cálculo
+          </div>
+          <div id="bloque-iva-detalle" style="display:none;">
+            <div style="font-size:10px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:4px 0 8px;">Bloque 2 — Posición IVA del período (solo insumos de este producto)</div>
+            <div class="bk-row"><span class="bk-label">IVA ventas cobrado (débito fiscal 10.5%)</span><span class="bk-val" id="bk-iva-ventas">$0</span></div>
+            <div class="bk-row"><span class="bk-label">IVA compras pagado (crédito fiscal)</span><span class="bk-val green" id="bk-iva-compras">$0</span></div>
+            <div class="bk-row total"><span class="bk-label" id="bk-posicion-label">A pagar a AFIP</span><span class="bk-val red" id="bk-posicion-iva">$0</span></div>
+            <div style="font-size:10px;color:var(--text3);padding:8px 0;">⚠ No usado para el cálculo — el peso real de impuestos (IVA neto del período + IIBB + bancarios) ya se prorratea en "Costos fijos" de arriba a través del ítem "Impuestos" en Costos Fijos. Este bloque solo neteaba el IVA de los insumos directos de este producto, sin contemplar el resto de las compras ni otros impuestos, así que quedaba incompleto.</div>
 
-          <div style="font-size:10px;color:var(--green);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:16px 0 8px;">Resultado final — Lo que realmente te queda</div>
-          <div class="bk-row"><span class="bk-label">Ganancia operativa</span><span class="bk-val" id="bk-ganancia-op-2">$0</span></div>
-          <div class="bk-row"><span class="bk-label">Pago a AFIP (IVA neto)</span><span class="bk-val red" id="bk-afip-pago">$0</span></div>
-          <div class="bk-row total"><span class="bk-label" style="font-weight:600;">Lo que te queda en el bolsillo</span><span class="bk-val" style="font-size:15px;font-weight:600;" id="bk-resultado-real">$0</span></div>
-          <div class="bk-row"><span class="bk-label">Equivalente en USD</span><span class="bk-val" id="bk-resultado-usd">USD 0</span></div>
+            <div style="font-size:10px;color:var(--green);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;padding:16px 0 8px;">Resultado final — referencial (no oficial)</div>
+            <div class="bk-row"><span class="bk-label">Ganancia operativa</span><span class="bk-val" id="bk-ganancia-op-2">$0</span></div>
+            <div class="bk-row"><span class="bk-label">Pago a AFIP (IVA neto)</span><span class="bk-val red" id="bk-afip-pago">$0</span></div>
+            <div class="bk-row total"><span class="bk-label" style="font-weight:600;">Lo que quedaría en el bolsillo (referencial)</span><span class="bk-val" style="font-size:15px;font-weight:600;" id="bk-resultado-real">$0</span></div>
+            <div class="bk-row"><span class="bk-label">Equivalente en USD</span><span class="bk-val" id="bk-resultado-usd">USD 0</span></div>
+          </div>
         </div>
       </div>
 
@@ -470,10 +476,10 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
         <div class="metric-value" id="total-fijos-display">$0</div>
       </div>
       <div class="metric blue">
-        <div class="metric-label">Ingreso mensual por licencias (neto, sin IVA)</div>
+        <div class="metric-label">Ingreso mensual por licencias (bruto, lo que efectivamente ingresa)</div>
         <input type="number" id="ingreso-licencias-input" value="4958678" step="10000" onchange="actualizarIngresoLicencias()"
           style="width:100%;background:transparent;border:none;border-bottom:1px solid var(--blue-border,var(--border2));color:var(--blue);font-size:20px;font-weight:600;font-family:inherit;padding:2px 0;" />
-        <div class="metric-sub" id="licencias-periodo-label">cargá el neto — si tenés el bruto, dividilo por 1.21</div>
+        <div class="metric-sub" id="licencias-periodo-label">cargá el bruto — lo que realmente cobrás/ingresa, con IVA si corresponde</div>
       </div>
       <div class="metric" style="cursor:pointer;" onclick="toggleDetalleEventuales()">
         <div class="metric-label">Costos eventuales (prom. 12 meses)</div>
@@ -2008,7 +2014,7 @@ async function cargarCostosEventuales(){
     const ocIds = ocsEnVentana.map(o=>o.id);
     if(!ocIds.length){ costosEventualesPromedio = 0; costosEventualesInfo = {total:0, meses:ventanaMeses, detalle:[]}; return; }
 
-    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&sku_id=in.(${skuIds.join(',')})&select=sku_id,cantidad,precio_unitario_neto,oc_id,oc_item_asignaciones(id)`);
+    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&sku_id=in.(${skuIds.join(',')})&select=sku_id,cantidad,precio_unitario_neto,iva_pct,oc_id,oc_item_asignaciones(id)`);
     const porSku = {};
     let total = 0;
     let fechaMasAntigua = null;
@@ -2016,9 +2022,13 @@ async function cargarCostosEventuales(){
     // Las líneas que ya fueron asociadas a proyecto(s) puntual(es) desde Compras
     // ("🔀 Asociar a proyectos") NO entran acá — pasan a ser costo de ese proyecto,
     // no gasto general de la empresa. Solo se promedia lo que quedó como "Toda la empresa".
+    // En bruto (con IVA), para quedar en la misma base que el resto de la estructura
+    // de costos e ingresos — el IVA se maneja aparte como impuesto (ver "Impuestos"
+    // en Costos Fijos), no restándolo línea por línea.
     (items||[]).forEach(i=>{
       if(i.oc_item_asignaciones && i.oc_item_asignaciones.length) return;
-      const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0);
+      const ivaRate = i.iva_pct!==undefined && i.iva_pct!==null ? i.iva_pct/100 : 0;
+      const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0) * (1 + ivaRate);
       total += monto;
       porSku[i.sku_id] = (porSku[i.sku_id]||0) + monto;
       const f = fechaPorOc[i.oc_id];
@@ -2056,15 +2066,17 @@ async function cargarCostosNoInventariables(){
     const ocIds = ocsEnVentana.map(o=>o.id);
     if(!ocIds.length){ costosNoInventariablesPromedio = 0; costosNoInventariablesInfo = {total:0, meses:ventanaMeses, detalle:[]}; recalcFijos(); if(productoActual) recalcCotizador(); return; }
 
-    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&no_inventariable=eq.true&select=nombre,sku_id,cantidad,precio_unitario_neto,oc_id,oc_item_asignaciones(id),skus(categoria_id)`);
+    const items = await stockAPI(`oc_items?oc_id=in.(${ocIds.join(',')})&no_inventariable=eq.true&select=nombre,sku_id,cantidad,precio_unitario_neto,iva_pct,oc_id,oc_item_asignaciones(id),skus(categoria_id)`);
     const porNombre = {};
     let total = 0;
     let fechaMasAntigua = null;
     const fechaPorOc = {}; ocsEnVentana.forEach(o=>{ fechaPorOc[o.id] = new Date(o.created_at); });
+    // En bruto (con IVA) — misma base que el resto de la estructura de costos e ingresos.
     (items||[]).forEach(i=>{
       if(i.oc_item_asignaciones && i.oc_item_asignaciones.length) return; // ya asignado a proyecto(s) puntual(es)
       if(i.skus?.categoria_id === catServiciosId) return; // ya contemplado en cargarCostosEventuales
-      const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0);
+      const ivaRate = i.iva_pct!==undefined && i.iva_pct!==null ? i.iva_pct/100 : 0;
+      const monto = (parseFloat(i.cantidad)||0) * (parseFloat(i.precio_unitario_neto)||0) * (1 + ivaRate);
       total += monto;
       porNombre[i.nombre] = (porNombre[i.nombre]||0) + monto;
       const f = fechaPorOc[i.oc_id];
@@ -2561,14 +2573,17 @@ function recalcCotizador(){
   set('bk-ganancia-op-2',fmt(Math.round(gananciaOperativa)));
   set('bk-afip-pago',fmt(Math.round(posicionIva)));
 
-  // Box resultado
+  // Box resultado — usa Ganancia operativa (Bloque 1) como número oficial.
+  // El Bloque 2 (posición de IVA por producto) quedó como informativo/colapsado,
+  // ya no participa del resultado: el peso real de impuestos ahora se prorratea
+  // vía el ítem "Impuestos" dentro de Costos Fijos, adentro del coeficiente.
   set('pf-precio',fmt(Math.round(precioListaConIva)));
   set('pf-precio-usd','USD '+Math.round(precioListaConIva/dolar));
   const gananciaEl=document.getElementById('pf-ganancia');
-  if(gananciaEl){gananciaEl.textContent=fmt(Math.round(resultadoReal));gananciaEl.className='pf-item-value '+(resultadoReal>0?'green':resultadoReal===0?'amber':'red');}
-  set('pf-ganancia-usd','USD '+Math.round(resultadoReal/dolar));
+  if(gananciaEl){gananciaEl.textContent=fmt(Math.round(gananciaOperativa));gananciaEl.className='pf-item-value '+(gananciaOperativa>0?'green':gananciaOperativa===0?'amber':'red');}
+  set('pf-ganancia-usd','USD '+Math.round(gananciaOperativa/dolar));
   const box=document.getElementById('precio-box');
-  if(box) box.className='precio-box '+(resultadoReal>0?'positivo':resultadoReal<0?'negativo':'neutro');
+  if(box) box.className='precio-box '+(gananciaOperativa>0?'positivo':gananciaOperativa<0?'negativo':'neutro');
 
   // Veredicto
   const undMes=getUndMes();
@@ -2578,10 +2593,10 @@ function recalcCotizador(){
   const vEl=document.getElementById('veredicto');
   const vText=document.getElementById('veredicto-text');
   const vIcon=vEl?.querySelector('.v-icon');
-  if(resultadoReal>0 && undMes>=peUnd){
+  if(gananciaOperativa>0 && undMes>=peUnd){
     if(vEl) vEl.className='veredicto ok';
     if(vIcon) vIcon.textContent='✓';
-    if(vText) vText.textContent='Estás cubriendo la estructura. Ganancia operativa: '+fmt(Math.round(gananciaOperativa))+' | Lo que te queda después de AFIP: '+fmt(Math.round(resultadoReal))+' ('+margenReal.toFixed(1)+'%).';
+    if(vText) vText.textContent='Estás cubriendo la estructura. Ganancia operativa: '+fmt(Math.round(gananciaOperativa))+' ('+margenReal.toFixed(1)+'%).';
   } else if(gananciaOperativa>0 && undMes<peUnd){
     if(vEl) vEl.className='veredicto warning';
     if(vIcon) vIcon.textContent='⚠';
@@ -3740,6 +3755,14 @@ function recalcFijos(){
   }
 }
 
+function toggleBloqueIva(){
+  const el = document.getElementById('bloque-iva-detalle');
+  const arrow = document.getElementById('bloque-iva-arrow');
+  if(!el) return;
+  const abierto = el.style.display !== 'none';
+  el.style.display = abierto ? 'none' : 'block';
+  if(arrow) arrow.textContent = abierto ? '▸' : '▾';
+}
 function toggleDetalleEventuales(){
   const el = document.getElementById('detalle-eventuales');
   if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
