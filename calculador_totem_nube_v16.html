@@ -745,20 +745,17 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <label>Validez (días)</label>
           <input type="number" id="cot-validez" value="15" min="1" style="width:100%;" />
         </div>
-      </div>
-
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 8px;">
-        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;">Ítems</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <label style="font-size:11px;color:var(--text3);">IVA hardware (equipo, periféricos, transporte, etc.):</label>
-          <select id="cot-iva-hardware" onchange="cotIvaHardwarePct=parseFloat(this.value);renderCotItemsTemp();calcPagoMontos();" style="font-size:11px;height:26px;">
+        <div class="modal-field">
+          <label>IVA hardware</label>
+          <select id="cot-iva-hardware" onchange="cotIvaHardwarePct=parseFloat(this.value);renderCotItemsTemp();calcPagoMontos();" style="width:100%;height:36px;font-size:12px;">
             <option value="0.105" selected>10,5%</option>
             <option value="0.21">21%</option>
             <option value="0">Sin IVA</option>
           </select>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">Se aplica a todo el hardware de la cotización (equipo, Mini PC, periféricos, transporte, parametrización, ploteo). La licencia de software mantiene su propio tratamiento de IVA, independiente de esta selección.</div>
+
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;margin:12px 0 8px;">Ítems</div>
       <div id="cot-items-lista"></div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-top:8px;align-items:end;">
         <div>
