@@ -1453,6 +1453,9 @@ const PRODUCTOS = [
   {id:"turn_sin_sw_pos_15",name:"Turnero sin SW — Módulo Terminal POS 15\"",categoria:"Turnero sin software",
    precioLista:Math.round(1380.0*dolar),_usd:1380.0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1}],warning:"⚠️ Revisar insumos: módulo POS 15\""},
+  {id:"turn_sin_sw_22_incl_impr_a4",name:"Turnero sin SW — Inclinado 22\" para impresora A4",categoria:"Turnero sin software",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[],warning:"⚠️ Falta cargar insumos y precio de lista — usa el Gabinete Inclinado para impresora A4 metal 22\""},
 
   // ══════════════════════════════════════════════════════════════
   // TURNEROS CON IMPRESORA — con software
@@ -1531,6 +1534,9 @@ const PRODUCTOS = [
   {id:"auto_22_incl",name:"Autogestión — Inclinado 22\"",categoria:"Terminal Autogestión",
    precioLista:Math.round(1658.3*dolar),_usd:1658.3, precioListaConMiniPC:Math.round((1658.3+430)*dolar),_usdConMini:2088.3, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_22",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
+  {id:"auto_22_incl_impr_a4",name:"Autogestión — Inclinado 22\" para impresora A4",categoria:"Terminal Autogestión",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[],warning:"⚠️ Falta cargar insumos y precio de lista — usa el Gabinete Inclinado para impresora A4 metal 22\""},
   {id:"auto_32_incl",name:"Autogestión — Inclinado 32\"",categoria:"Terminal Autogestión",
    precioLista:Math.round(1905.5*dolar),_usd:1905.5, precioListaConMiniPC:Math.round((1905.5+430)*dolar),_usdConMini:2335.5, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_32",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
@@ -1732,10 +1738,6 @@ const PRODUCTOS = [
   {id:"acc_impresora_termica",name:"Impresora Térmica — XPrinter",categoria:"Accesorios",
    precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"impresora",qty:1},{key:"fuente_impresora",qty:1}]},
-
-  {id:"acc_gab_inclinado_a4",name:"Gabinete Inclinado para impresora A4 metal 22\"",categoria:"Accesorios",
-   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
-   insumos:[]},
 
 ];
 
@@ -4087,12 +4089,32 @@ function filtrarProductosPorCategoria(){
   const sel = document.getElementById('cot-item-producto');
   if(!sel) return;
   sel.innerHTML = '<option value="">— Seleccionar producto —</option>';
-  PRODUCTOS.filter(function(p){ return !cat || p.categoria === cat; }).forEach(function(p){
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.name;
-    sel.appendChild(opt);
-  });
+
+  function agregarOpciones(lista, contenedor){
+    lista.forEach(function(p){
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      contenedor.appendChild(opt);
+    });
+  }
+
+  if(!cat){
+    agregarOpciones(PRODUCTOS, sel);
+  } else {
+    agregarOpciones(PRODUCTOS.filter(function(p){ return p.categoria === cat; }), sel);
+    // Los Accesorios quedan siempre disponibles como ítems adicionales,
+    // sin importar la categoría principal elegida para la cotización.
+    if(cat !== 'Accesorios'){
+      const accesorios = PRODUCTOS.filter(function(p){ return p.categoria === 'Accesorios'; });
+      if(accesorios.length){
+        const grp = document.createElement('optgroup');
+        grp.label = 'Accesorios';
+        agregarOpciones(accesorios, grp);
+        sel.appendChild(grp);
+      }
+    }
+  }
 
   // Preconfigurar licencia según categoría
   const licConfig = LICENCIAS_CONFIG[cat];
@@ -4130,7 +4152,7 @@ function recalcLicenciaTotal(){
   if(licMonto) licMonto.value = total;
 }
 
-const CATS_CON_PLAYER = ['Turnero con software','Turnero sin software','Totem Publicidad','VideoWall','Atención Remota'];
+const CATS_CON_PLAYER = ['Turnero con software','Turnero sin software','Totem Publicidad','VideoWall','Atención Remota','Terminal Autogestión'];
 const CATS_CON_PLOTEO = ['Turnero con software','Turnero sin software','Totem Publicidad','Terminal Autogestión','Vigilancia Remota','Atención Remota','Totem NubiPay','Encuesta Satisfacción'];
 
 function autocompletarNombreComercial(){
