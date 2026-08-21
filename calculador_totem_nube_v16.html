@@ -8979,7 +8979,15 @@ async function crearOP(proyId){
   try {
     // Número interno correlativo (ej: OP535/26) — antes había que tipearlo a mano
     // en el Tablero; ahora se asigna solo al crear la OP.
-    const codigoOPInterno = await _autoGenerarCodigoOP();
+    // Si el Doc OP de esta cotización ya tiene un código asignado, lo reutilizamos
+    // en vez de generar uno nuevo (evita que Tablero y Producción muestren
+    // números distintos para la misma OP).
+    let codigoOPInterno = '';
+    try {
+      const _docRows = await stockAPI('doc_op_config?cot_numero=eq.' + encodeURIComponent('COT-' + p.orden) + '&select=datos');
+      codigoOPInterno = (_docRows && _docRows[0] && _docRows[0].datos && _docRows[0].datos.codigo_op_interno) || '';
+    } catch(e){ /* si falla, generamos uno nuevo abajo */ }
+    if(!codigoOPInterno) codigoOPInterno = await _autoGenerarCodigoOP();
 
     const opRes = await stockAPI('ordenes_produccion', 'POST', {
       op_numero: opNumero,
