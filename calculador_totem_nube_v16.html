@@ -4208,9 +4208,10 @@ function toggleAdicional(tipo){
     if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
     if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
   }
+  refrescarChecklistDescuentoSiActivo();
 }
 
-function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ }
+function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ refrescarChecklistDescuentoSiActivo(); }
 
 function renderOtrosItemsAdicional(){
   const cont = document.getElementById('add-otros-lista');
@@ -4234,6 +4235,7 @@ function renderOtrosItemsAdicional(){
 function agregarOtroItemAdicional(){
   cotOtrosItems.push({desc:'', precio:0, cant:1});
   renderOtrosItemsAdicional();
+  refrescarChecklistDescuentoSiActivo();
 }
 
 function actualizarOtroItemAdicional(idx, campo, val){
@@ -4242,12 +4244,14 @@ function actualizarOtroItemAdicional(idx, campo, val){
   else if(campo==='cant') cotOtrosItems[idx].cant = parseInt(val)||1;
   else cotOtrosItems[idx].desc = val;
   calcPagoMontos();
+  refrescarChecklistDescuentoSiActivo();
 }
 
 function quitarOtroItemAdicional(idx){
   cotOtrosItems.splice(idx,1);
   renderOtrosItemsAdicional();
   calcPagoMontos();
+  refrescarChecklistDescuentoSiActivo();
 }
 
 function toggleAdicionalExtra(tipo){
@@ -4257,6 +4261,7 @@ function toggleAdicionalExtra(tipo){
   const precioEl = document.getElementById('add-extra-'+tipo+'-precio');
   if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
   if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
+  refrescarChecklistDescuentoSiActivo();
 }
 
 function sincronizarAdicionales(){
@@ -4466,6 +4471,7 @@ function abrirNuevaCotizacion(editId){
     if(descPct){ descPct.value = c.descuentoPct||''; descPct.style.display = c.descuentoActivo?'inline-block':'none'; }
     const descPanel = document.getElementById('cot-descuento-panel');
     if(descPanel) descPanel.style.display = c.descuentoActivo?'block':'none';
+    if(c.descuentoActivo) renderDescuentoChecklist();
   } else {
     document.getElementById('cot-edit-id').value = '';
     ['cot-empresa','cot-cuit','cot-contacto','cot-tel','cot-email','cot-sistema','cot-notas','cot-lic-desc'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
@@ -4566,9 +4572,17 @@ function toggleDescuentoUI(){
   if(on) renderDescuentoChecklist();
 }
 
+function refrescarChecklistDescuentoSiActivo(){
+  if(document.getElementById('cot-descuento-check')?.checked) renderDescuentoChecklist();
+}
+
 function renderDescuentoChecklist(){
   const el = document.getElementById('cot-descuento-items');
   if(!el) return;
+  // Aseguramos que ploteo/Mini PC/HDMI/otros ítems ya estén reflejados en
+  // cotItemsTemp antes de armar la lista, para que también se puedan
+  // incluir en el descuento (no solo el equipo principal).
+  sincronizarAdicionales();
   const lineas = obtenerLineasDescontables(cotItemsTemp);
   if(!lineas.length){ el.innerHTML = '<div style="font-size:12px;color:var(--text3);">— Agregá ítems primero —</div>'; return; }
   el.innerHTML = lineas.map(function(l){
