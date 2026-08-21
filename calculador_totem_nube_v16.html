@@ -804,15 +804,12 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-hdmi-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" onchange="syncAdicional('hdmi')" />
         </label>
-        <!-- Otros (campo libre) -->
-        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-top:6px;cursor:pointer;">
-          <input type="checkbox" id="add-otros" onchange="toggleAdicional('otros')" style="width:14px;height:14px;" />
-          Otro ítem
-          <input type="text" id="add-otros-desc" placeholder="Descripción" style="width:160px;height:24px;font-size:11px;display:none;padding:0 6px;" />
-          <input type="number" id="add-otros-precio" placeholder="$ neto" style="width:90px;height:24px;font-size:11px;display:none;" />
-          <span style="font-size:10px;color:var(--text3);display:none;" id="add-otros-label2">+ IVA · cant:</span>
-          <input type="number" id="add-otros-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
-        </label>
+        <!-- Otros (campo libre, repetible) -->
+        <div style="margin-top:8px;">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Otros ítems</div>
+          <div id="add-otros-lista"></div>
+          <button type="button" onclick="agregarOtroItemAdicional()" class="btn" style="height:26px;font-size:11px;padding:2px 10px;margin-top:2px;">+ Agregar ítem</button>
+        </div>
 
       </div>
 
@@ -1735,6 +1732,10 @@ const PRODUCTOS = [
   {id:"acc_impresora_termica",name:"Impresora Térmica — XPrinter",categoria:"Accesorios",
    precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"impresora",qty:1},{key:"fuente_impresora",qty:1}]},
+
+  {id:"acc_gab_inclinado_a4",name:"Gabinete Inclinado para impresora A4 metal 22\"",categoria:"Accesorios",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[]},
 
 ];
 
@@ -3975,6 +3976,7 @@ function recalcPE(){
 let cotizaciones = [];
 let cotItemsTemp = [];
 let cotIvaHardwarePct = 0.105; // IVA aplicado a hardware (equipo, periféricos, transporte, param, ploteo) de la cotización en edición. La licencia de software NO usa esta variable — mantiene su propio tratamiento.
+let cotOtrosItems = []; // [{desc, precio, cant}] — lista repetible de "Otros ítems" en Adicionales
 
 // ─── COTIZACIONES SUPABASE SYNC ──────────────────────────────────────────────
 async function cotSupaSave(c){
@@ -4184,17 +4186,47 @@ function toggleAdicional(tipo){
     if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
     if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
   }
-  if(tipo === 'otros'){
-    const checked = document.getElementById('add-otros')?.checked;
-    const show = checked ? 'inline-block' : 'none';
-    ['add-otros-desc','add-otros-precio','add-otros-cant'].forEach(function(id){
-      const el = document.getElementById(id); if(el) el.style.display = show;
-    });
-    const lbl = document.getElementById('add-otros-label2'); if(lbl) lbl.style.display = show;
-  }
 }
 
 function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ }
+
+function renderOtrosItemsAdicional(){
+  const cont = document.getElementById('add-otros-lista');
+  if(!cont) return;
+  if(cotOtrosItems.length===0){
+    cont.innerHTML = '<div style="font-size:11px;color:var(--text3);margin-bottom:4px;">— Sin ítems adicionales.</div>';
+    return;
+  }
+  cont.innerHTML = cotOtrosItems.map(function(o,idx){
+    const descVal = (o.desc||'').replace(/"/g,'&quot;');
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+      +'<input type="text" value="'+descVal+'" placeholder="Descripción" style="flex:1;min-width:0;height:24px;font-size:11px;padding:0 6px;" oninput="actualizarOtroItemAdicional('+idx+',\'desc\',this.value)" />'
+      +'<input type="number" value="'+(o.precio||0)+'" placeholder="$ neto" style="width:90px;height:24px;font-size:11px;" oninput="actualizarOtroItemAdicional('+idx+',\'precio\',this.value)" />'
+      +'<span style="font-size:10px;color:var(--text3);white-space:nowrap;">+ IVA · cant:</span>'
+      +'<input type="number" value="'+(o.cant||1)+'" min="1" style="width:45px;height:24px;font-size:11px;" oninput="actualizarOtroItemAdicional('+idx+',\'cant\',this.value)" />'
+      +'<button type="button" onclick="quitarOtroItemAdicional('+idx+')" style="font-size:9px;padding:1px 6px;border:1px solid var(--red);color:var(--red);border-radius:4px;background:transparent;cursor:pointer;">✕</button>'
+    +'</div>';
+  }).join('');
+}
+
+function agregarOtroItemAdicional(){
+  cotOtrosItems.push({desc:'', precio:0, cant:1});
+  renderOtrosItemsAdicional();
+}
+
+function actualizarOtroItemAdicional(idx, campo, val){
+  if(!cotOtrosItems[idx]) return;
+  if(campo==='precio') cotOtrosItems[idx].precio = parseFloat(val)||0;
+  else if(campo==='cant') cotOtrosItems[idx].cant = parseInt(val)||1;
+  else cotOtrosItems[idx].desc = val;
+  calcPagoMontos();
+}
+
+function quitarOtroItemAdicional(idx){
+  cotOtrosItems.splice(idx,1);
+  renderOtrosItemsAdicional();
+  calcPagoMontos();
+}
 
 function toggleAdicionalExtra(tipo){
   const el = document.getElementById('add-extra-'+tipo);
@@ -4228,12 +4260,12 @@ function sincronizarAdicionales(){
     const precio = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
     cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:precio, cat:'periferico'});
   }
-  if(document.getElementById('add-otros')?.checked){
-    const cant = parseInt(document.getElementById('add-otros-cant')?.value)||1;
-    const precio = parseFloat(document.getElementById('add-otros-precio')?.value)||0;
-    const desc = document.getElementById('add-otros-desc')?.value.trim() || 'Otro ítem';
-    if(precio > 0 || desc !== 'Otro ítem') cotItemsTemp.push({prodId:'otros_custom', nombre:desc, cant:cant, precio:precio, cat:'periferico'});
-  }
+  cotOtrosItems.forEach(function(o){
+    const cant = o.cant||1;
+    const precio = o.precio||0;
+    const descTrim = (o.desc||'').trim();
+    if(precio > 0 || descTrim) cotItemsTemp.push({prodId:'otros_custom', nombre:descTrim || 'Otro ítem', cant:cant, precio:precio, cat:'periferico'});
+  });
   // Otros periféricos
   const extrasConfig = [
     {id:'minipc',    prodId:'extra_minipc',    nombre:'Mini PC Beelink N95 8GB SSD 240Gb.',  defPrecio:614000},
@@ -4287,6 +4319,8 @@ function restaurarPagoValores(c){
 function abrirNuevaCotizacion(editId){
   cotItemsTemp = [];
   cotIvaHardwarePct = 0.105;
+  cotOtrosItems = [];
+  renderOtrosItemsAdicional();
   const ivaHwEl = document.getElementById('cot-iva-hardware');
   if(ivaHwEl) ivaHwEl.value = '0.105';
   let _cLoadedParaPago = null;
@@ -4375,17 +4409,9 @@ function abrirNuevaCotizacion(editId){
     if(hdmiMonto && itemHdmi){ hdmiMonto.value = itemHdmi.precio; }
     if(hdmiCant && itemHdmi){ hdmiCant.value = itemHdmi.cant||1; }
 
-    const itemOtros = (c.items||[]).find(function(i){ return i.prodId==='otros_custom'; });
-    const otrosCheck = document.getElementById('add-otros');
-    if(otrosCheck){ otrosCheck.checked = !!itemOtros; toggleAdicional('otros'); }
-    if(itemOtros){
-      const otrosDesc = document.getElementById('add-otros-desc');
-      const otrosMonto = document.getElementById('add-otros-precio');
-      const otrosCant = document.getElementById('add-otros-cant');
-      if(otrosDesc) otrosDesc.value = itemOtros.nombre||'';
-      if(otrosMonto) otrosMonto.value = itemOtros.precio||0;
-      if(otrosCant) otrosCant.value = itemOtros.cant||1;
-    }
+    const itemsOtros = (c.items||[]).filter(function(i){ return i.prodId==='otros_custom'; });
+    cotOtrosItems = itemsOtros.map(function(i){ return {desc:i.nombre||'', precio:i.precio||0, cant:i.cant||1}; });
+    renderOtrosItemsAdicional();
     // Parametrización
     const paramCheck = document.getElementById('cot-tiene-param');
     if(paramCheck){ paramCheck.checked = !!c.param; }
@@ -4764,9 +4790,9 @@ function calcPagoMontos(){
   if(document.getElementById('add-hdmi')?.checked){
     subtotal += (parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400) * (parseInt(document.getElementById('add-hdmi-cant')?.value)||1);
   }
-  if(document.getElementById('add-otros')?.checked){
-    subtotal += (parseFloat(document.getElementById('add-otros-precio')?.value)||0) * (parseInt(document.getElementById('add-otros-cant')?.value)||1);
-  }
+  cotOtrosItems.forEach(function(o){
+    subtotal += (o.precio||0) * (o.cant||1);
+  });
   if(c.transporte && c.transporteMonto) subtotal += c.transporteMonto;
   if(c.param && c.paramMonto) subtotal += c.paramMonto;
   // La licencia mantiene su propio IVA (10.5%), independiente del selector de hardware
