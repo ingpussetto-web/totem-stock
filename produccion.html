@@ -688,6 +688,7 @@ async function procesarCaja(sku){
     itemsCompatibles = bomItems.filter(i=>
       i.sku_id !== sku.id &&
       i.variante_id == null &&
+      !i.sin_sustituto &&
       i.skus?.familia_id === sku.familia_id &&
       i.estado === 'pendiente' &&
       i.incluido !== false &&
@@ -1160,6 +1161,7 @@ async function procesarScan(){
       itemsCompatibles = bomItems.filter(i=>
         i.sku_id !== unidad.sku_id &&
         i.variante_id == null &&
+        !i.sin_sustituto &&
         i.skus?.familia_id === unidad.skus.familia_id &&
         i.estado === 'pendiente' &&
         i.incluido !== false
