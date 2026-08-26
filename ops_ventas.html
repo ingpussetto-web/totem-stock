@@ -512,7 +512,7 @@ async function abrirBOM(opId){
     openModal('modal-bom');
 
     // Cargar items BOM con SKU y variantes
-    const allBomItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
+    const allBomItems = await api(`op_bom_items?op_id=eq.${opId}&sku_id=not.is.null&select=*,skus(id,codigo,nombre,tracking,categoria_id,familia_id,categorias(nombre)),variantes(id,valor)&order=id.asc`);
     currentPlayerItems = (allBomItems||[]).filter(i => i.notas && i.notas.startsWith('🖥'));
     currentBOMItems = (allBomItems||[]).filter(i => !i.notas || !i.notas.startsWith('🖥'));
 
@@ -789,10 +789,18 @@ function renderBOMItem(item){
   const estadoTag = marcadoDesmontar
     ? '<span style="font-size:9px;background:rgba(255,94,94,0.12);color:var(--red);border:1px solid rgba(255,94,94,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">✕ A desmontar</span>'
     : (yaAsignadoFisico ? '<span style="font-size:9px;background:rgba(0,229,160,0.12);color:var(--green);border:1px solid rgba(0,229,160,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">✓ Ya en el equipo</span>' : '');
+  // Solo tiene sentido mostrar este control si el insumo pertenece a una familia de
+  // insumos intercambiables — de lo contrario no hay ningún sustituto que bloquear.
+  const sinSustHTML = item.skus?.familia_id
+    ? `<label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text3);cursor:pointer;white-space:nowrap;" title="Marca específica: no permite que Producción use otro modelo de la misma familia, aunque falte stock">
+        <input type="checkbox" ${item.sin_sustituto?'checked':''} onchange="toggleSinSustituto('${item.id}')" style="width:12px;height:12px;" />🔒 Sin sustituto
+      </label>`
+    : '';
   return `<div class="bom-item ${incluido && !marcadoDesmontar?'':'excluido'}" id="bom-item-${item.id}">
     ${toggleBtn}
     <div class="bom-item-nombre">${item.nombre}${estadoTag}${esManual?'<span style="font-size:9px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:4px;padding:1px 5px;margin-left:6px;font-family:\'DM Mono\',monospace;">+ Manual</span>':''}</div>
     ${varHTML}
+    ${sinSustHTML}
     ${stockHTML}
     <div class="bom-item-qty" style="text-align:right;">
       <span>×${item.qty}</span>
@@ -808,6 +816,14 @@ function toggleItem(itemId){
   if(!item) return;
   item.incluido = !item.incluido;
   renderBOMEditor();
+}
+
+// Bloquea/desbloquea la sustitución por otro modelo de la misma familia de insumos
+// para esta línea puntual (ver familias_insumo). No requiere re-render completo.
+function toggleSinSustituto(itemId){
+  const item = currentBOMItems.find(i=>String(i.id)===String(itemId));
+  if(!item) return;
+  item.sin_sustituto = !item.sin_sustituto;
 }
 
 // Marca/desmarca un componente ya asignado físicamente (equipo vendido desde stock)
@@ -922,7 +938,7 @@ async function cargarDesdeBOMMaestra(){
 
   try{
     // Cargar items de BOM Maestra
-    const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoV14)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking,categoria_id,categorias(nombre))').catch(()=>[]);
+    const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoV14)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking,categoria_id,familia_id,categorias(nombre))').catch(()=>[]);
     
     if(!rows?.length){
       // Sin BOM maestra — dejar editor vacío para carga manual
@@ -953,6 +969,7 @@ async function cargarDesdeBOMMaestra(){
       notas: null,
       skus: r.skus || {},
       variante_id: r.variante_id || null,
+      sin_sustituto: r.sin_sustituto || false,
       _variantes: [],
       _stock: 0,
       _stockDefinir: 0,
@@ -1224,6 +1241,7 @@ async function guardarBOM(estado){
           qty: qtyAGuardar,
           incluido: item.incluido,
           variante_id: item.variante_id||null,
+          sin_sustituto: item.sin_sustituto||false,
           estado: 'pendiente',
           notas: item.notas
         }]);
@@ -1232,6 +1250,7 @@ async function guardarBOM(estado){
         const patch = {
           incluido: item.incluido,
           variante_id: item.variante_id||null,
+          sin_sustituto: item.sin_sustituto||false,
           notas: item.notas
         };
         // Si cambiaron el modelo de Mini PC, actualizar sku_id y nombre
@@ -2004,7 +2023,7 @@ async function crearOPAmpliacion(){
 async function abrirBOMMaestra(){
   const pwd = prompt('Contraseña gerencia:');
   if(pwd !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
-  skusDisponibles = await api('skus?activo=eq.true&select=id,nombre,codigo&order=nombre.asc').catch(()=>[]);
+  skusDisponibles = await api('skus?activo=eq.true&select=id,nombre,codigo,familia_id&order=nombre.asc').catch(()=>[]);
   const bomsExistentes = await api('bom_maestra?select=producto_v14&order=producto_v14.asc').catch(()=>[]);
   const productosCon = new Set(bomsExistentes.map(b=>b.producto_v14));
   const overlay = document.createElement('div');
@@ -2056,9 +2075,9 @@ async function seleccionarModeloBOM(productoId){
   });
   const panel = document.getElementById('bm-editor-panel');
   panel.innerHTML = '<div style="color:var(--text3);font-size:12px;">Cargando...</div>';
-  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(nombre)&order=nombre.asc').catch(()=>[]);
+  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(nombre,familia_id)&order=nombre.asc').catch(()=>[]);
   if(rows && rows.length > 0){
-    bomMaestraItems = rows.map(r=>({ id:r.id, v14_key:r.v14_key, sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1, variante_id:r.variante_id||null, _variantes:[] }));
+    bomMaestraItems = rows.map(r=>({ id:r.id, v14_key:r.v14_key, sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1, variante_id:r.variante_id||null, familia_id:r.skus?.familia_id||null, sin_sustituto:r.sin_sustituto||false, _variantes:[] }));
     await cargarVariantesBOMMaestra();
     renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===productoId), false);
   } else {
@@ -2066,13 +2085,13 @@ async function seleccionarModeloBOM(productoId){
     bomMaestraItems = [];
     let desdOP = false;
     if(ops && ops.length){
-      const opItems = await api('op_bom_items?op_id=eq.'+ops[0].id+'&sku_id=not.is.null&incluido=eq.true&select=*,skus(nombre)&order=id.asc').catch(()=>[]);
+      const opItems = await api('op_bom_items?op_id=eq.'+ops[0].id+'&sku_id=not.is.null&incluido=eq.true&select=*,skus(nombre,familia_id)&order=id.asc').catch(()=>[]);
       const vistos = new Set();
       for(const item of opItems){
         if((item.equipo_num||1)!==1) continue;
         if(vistos.has(item.sku_id)) continue;
         vistos.add(item.sku_id);
-        bomMaestraItems.push({ id:null, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.skus?.nombre||item.nombre, qty:item.qty||1, variante_id:item.variante_id||null, _variantes:[] });
+        bomMaestraItems.push({ id:null, v14_key:item.v14_key, sku_id:item.sku_id, nombre:item.skus?.nombre||item.nombre, qty:item.qty||1, variante_id:item.variante_id||null, familia_id:item.skus?.familia_id||null, sin_sustituto:item.sin_sustituto||false, _variantes:[] });
       }
       if(bomMaestraItems.length) desdOP = true;
     }
@@ -2104,9 +2123,17 @@ function renderEditorBOM(prod, desdOP){
         +item._variantes.filter(v=>v.valor!=='A definir'&&v.valor!=='a definir').map(v=>'<option value="'+v.id+'" '+(item.variante_id===v.id?'selected':'')+'>'+esc(v.valor)+'</option>').join('')
         +'</select>'
       : '<span style="font-size:11px;color:var(--text3);">—</span>';
-    return '<div style="display:grid;grid-template-columns:1fr 110px 60px 36px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:8px;">'
+    // Solo aplica si el insumo pertenece a una familia de insumos intercambiables
+    // (ver familias_insumo) — si no, no hay ningún sustituto que bloquear.
+    const sinSustHTML = item.familia_id
+      ? '<label style="display:flex;justify-content:center;cursor:pointer;" title="Marca específica: no permite que Producción use otro modelo de la misma familia, aunque falte stock">'
+        +'<input type="checkbox" '+(item.sin_sustituto?'checked':'')+' onchange="bomMaestraItems['+idx+'].sin_sustituto=this.checked" />'
+        +'</label>'
+      : '<span style="font-size:11px;color:var(--text3);text-align:center;display:block;">—</span>';
+    return '<div style="display:grid;grid-template-columns:1fr 110px 70px 60px 36px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:8px;">'
       +'<div style="font-size:13px;">'+esc(item.nombre)+'</div>'
       +colorHTML
+      +sinSustHTML
       +'<input type="number" value="'+item.qty+'" min="1" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text);font-size:12px;text-align:center;" onchange="bomMaestraItems['+idx+'].qty=parseInt(this.value)||1">'
       +'<button onclick="quitarItemBOMMaestra('+idx+')" style="background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:4px;padding:4px;font-size:11px;cursor:pointer;">X</button>'
       +'</div>';
@@ -2114,9 +2141,10 @@ function renderEditorBOM(prod, desdOP){
   const listaHTML = bomMaestraItems.length === 0
     ? '<div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center;">Sin insumos. Agrega items desde el selector abajo.</div>'
     : '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">'
-      +'<div style="display:grid;grid-template-columns:1fr 110px 60px 36px;background:var(--surface2);padding:8px 12px;border-bottom:1px solid var(--border);">'
+      +'<div style="display:grid;grid-template-columns:1fr 110px 70px 60px 36px;background:var(--surface2);padding:8px 12px;border-bottom:1px solid var(--border);">'
       +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Insumo</div>'
       +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Color</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;text-align:center;" title="Bloquea sustituto de la familia de insumos">🔒 Excl.</div>'
       +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;text-align:center;">Qty</div>'
       +'<div></div></div>'+filas+'</div>';
   const opsCopy = PRODUCTOS_BOM.filter(p=>p.id!==bomMaestraProducto).map(p=>'<option value="'+p.id+'">'+p.nombre+'</option>').join('');
@@ -2152,7 +2180,8 @@ async function agregarItemBOMMaestra(){
   // Se permite repetir el mismo insumo más de una vez (ej: 2 pulsadores, uno Rojo y uno Verde) —
   // cada línea es independiente y puede llevar su propio color.
   const variantes = await api('variantes?sku_id=eq.'+skuId+'&select=id,sku_id,valor').catch(()=>[]);
-  bomMaestraItems.push({ id:null, v14_key:'manual_'+skuId+'_'+Date.now(), sku_id:skuId, nombre, qty, variante_id:null, _variantes: variantes||[] });
+  const skuInfo = skusDisponibles.find(s=>s.id===skuId);
+  bomMaestraItems.push({ id:null, v14_key:'manual_'+skuId+'_'+Date.now(), sku_id:skuId, nombre, qty, variante_id:null, familia_id:skuInfo?.familia_id||null, sin_sustituto:false, _variantes: variantes||[] });
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
 
@@ -2160,9 +2189,9 @@ async function copiarBOMMaestra(){
   const sel = document.getElementById('bm-copiar-sel');
   if(!sel.value){ alert('Selecioná un producto para copiar.'); return; }
   if(!confirm('Esto reemplaza los insumos actuales con los del modelo seleccionado. ¿Continuar?')) return;
-  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre)').catch(()=>[]);
+  const rows = await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(sel.value)+'&activo=eq.true&select=*,skus(nombre,familia_id)').catch(()=>[]);
   if(!rows||!rows.length){ alert('El modelo seleccionado no tiene BOM maestra cargada.'); return; }
-  bomMaestraItems = rows.map((r,idx)=>({ id:null, v14_key: r.v14_key||('manual_'+idx+'_'+Date.now()), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1, variante_id:r.variante_id||null, _variantes:[] }));
+  bomMaestraItems = rows.map((r,idx)=>({ id:null, v14_key: r.v14_key||('manual_'+idx+'_'+Date.now()), sku_id:r.sku_id, nombre:r.skus?.nombre||r.nombre, qty:r.qty||1, variante_id:r.variante_id||null, familia_id:r.skus?.familia_id||null, sin_sustituto:r.sin_sustituto||false, _variantes:[] }));
   await cargarVariantesBOMMaestra();
   renderEditorBOM(PRODUCTOS_BOM.find(p=>p.id===bomMaestraProducto), false);
 }
@@ -2175,7 +2204,7 @@ async function guardarBOMMaestra(){
     // Borrar primero TODOS los registros viejos del producto (sin filtrar activo)
     await api('bom_maestra?producto_v14=eq.'+encodeURIComponent(bomMaestraProducto),'DELETE').catch(()=>{});
     // POST con los nuevos ítems
-    const payload = bomMaestraItems.map((item,idx)=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id+'_'+idx), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, variante_id:item.variante_id||null, activo:true }));
+    const payload = bomMaestraItems.map((item,idx)=>({ producto_v14:bomMaestraProducto, v14_key:item.v14_key||('sku_'+item.sku_id+'_'+idx), sku_id:item.sku_id, nombre:item.nombre, qty:item.qty, variante_id:item.variante_id||null, sin_sustituto:item.sin_sustituto||false, activo:true }));
     await api('bom_maestra','POST',payload);
     document.querySelectorAll('.bm-modelo-item').forEach(el=>{
       if(el.dataset.id===bomMaestraProducto){
