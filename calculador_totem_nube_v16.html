@@ -1564,6 +1564,9 @@ const PRODUCTOS = [
   {id:"auto_43_horiz_acc",name:"Autogestión — Horizontal 43\" Accesibilidad",categoria:"Terminal Autogestión",
    precioLista:0,_usd:0, precioListaConMiniPC:Math.round(430*dolar),_usdConMini:430, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler_doble",qty:1},{key:"fuente",qty:1},{key:"gab_43_horiz_acc",qty:1},{key:"marco_43",qty:1},{key:"vidrio_43_tactil",qty:1},{key:"led_43",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista y costo del gabinete de accesibilidad."},
+  {id:"auto_acceso_vehicular",name:"Autogestión — Acceso Vehicular",categoria:"Terminal Autogestión",
+   precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
+   insumos:[],warning:"⚠️ Falta cargar insumos y precio de lista"},
 
   // ══════════════════════════════════════════════════════════════
   // TOTEM ENCUESTA DE SATISFACCIÓN
@@ -4155,12 +4158,36 @@ function recalcLicenciaTotal(){
 const CATS_CON_PLAYER = ['Turnero con software','Turnero sin software','Totem Publicidad','VideoWall','Atención Remota','Terminal Autogestión'];
 const CATS_CON_PLOTEO = ['Turnero con software','Turnero sin software','Totem Publicidad','Terminal Autogestión','Vigilancia Remota','Atención Remota','Totem NubiPay','Encuesta Satisfacción'];
 
+// Busca el precio neto del último ítem cotizado (guardado en cotizaciones_crm) que haya
+// usado este producto. `cotizaciones` ya viene ordenado por updated_at.desc (cotSupaLoad),
+// así que el primer match es el más reciente.
+function buscarUltimoPrecioCotizado(prodId){
+  for(const c of cotizaciones){
+    const item = (c.items||[]).find(function(i){ return i.prodId===prodId && i.precio; });
+    if(item) return item.precio;
+  }
+  return null;
+}
+
 function autocompletarNombreComercial(){
   const sel = document.getElementById('cot-item-producto');
   const p = PRODUCTOS.find(function(x){ return x.id===sel?.value; });
   if(!p) return;
   const precioEl = document.getElementById('cot-item-precio');
-  if(precioEl) precioEl.value = p.precioLista || '';
+  if(precioEl){
+    // Prioridad: 1) precio oficial aplicado en "Comparar precios", 2) precio de lista
+    // hardcodeado, 3) precio de la última cotización real que haya usado este producto
+    // (así, si un producto todavía no tiene precio de lista cargado, la primera vez que
+    // se cotiza el usuario lo tipea a mano y desde la próxima cotización queda de base).
+    const aplicado = precioVentaAplicado[p.id];
+    if(aplicado && aplicado.precio_usd_neto){
+      precioEl.value = Math.round(parseFloat(aplicado.precio_usd_neto) * dolar);
+    } else if(p.precioLista){
+      precioEl.value = p.precioLista;
+    } else {
+      precioEl.value = buscarUltimoPrecioCotizado(p.id) || '';
+    }
+  }
   // Mostrar adicionales según categoría
   actualizarAdicionalesVisibles();
 }
