@@ -4989,6 +4989,9 @@ function cerrarPreview(){
 }
 
 function fmt2(n){ return '$\u00a0'+Math.round(n).toLocaleString('es-AR'); }
+// Para filas de \u00edtems "incluidos" (Mini PC / perif\u00e9ricos con precio $0): mostrar un
+// gui\u00f3n en vez de "$ 0" para dejar en claro que est\u00e1 incluido, no que no tiene costo.
+function fmt2z(n){ return n ? fmt2(n) : '\u2014'; }
 
 function generarPreviewHTML(c){
   const fecha = new Date(c.fecha||Date.now()).toLocaleDateString('es-AR');
@@ -5028,16 +5031,18 @@ function generarPreviewHTML(c){
       +'<td style="padding:7px 10px;text-align:right;">'+fmt2(iva)+'</td>'
       +'<td style="padding:7px 10px;text-align:right;font-weight:600;">'+fmt2(total)+'</td>'
     +'</tr>';
-    // Agregar fila de Mini PC si existe
-    if(it.minipc && it.minipc.precio){
-      const ivaPC = Math.round(it.minipc.precio*it.cant*ivaHwRate);
-      const totalPC = it.minipc.precio*it.cant + ivaPC;
+    // Agregar fila de Mini PC si existe (aunque su precio sea $0 — puede estar
+    // incluida dentro del total del equipo y mostrarse solo a modo informativo)
+    if(it.minipc){
+      const precioMini = it.minipc.precio||0;
+      const ivaPC = Math.round(precioMini*it.cant*ivaHwRate);
+      const totalPC = precioMini*it.cant + ivaPC;
       rows += '<tr style="background:#f9f9fb;">'
         +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+it.minipc.nombre+'</td>'
         +'<td style="padding:5px 10px;text-align:center;font-size:12px;">'+it.cant+'</td>'
-        +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(it.minipc.precio)+'</td>'
-        +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(ivaPC)+'</td>'
-        +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2(totalPC)+'</td>'
+        +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2z(precioMini)+'</td>'
+        +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2z(ivaPC)+'</td>'
+        +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2z(totalPC)+'</td>'
       +'</tr>';
     }
     // Agregar filas de otros periféricos activos (lector QR, cámara, etc.)
@@ -5056,9 +5061,9 @@ function generarPreviewHTML(c){
         rows += '<tr style="background:#f9f9fb;">'
           +'<td style="padding:5px 10px;padding-left:24px;color:#555;font-size:12px;">↳ '+nombre+'</td>'
           +'<td style="padding:5px 10px;text-align:center;font-size:12px;">'+(p.cant||1)+'</td>'
-          +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(p.precio||0)+'</td>'
-          +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2(ivaPer)+'</td>'
-          +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2(totalPer)+'</td>'
+          +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2z(p.precio||0)+'</td>'
+          +'<td style="padding:5px 10px;text-align:right;font-size:12px;">'+fmt2z(ivaPer)+'</td>'
+          +'<td style="padding:5px 10px;text-align:right;font-weight:600;font-size:12px;">'+fmt2z(totalPer)+'</td>'
         +'</tr>';
       });
     }
@@ -6397,8 +6402,8 @@ function enviarWhatsApp(){
     msg += (i+1) + '. ' + it.nombre;
     if(it.cant > 1) msg += ' (x' + it.cant + ')';
     msg += ' → $' + total.toLocaleString('es-AR') + ' c/IVA\n';
-    if(it.minipc && it.minipc.precio){
-      const totalPC = Math.round(it.minipc.precio * it.cant * (1+ivaHwRate));
+    if(it.minipc){
+      const totalPC = Math.round((it.minipc.precio||0) * it.cant * (1+ivaHwRate));
       msg += '   ↳ ' + it.minipc.nombre + ' → $' + totalPC.toLocaleString('es-AR') + ' c/IVA\n';
     }
     if(it.otrosPerifericos){
