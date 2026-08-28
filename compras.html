@@ -745,6 +745,8 @@ let proveedores = [];
 let categorias = [];
 let skus = [];
 let proyectosAsignables = []; // proyectos_cotizador, para asignar gastos de Servicios
+let proyectosCerradosAsignables = null; // se carga bajo demanda (null = todavía no pedido), últimos ~90 días de OPs completadas
+let mostrandoCerradosAsig = false;
 let lineas = []; // líneas de la OC en edición
 let provSeleccionado = null;
 let pagoSeleccionado = 'transferencia_total';
@@ -1406,6 +1408,27 @@ async function loadData(){
   }catch(e){console.error(e);}
 }
 
+// Carga bajo demanda de proyectos ya cerrados (completados), solo cuando el usuario
+// abre "Mostrar proyectos ya cerrados" en el modal de asignación — para no traer el
+// historial completo. Se limita a los últimos 90 días por fecha de cierre.
+async function cargarProyectosCerradosAsignables(){
+  if(proyectosCerradosAsignables!==null) return proyectosCerradosAsignables; // ya cargado, cache
+  try{
+    const cutoff = new Date(Date.now() - 90*86400000).toISOString();
+    const opsCerradas = await api('ordenes_produccion?estado=eq.completada&fecha_cierre=gte.'+encodeURIComponent(cutoff)+'&select=v14_orden,cliente,codigo_op_interno,op_numero,producto_nombre,cantidad,fecha_cierre&order=fecha_cierre.desc').catch(()=>[]);
+    proyectosCerradosAsignables = (opsCerradas||[]).filter(o=>o.v14_orden).map(o=>{
+      const fecha = o.fecha_cierre ? new Date(o.fecha_cierre).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '';
+      return {
+        orden: o.v14_orden,
+        cliente: o.cliente || '',
+        label: o.codigo_op_interno || o.op_numero || o.v14_orden,
+        detalle: [o.producto_nombre ? o.producto_nombre+(o.cantidad?' x'+o.cantidad:'') : '', fecha?'cerrada '+fecha:''].filter(Boolean).join(' · ')
+      };
+    });
+  }catch(e){ console.error(e); proyectosCerradosAsignables = []; }
+  return proyectosCerradosAsignables;
+}
+
 // ─── OCs ────────────────────────────────────────────────────
 async function loadOCs(){
   try{
@@ -2051,37 +2074,46 @@ function resumenAsignacion(l){
 // ─── MODAL: Asociar a proyectos (split % entre proyectos activos) ──────────
 let asigModalLineaIdx = null;
 
+function filaAsigHTML(p, seleccionados){
+  const checked = seleccionados[p.orden]!==undefined;
+  const pct = checked ? seleccionados[p.orden] : '';
+  return `<div class="asig-fila" data-buscar="${((p.label||'')+' '+(p.cliente||'')).toLowerCase().replace(/"/g,'&quot;')}" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+    <input type="checkbox" class="asig-chk" data-orden="${p.orden}" data-cliente="${(p.cliente||'').replace(/"/g,'&quot;')}" data-label="${p.label.replace(/"/g,'&quot;')}"
+      ${checked?'checked':''} onchange="toggleAsigProyecto(this)" style="width:16px;height:16px;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:12px;color:#e8eaf0;">${p.label} — ${p.cliente}</div>
+      <div style="font-size:10px;color:#7a8099;">${p.detalle||''}</div>
+    </div>
+    <input type="number" class="asig-pct linea-input" data-orden="${p.orden}" value="${pct}" min="0" max="100" placeholder="%" ${checked?'':'disabled'}
+      style="width:64px;" oninput="actualizarSumaAsig()">
+  </div>`;
+}
+
 function abrirModalAsignacionProyectos(i){
   asigModalLineaIdx = i;
+  mostrandoCerradosAsig = false;
   const l = lineas[i];
   const seleccionados = {};
   (l.asignaciones||[]).forEach(a=>{ seleccionados[a.proyecto_orden] = a.porcentaje; });
+  window._asigSeleccionados = seleccionados; // usado por toggleCerradosAsig al cargar la sección de cerrados
 
   document.getElementById('popup-asig-proy')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'popup-asig-proy';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
 
-  const filas = proyectosAsignables.map(p=>{
-    const checked = seleccionados[p.orden]!==undefined;
-    const pct = checked ? seleccionados[p.orden] : '';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
-      <input type="checkbox" class="asig-chk" data-orden="${p.orden}" data-cliente="${(p.cliente||'').replace(/"/g,'&quot;')}" data-label="${p.label.replace(/"/g,'&quot;')}"
-        ${checked?'checked':''} onchange="toggleAsigProyecto(this)" style="width:16px;height:16px;">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;color:#e8eaf0;">${p.label} — ${p.cliente}</div>
-        <div style="font-size:10px;color:#7a8099;">${p.detalle||''}</div>
-      </div>
-      <input type="number" class="asig-pct linea-input" data-orden="${p.orden}" value="${pct}" min="0" max="100" placeholder="%" ${checked?'':'disabled'}
-        style="width:64px;" oninput="actualizarSumaAsig()">
-    </div>`;
-  }).join('');
+  const filas = proyectosAsignables.map(p=>filaAsigHTML(p, seleccionados)).join('');
 
   overlay.innerHTML = `<div style="background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:22px;max-width:520px;width:100%;max-height:82vh;overflow-y:auto;">
     <div style="font-size:10px;color:#3a4055;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Asociar costo a proyectos</div>
     <div style="font-size:15px;font-weight:600;color:#e8eaf0;margin-bottom:4px;">${l.nombre}</div>
-    <div style="font-size:11px;color:#7a8099;margin-bottom:14px;">Tildá uno o varios proyectos activos y asigná el % del costo que corresponde a cada uno. Si no tildás ninguno, queda como gasto de toda la empresa.</div>
+    <div style="font-size:11px;color:#7a8099;margin-bottom:10px;">Tildá uno o varios proyectos activos y asigná el % del costo que corresponde a cada uno. Si no tildás ninguno, queda como gasto de toda la empresa.</div>
+    <input id="asig-buscar" type="text" placeholder="🔎 Buscar cliente o código..." oninput="filtrarAsigLista()" style="width:100%;margin-bottom:10px;background:#161b22;border:1px solid #3a4055;border-radius:6px;padding:7px 10px;color:#e8eaf0;font-size:12px;box-sizing:border-box;">
     <div id="asig-lista">${filas || '<div style="color:#7a8099;font-size:12px;">No hay proyectos activos (aprobados, no terminados) para asignar.</div>'}</div>
+    <div style="margin-top:6px;">
+      <button id="asig-btn-cerrados" onclick="toggleCerradosAsig()" style="background:transparent;color:#4d9fff;border:none;padding:4px 0;cursor:pointer;font-size:11px;">▾ Mostrar proyectos ya cerrados (últimos 90 días)</button>
+      <div id="asig-lista-cerrados"></div>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;">
       <button onclick="distribuirIgualAsig()" style="background:transparent;color:#7a8099;border:1px solid #3a4055;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;">↔ Distribuir igual</button>
       <span id="asig-suma" style="color:#7a8099;">Suma: 0%</span>
@@ -2095,6 +2127,34 @@ function abrirModalAsignacionProyectos(i){
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function(ev){ if(ev.target===overlay) overlay.remove(); });
   actualizarSumaAsig();
+}
+
+async function toggleCerradosAsig(){
+  const btn = document.getElementById('asig-btn-cerrados');
+  const cont = document.getElementById('asig-lista-cerrados');
+  if(!btn || !cont) return;
+  mostrandoCerradosAsig = !mostrandoCerradosAsig;
+  if(!mostrandoCerradosAsig){
+    cont.innerHTML = '';
+    btn.textContent = '▾ Mostrar proyectos ya cerrados (últimos 90 días)';
+    return;
+  }
+  btn.textContent = 'Cargando...';
+  const cerrados = await cargarProyectosCerradosAsignables();
+  const seleccionados = window._asigSeleccionados || {};
+  cont.innerHTML = cerrados.length
+    ? '<div style="font-size:10px;color:#7a8099;text-transform:uppercase;letter-spacing:0.06em;margin:8px 0 4px;">Cerrados</div>' + cerrados.map(p=>filaAsigHTML(p, seleccionados)).join('')
+    : '<div style="color:#7a8099;font-size:12px;padding:6px 0;">No hay proyectos cerrados en los últimos 90 días.</div>';
+  btn.textContent = '▴ Ocultar proyectos ya cerrados';
+  filtrarAsigLista();
+}
+
+function filtrarAsigLista(){
+  const q = (document.getElementById('asig-buscar')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('.asig-fila').forEach(function(fila){
+    const texto = fila.dataset.buscar||'';
+    fila.style.display = (!q || texto.includes(q)) ? 'flex' : 'none';
+  });
 }
 
 function toggleAsigProyecto(chk){
