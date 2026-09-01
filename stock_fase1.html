@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Stock v1</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
@@ -674,19 +676,16 @@ let variantesTemp = [];
 let editingSkuId = null;
 
 // ─── API ───────────────────────────────────────────────────────────────────
+// Usa la sesión del usuario logueado (ver auth-common.js) en vez de la clave
+// compartida que se pegaba a mano en "Configuración". SUPABASE_URL y authHeaders()
+// vienen de auth-common.js, cargado antes que este script.
 async function api(path, method='GET', body=null){
-  if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración');
   const opts = {
     method,
-    headers:{
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST' ? 'return=representation' : ''
-    }
+    headers: authHeaders({ 'Prefer': method==='POST' ? 'return=representation' : '' })
   };
   if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
   if(!res.ok){
     const err = await res.text();
     throw new Error(err);
@@ -1178,10 +1177,11 @@ async function loadPendientesIngreso(){
     }
 
     const ocIds = ocsActivas.map(o=>o.id).join(',');
-    const items = await api(`oc_items?oc_id=in.(${ocIds})&select=id,nombre,color,cantidad,cantidad_recibida,oc_id`).catch(()=>[]);
+    const items = await api(`oc_items?oc_id=in.(${ocIds})&select=id,nombre,color,cantidad,cantidad_recibida,oc_id,sku_id,skus(categorias(nombre))`).catch(()=>[]);
 
-    // Filtrar items con saldo
-    const pendientes = items.filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0);
+    // Filtrar items con saldo — excluye líneas de Servicios (no se reciben físicamente,
+    // no deberían figurar como "pendiente de ingreso" aunque compartan OC con insumos reales)
+    const pendientes = items.filter(i=>(i.cantidad-(i.cantidad_recibida||0))>0 && i.skus?.categorias?.nombre!=='Servicios');
     if(!pendientes.length){
       wrap.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:12px;">No hay pendientes de ingreso.</div>';
       return;
@@ -1231,14 +1231,18 @@ async function loadPendientesIngreso(){
 // ─── CHECK BADGE PENDIENTES ─────────────────────────────────────────────────
 async function checkPendientesIngreso(){
   try{
-    const ocsActivas = await api("ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id").catch(()=>[]);
     const badge = document.getElementById('badge-pendientes');
     if(!badge) return;
-    if(ocsActivas?.length > 0){
-      badge.style.display = 'inline-flex';
-    } else {
-      badge.style.display = 'none';
+    const ocsActivas = await api("ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id").catch(()=>[]);
+    let hayPendiente = false;
+    if(ocsActivas?.length){
+      const ocIds = ocsActivas.map(o=>o.id).join(',');
+      const items = await api(`oc_items?oc_id=in.(${ocIds})&select=cantidad,cantidad_recibida,skus(categorias(nombre))`).catch(()=>[]);
+      // Igual que en loadPendientesIngreso: las líneas de Servicios no cuentan como
+      // pendiente de ingreso físico, aunque la OC siga "aprobada".
+      hayPendiente = (items||[]).some(i=>(i.cantidad-(i.cantidad_recibida||0))>0 && i.skus?.categorias?.nombre!=='Servicios');
     }
+    badge.style.display = hayPendiente ? 'inline-flex' : 'none';
   }catch(e){}
 }
 
@@ -2049,22 +2053,29 @@ if(IS_READONLY){
 }
 
 async function init(){
-  // Load config from localStorage
-  const ok = await checkConnection();
-  if(ok){
-    showPage('dashboard');
-    // Pre-load categorías y skus
-    categorias = await api('categorias?select=*&order=orden.asc').catch(()=>[]);
-    skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc&activo=eq.true').catch(()=>[]);
-    fillCatFilters();
-  } else {
-    // Si no hay config, ir a config page
-    if(!SUPA_URL || !SUPA_KEY){
-      showPage('config');
-      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-      document.querySelector('.nav-item:last-child').classList.add('active');
-    }
-  }
+  // Exige login (ver auth-common.js). Si no hay sesión válida, requireAuth() ya
+  // redirige a login.html y esta función corta acá.
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  mostrarUsuarioLogueado(usuario);
+
+  showPage('dashboard');
+  // Pre-load categorías y skus
+  categorias = await api('categorias?select=*&order=orden.asc').catch(()=>[]);
+  skus = await api('skus?select=*,categorias(nombre),variantes(id,atributo,valor)&order=codigo.asc&activo=eq.true').catch(()=>[]);
+  fillCatFilters();
+}
+
+// Muestra quién está logueado (y su rol) en el header, con un botón para salir.
+// No reemplaza los controles de "contraseña gerencia" que ya existen para
+// funciones puntuales — eso se mantiene igual por ahora.
+function mostrarUsuarioLogueado(usuario){
+  const nav = document.querySelector('.sidebar') || document.body;
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);font-family:"DM Mono",monospace;background:var(--surface2);border:1px solid var(--border2);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:var(--text3);">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
 }
 
 // Keyboard: Enter en variante nueva
