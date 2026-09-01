@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Calculador de Costeo — Totem Nube v3</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root {
@@ -1348,6 +1350,20 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
 </div>
 
 <script>
+// Exige login (ver auth-common.js). Corre en paralelo al resto de este script
+// (que trabaja mayormente con datos en localStorage) y redirige a login.html
+// si no hay sesión válida — no se envuelve el resto del archivo para no romper
+// los onclick="..." inline que dependen de funciones globales.
+(async function(){
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
+})();
+
 const BASE_DOLAR = 1420;
 
 let INSUMOS_FUENTE = {}; // tracks data source per insumo key
@@ -8778,24 +8794,13 @@ function mostrarNotifOP(opNumero, cliente, producto, color){
 
 // ─── INTEGRACIÓN STOCK — CREAR OP ────────────────────────────────────────────
 
-const STOCK_URL = localStorage.getItem('supa_url') || '';
-const STOCK_KEY = localStorage.getItem('supa_key') || '';
-
 async function stockAPI(path, method='GET', body=null){
-  const url = localStorage.getItem('supa_url') || '';
-  const key = localStorage.getItem('supa_key') || '';
-  if(!url || !key) throw new Error('Sin conexión al sistema de stock. Configurá las credenciales en el módulo de Stock.');
   const opts = {
     method,
-    headers:{
-      'apikey': key,
-      'Authorization': 'Bearer ' + key,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST' ? 'return=representation' : ''
-    }
+    headers: authHeaders({'Prefer': method==='POST' ? 'return=representation' : ''})
   };
   if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(url.replace(/\/$/, '') + '/rest/v1/' + path, opts);
+  const res = await fetch(SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/' + path, opts);
   if(!res.ok) throw new Error(await res.text());
   if(res.status === 204) return null;
   return res.json();
@@ -8807,9 +8812,7 @@ async function stockAPI(path, method='GET', body=null){
 
 async function verificarPreciosActualizados(){
   try{
-    const url = localStorage.getItem('supa_url');
-    const key = localStorage.getItem('supa_key');
-    if(!url || !key) return;
+    if(!window.currentUser) return;
     // Traer el último precio por v14_key, incluyendo sku_id para match alternativo
     const historial = await stockAPI('historial_precios?select=v14_key,sku_id,precio_neto,moneda,tipo_cambio,iva_pct,fecha,oc_id,ordenes_compra(oc_numero),proveedores(razon_social)&order=fecha.desc');
     if(!historial || !historial.length) return;

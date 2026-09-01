@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Bienes y Personal</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
@@ -679,24 +681,25 @@ let stockRowsAsigPersonal = []; // filas de stock (por cantidad) cacheadas para 
 
 // ─── API ───────────────────────────────────────────────────────────────────
 async function api(path, method='GET', body=null){
-  if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración');
   const opts = {
     method,
-    headers:{
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST' ? 'return=representation' : (method==='PATCH' ? 'return=representation' : '')
-    }
+    headers: authHeaders({'Prefer': method==='POST' ? 'return=representation' : (method==='PATCH' ? 'return=representation' : '')})
   };
   if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
   if(!res.ok){
     const err = await res.text();
     throw new Error(err);
   }
   if(res.status===204) return null;
   return res.json();
+}
+function mostrarUsuarioLogueado(usuario){
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:"DM Mono",monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
 }
 
 function toast(msg){
@@ -1828,12 +1831,10 @@ async function confirmarDevolucionPrestamo(){
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 (async function init(){
-  const url = new URLSearchParams(window.location.search);
-  if(url.get('v')){ /* cache-buster, no-op */ }
-  document.getElementById('cfg-url').value = SUPA_URL;
-  document.getElementById('cfg-key').value = SUPA_KEY;
-  const ok = await checkConnection();
-  if(ok) loadDashboard();
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  mostrarUsuarioLogueado(usuario);
+  loadDashboard();
 })();
 </script>
 </body>

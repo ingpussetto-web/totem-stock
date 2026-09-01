@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Producción</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root {
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
@@ -315,18 +317,12 @@ let scanTimeout = null;
 
 // ─── API ───────────────────────────────────────────────────
 async function api(path, method='GET', body=null){
-  if(!SUPA_URL||!SUPA_KEY) throw new Error('Sin configuración');
   const opts = {
     method,
-    headers:{
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''
-    }
+    headers: authHeaders({'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''})
   };
   if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(SUPA_URL.replace(/\/$/,'')+'/rest/v1/'+path, opts);
+  const res = await fetch(SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+path, opts);
   if(!res.ok) throw new Error(await res.text());
   if(res.status===204) return null;
   return res.json();
@@ -1462,16 +1458,23 @@ function toast(msg){
 
 // ─── INIT ────────────────────────────────────────────────────
 async function init(){
-  const ok=await checkConnection();
-  if(ok){
-    await loadOPs();
-    // Si viene con ?vista=terminadas desde el calculador, activar ese filtro
-    const params = new URLSearchParams(window.location.search);
-    if(params.get('vista') === 'terminadas'){
-      const sel = document.getElementById('filtro-vista');
-      if(sel){ sel.value = 'terminadas'; aplicarFiltros(); }
-    }
-  } else if(!SUPA_URL||!SUPA_KEY) showPage('config');
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  mostrarUsuarioLogueado(usuario);
+  await loadOPs();
+  // Si viene con ?vista=terminadas desde el calculador, activar ese filtro
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('vista') === 'terminadas'){
+    const sel = document.getElementById('filtro-vista');
+    if(sel){ sel.value = 'terminadas'; aplicarFiltros(); }
+  }
+}
+function mostrarUsuarioLogueado(usuario){
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:"DM Mono",monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
 }
 init();
 </script>
@@ -1971,15 +1974,13 @@ function cancelarDestino(){
 
 <script>
 // ─── NOTAS DE PROYECTO ────────────────────────────────────────────────
-const SUPABASE_URL = 'https://nkkwukcgxyhudprlhjjw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
 const STORAGE_BUCKET = 'op-notas-archivos';
 
 let _notasOpId = null;
 let _notasOpNumero = '';
 
 async function apiNotas(path, method='GET', body=null){
-  const opts = { method, headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Content-Type':'application/json', 'Prefer':'return=representation'} };
+  const opts = { method, headers: authHeaders({'Prefer':'return=representation'}) };
   if(body) opts.body = JSON.stringify(body);
   const r = await fetch(SUPABASE_URL+'/rest/v1/'+path, opts);
   if(!r.ok){ const e=await r.text(); throw new Error(e); }
@@ -2103,7 +2104,7 @@ async function publicarNota(){
           const fpath = `${_notasOpId}/${notaId}_${Date.now()}.${ext}`;
           const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${fpath}`, {
             method:'POST',
-            headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':file.type,'x-upsert':'true'},
+            headers: authHeaders({'Content-Type':file.type,'x-upsert':'true'}),
             body: file
           });
           if(upRes.ok){

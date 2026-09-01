@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Conteo Físico</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="etiquetas_modal.js"></script>
 <style>
@@ -215,26 +217,25 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 </nav>
 
 <script>
-const SUPA_URL = localStorage.getItem('supa_url') || 'https://nkkwukcgxyhudprlhjjw.supabase.co';
-const SUPA_KEY = localStorage.getItem('supa_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ra3d1a2NneHlodWRwcmxoamp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjAzNTQsImV4cCI6MjA5MzU5NjM1NH0.NGDzPGnChtqYbnjcIZhso1CUozqG_JQ7TyElKSesy5s';
 const READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
 
 async function api(path, method='GET', body=null){
-  if(!SUPA_URL || !SUPA_KEY) throw new Error('Sin configuración Supabase. Configurá desde Stock → Configuración.');
   const opts = {
     method,
-    headers:{
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST' ? 'return=representation' : ''
-    }
+    headers: authHeaders({'Prefer': method==='POST' ? 'return=representation' : ''})
   };
   if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
   if(!res.ok){ const err = await res.text(); throw new Error(err); }
   if(res.status===204) return null;
   return res.json();
+}
+function mostrarUsuarioLogueado(usuario){
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:"DM Mono",monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
 }
 
 function fmt_fecha(str){
@@ -1538,7 +1539,11 @@ function cancelarAjuste(){
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────
-(function(){
+(async function(){
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  mostrarUsuarioLogueado(usuario);
+
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
   const nav = document.getElementById('gernav');
@@ -1578,13 +1583,6 @@ function cancelarAjuste(){
         }catch(e){}
       }
     });
-  }
-
-  if(!SUPA_URL || !SUPA_KEY){
-    document.getElementById('conteo-content').innerHTML = `
-      <div class="error-msg">⚠️ Sin configuración de Supabase. Entrá a Stock → Configuración y guardá las credenciales.</div>
-    `;
-    return;
   }
 
   cargarSkus().then(() => {

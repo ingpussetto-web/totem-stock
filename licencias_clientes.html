@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Licencias Clientes</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
@@ -697,7 +699,15 @@ function showMsg(txt, tipo){
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-(function(){
+(async function(){
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:"DM Mono",monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
+
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || 'gerencia';
 
