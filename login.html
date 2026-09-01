@@ -85,7 +85,7 @@
     el.className = 'msg ' + tipo;
   }
 
-  if(motivo === 'inactivo') mostrarMsg('Tu usuario está deshabilitado. Consultá con Gerencia.', 'err');
+  if(motivo === 'inactivo') mostrarMsg('Tu cuenta todavía no fue habilitada por Gerencia. Avisales que te registraste para que te den acceso.', 'err');
   if(motivo === 'sin_perfil') mostrarMsg('Tu cuenta no tiene un perfil asignado todavía. Consultá con Gerencia.', 'err');
 
   // Si ya hay sesión activa, no mostrar el login — ir directo al módulo pedido.
@@ -126,13 +126,19 @@
     if(pass.length < 6){ mostrarMsg('La contraseña debe tener al menos 6 caracteres.', 'err'); return; }
     const btn = document.getElementById('btn-signup');
     btn.disabled = true; btn.textContent = 'Creando...';
-    const { error } = await sb.auth.signUp({
+    const { data, error } = await sb.auth.signUp({
       email, password: pass,
       options: { data: { nombre } }
     });
     btn.disabled = false; btn.textContent = 'Crear cuenta';
     if(error){ mostrarMsg('No se pudo crear la cuenta: ' + error.message, 'err'); return; }
-    mostrarMsg('Cuenta creada. Tu acceso queda en revisión de Gerencia hasta que te asignen un rol — mientras tanto ya podés ingresar con permisos básicos.', 'ok');
+    if(!data.session){
+      // El proyecto pide confirmar el email antes de habilitar la sesión —
+      // no hay nada más para hacer en esta pantalla hasta que confirme.
+      mostrarMsg('Cuenta creada. Te llegó un mail de Supabase — abrilo y tocá "Confirm your mail" para activar tu cuenta, y después volvé acá a ingresar con tu email y contraseña.', 'ok');
+      return;
+    }
+    mostrarMsg('Cuenta creada. Ahora queda pendiente de que Gerencia la habilite — avisales que te registraste. Una vez habilitada, vas a poder entrar normalmente con tu email y contraseña.', 'ok');
     setTimeout(()=>{ location.href = redirect; }, 2500);
   }
 
