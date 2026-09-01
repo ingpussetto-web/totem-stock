@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totem Nube — Usuarios</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#252529;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#444;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.1);--green-border:rgba(0,200,150,0.25);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.1);--amber-border:rgba(245,166,35,0.25);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.09);--red-border:rgba(255,94,94,0.25);
+  --radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:28px 32px 90px;}
+
+.page-header{margin-bottom:24px;}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.025em;}
+.page-sub{font-size:12px;color:var(--text2);margin-top:3px;}
+
+.tabla-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:20px;}
+.tabla-header{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+.tabla-title{font-size:13px;font-weight:600;}
+table{width:100%;border-collapse:collapse;}
+th{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;font-weight:400;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);}
+td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.02);}
+td.nombre{color:var(--text);font-weight:500;font-size:13px;}
+.badge{display:inline-block;font-size:9px;padding:2px 8px;border-radius:4px;font-family:'DM Mono',monospace;font-weight:500;}
+.badge.activo{background:var(--green-dim);color:var(--green);}
+.badge.pendiente{background:var(--amber-dim);color:var(--amber);}
+select.rol-select{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:5px 8px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;}
+select.rol-select:focus{outline:none;border-color:var(--green);}
+select.rol-select:disabled{opacity:0.4;cursor:not-allowed;}
+.btn{padding:6px 14px;font-size:11px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all 0.12s;font-family:'DM Sans',sans-serif;}
+.btn:hover{background:rgba(255,255,255,0.05);color:var(--text);}
+.btn.green{border-color:var(--green);color:var(--green);}
+.btn.green:hover{background:var(--green-dim);}
+.btn.red{border-color:var(--red);color:var(--red);}
+.btn.red:hover{background:var(--red-dim);}
+.btn:disabled{opacity:0.35;cursor:not-allowed;}
+.btn:disabled:hover{background:transparent;color:var(--text2);}
+
+.loading-msg{color:var(--text3);font-size:12px;padding:20px;text-align:center;}
+.empty-msg{color:var(--text3);font-size:12px;padding:20px;text-align:center;font-style:italic;}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:10px 18px;font-size:12px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:10000;}
+
+/* Nav */
+.gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
+.gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
+.gernav-btn:hover{background:rgba(255,255,255,0.07);color:#e8eaf0;border-color:rgba(255,255,255,0.15);}
+.gernav-btn.active{background:rgba(0,229,160,0.1);border-color:rgba(0,229,160,0.3);color:#00e5a0;}
+.gernav-icon{font-size:16px;line-height:1;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-title">👤 Usuarios</div>
+  <div class="page-sub">Aprobar cuentas nuevas y administrar roles · Solo Gerencia</div>
+</div>
+
+<div class="tabla-wrap">
+  <div class="tabla-header">
+    <div class="tabla-title">Cuentas registradas</div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Registrado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tabla-body">
+        <tr><td colspan="6" class="loading-msg">Cargando usuarios...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<nav class="gernav" id="gernav">
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/index.html"><span class="gernav-icon">🏠</span>Inicio</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/calculador_totem_nube_v16.html"><span class="gernav-icon">💰</span>Cotizador</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/ops_ventas.html"><span class="gernav-icon">✅</span>OPs</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/compras.html"><span class="gernav-icon">🛒</span>Compras</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html"><span class="gernav-icon">📥</span>Recepción</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html"><span class="gernav-icon">📦</span>Stock</a>
+  <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/produccion.html"><span class="gernav-icon">🔧</span>Producción</a>
+  <a class="gernav-btn active" href="#"><span class="gernav-icon">👤</span>Usuarios</a>
+</nav>
+
+<script>
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function api(path, method='GET', body=null){
+  const opts = { method, headers: authHeaders({'Prefer': method==='POST' ? 'return=representation' : (method==='PATCH' ? 'return=representation' : '')}) };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+path, opts);
+  if(!res.ok){ const err = await res.text(); throw new Error(err); }
+  if(res.status===204) return null;
+  return res.json();
+}
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.opacity='0'; }, 2500);
+}
+
+function formatDate(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+
+let _usuarios = [];
+let _miId = null;
+
+async function cargarUsuarios(){
+  const tbody = document.getElementById('tabla-body');
+  try{
+    _usuarios = await api('usuarios?select=*&order=created_at.asc') || [];
+    renderTabla();
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-msg" style="color:var(--red)">Error cargando usuarios: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderTabla(){
+  const tbody = document.getElementById('tabla-body');
+  if(!_usuarios.length){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Todavía no se registró nadie.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _usuarios.map(u => {
+    const esYo = u.id === _miId;
+    return `
+    <tr>
+      <td class="nombre">${esc(u.nombre||'—')}</td>
+      <td style="font-family:'DM Mono',monospace;">${esc(u.email)}</td>
+      <td>
+        <select class="rol-select" onchange="cambiarRolUsuario('${u.id}', this.value)" ${esYo?'disabled title="No podés cambiar tu propio rol desde acá"':''}>
+          <option value="operador" ${u.rol==='operador'?'selected':''}>Operador</option>
+          <option value="gerencia" ${u.rol==='gerencia'?'selected':''}>Gerencia</option>
+        </select>
+      </td>
+      <td><span class="badge ${u.activo?'activo':'pendiente'}">${u.activo?'Activo':'Pendiente'}</span></td>
+      <td>${formatDate(u.created_at)}</td>
+      <td>
+        <button class="btn ${u.activo?'red':'green'}" onclick="toggleActivoUsuario('${u.id}', ${!u.activo})" ${esYo?'disabled title="No podés desactivarte a vos mismo"':''}>
+          ${u.activo?'Desactivar':'Activar'}
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function toggleActivoUsuario(id, nuevoActivo){
+  try{
+    await api(`usuarios?id=eq.${id}`, 'PATCH', {activo: nuevoActivo});
+    toast(nuevoActivo ? 'Usuario activado ✓' : 'Usuario desactivado');
+    cargarUsuarios();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function cambiarRolUsuario(id, nuevoRol){
+  try{
+    await api(`usuarios?id=eq.${id}`, 'PATCH', {rol: nuevoRol});
+    toast('Rol actualizado ✓');
+    cargarUsuarios();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+(async function(){
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  if(usuario.rol !== 'gerencia'){
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">Esta sección es solo para Gerencia.</div>';
+    return;
+  }
+  _miId = usuario.id;
+
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:"DM Mono",monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
+
+  cargarUsuarios();
+})();
+</script>
+</body>
+</html>

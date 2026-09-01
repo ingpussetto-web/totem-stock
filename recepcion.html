@@ -648,7 +648,10 @@ function checkDesvio(i){
   const colorRec = document.getElementById(`color-rec-${i}`)?.value||'';
   const colorEsp = item.color||'';
 
-  const qtyDesvio = qtyRec < pendiente;
+  // 0 recibido = todavía no llegó, queda pendiente para otro día — no es un desvío,
+  // es una recepción parcial normal. Desvío real es recibir ALGO pero menos de lo
+  // esperado (posible faltante del proveedor), o un color distinto al pedido.
+  const qtyDesvio = qtyRec > 0 && qtyRec < pendiente;
   const colorDesvio = colorRec && colorEsp && colorRec !== colorEsp;
   const hayDesvio = qtyDesvio || colorDesvio;
 
@@ -695,7 +698,8 @@ function procesarRecepcion(){
     if(item.color === 'A definir') return null; // Bloqueado hasta que Compras defina color
     const qtyRec = parseFloat(document.getElementById(`qty-rec-${i}`)?.value)||0;
     const colorRec = document.getElementById(`color-rec-${i}`)?.value||item.color||'';
-    const qtyDesvio = qtyRec < pendiente;
+    // 0 recibido = todavía no llegó (pendiente normal, no desvío) — ver nota en checkDesvio().
+    const qtyDesvio = qtyRec > 0 && qtyRec < pendiente;
     const colorDesvio = !!(colorRec && item.color && colorRec !== item.color);
     return {
       oc_item_id: item.id,
