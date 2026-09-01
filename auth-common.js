@@ -8,6 +8,13 @@
 //                      redirige a login.html y no devuelve nada usable.
 //                      Si hay sesión, devuelve { id, nombre, email, rol, activo }
 //                      y lo deja también en window.currentUser.
+//   requireAuthServicio(email, password) -> para pantallas SIN una persona
+//                      sentada (Dashboard TV, Escaneo QR por celular): loguea
+//                      automáticamente con una cuenta de servicio embebida en
+//                      el propio módulo, en vez de pedir usuario/clave. No
+//                      redirige a login.html si falla — devuelve null y el
+//                      módulo decide cómo avisar (no tiene sentido mandar a
+//                      un televisor a una pantalla de login).
 //   cerrarSesion()  -> cierra sesión y vuelve a login.html.
 //   authHeaders()   -> headers listos para usar en fetch() a Supabase
 //                      (apikey + Authorization con el token del usuario logueado).
@@ -58,6 +65,31 @@ async function requireAuth(){
   }
 }
 
+async function requireAuthServicio(email, password){
+  try{
+    const { data, error } = await _sb.auth.signInWithPassword({ email, password });
+    if(error || !data?.session){
+      console.error('[auth] No se pudo autenticar la cuenta de servicio:', error?.message);
+      return null;
+    }
+    const { data: perfil, error: errPerfil } = await _sb
+      .from('usuarios')
+      .select('id,nombre,email,rol,activo')
+      .eq('id', data.user.id)
+      .single();
+    if(errPerfil || !perfil || !perfil.activo){
+      console.error('[auth] Cuenta de servicio sin perfil activo en la tabla usuarios.');
+      return null;
+    }
+    window.currentUser = perfil;
+    window._authToken = data.session.access_token;
+    return perfil;
+  }catch(e){
+    console.error('[auth] Error autenticando cuenta de servicio:', e);
+    return null;
+  }
+}
+
 function irALogin(motivo){
   const redirect = encodeURIComponent(location.pathname.split('/').pop() + location.search);
   let url = 'login.html?redirect=' + redirect;
@@ -80,6 +112,12 @@ function authHeaders(extra){
 
 // Si Supabase Auth cierra la sesión en otra pestaña (o expira el token), volvemos
 // al login automáticamente en vez de dejar la pantalla mostrando datos viejos.
+// Excepción: las pantallas de cuenta de servicio (TV, celular de escaneo) definen
+// window._onAuthSignedOutServicio para reautenticarse solas en vez de terminar
+// mostrando una pantalla de login que nadie va a completar.
 _sb.auth.onAuthStateChange((event)=>{
-  if(event === 'SIGNED_OUT') irALogin();
+  if(event === 'SIGNED_OUT'){
+    if(typeof window._onAuthSignedOutServicio === 'function') window._onAuthSignedOutServicio();
+    else irALogin();
+  }
 });

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Totem Nube — Escaneo</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
@@ -164,8 +166,13 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 <div class="toast" id="toast"></div>
 
 <script>
-const SUPA_URL = localStorage.getItem('supa_url') || '';
-const SUPA_KEY = localStorage.getItem('supa_key') || '';
+// Este escaneo lo usa quien tenga el celular en la mano en el depósito, sin login
+// manual — usa una cuenta de servicio propia (ver auth-common.js →
+// requireAuthServicio). Si Gerencia la desactiva desde Usuarios, el escaneo deja
+// de funcionar, igual que cualquier otra cuenta.
+const SERVICIO_EMAIL = 'servicio.tv-scan@totemnube.internal';
+const SERVICIO_PASSWORD = '8dqR5SRniN9QoaBp6KcyIU0Z';
+window._onAuthSignedOutServicio = () => requireAuthServicio(SERVICIO_EMAIL, SERVICIO_PASSWORD);
 
 let unidadActual = null;
 let opSeleccionada = null;
@@ -175,15 +182,10 @@ function esc(str){ return (str||'').toString().replace(/&/g,'&amp;').replace(/</
 async function api(path, method='GET', body=null){
   const opts = {
     method,
-    headers:{
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''
-    }
+    headers: authHeaders({'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''})
   };
   if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(SUPA_URL+'/rest/v1/'+path, opts);
+  const res = await fetch(SUPABASE_URL+'/rest/v1/'+path, opts);
   if(!res.ok) throw new Error(await res.text());
   if(res.status===204) return null;
   return res.json();
@@ -220,8 +222,9 @@ async function api(path, method='GET', body=null){
 async function init(){
   if(window._setupDone) return;
 
-  if(!SUPA_URL || !SUPA_KEY){
-    renderError('Sin configuración', 'Escaneá el QR de configuración desde el panel principal antes de usar el escaneo.');
+  const perfil = await requireAuthServicio(SERVICIO_EMAIL, SERVICIO_PASSWORD);
+  if(!perfil){
+    renderError('Sin conexión', 'No se pudo conectar con el sistema. Probá de nuevo en un momento o avisale a Gerencia.');
     return;
   }
 

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1920, initial-scale=1.0">
 <title>Totem Nube — Dashboard Producción</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root{
   --bg:#080a0f;
@@ -376,16 +378,21 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:
 
 <script>
 // ─── CONFIG ────────────────────────────────────────────────
-const SUPA_URL = localStorage.getItem('supa_url') || '';
-const SUPA_KEY = localStorage.getItem('supa_key') || '';
 const REFRESH_MS = 30000; // 30 segundos
+
+// Esta pantalla vive en un televisor, sin nadie sentado para loguearse — usa una
+// cuenta de servicio propia (ver auth-common.js → requireAuthServicio) en vez de
+// pedir usuario/clave. Si Gerencia la desactiva desde Usuarios, este dashboard
+// deja de poder leer datos, igual que cualquier otra cuenta.
+const SERVICIO_EMAIL = 'servicio.tv-scan@totemnube.internal';
+const SERVICIO_PASSWORD = '8dqR5SRniN9QoaBp6KcyIU0Z';
+window._onAuthSignedOutServicio = () => requireAuthServicio(SERVICIO_EMAIL, SERVICIO_PASSWORD);
 
 // ─── API ───────────────────────────────────────────────────
 async function api(path){
-  if(!SUPA_URL||!SUPA_KEY) return null;
   try{
-    const res = await fetch(SUPA_URL.replace(/\/$/,'')+'/rest/v1/'+path,{
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    const res = await fetch(SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+path,{
+      headers: authHeaders()
     });
     if(!res.ok) return null;
     return res.json();
@@ -537,8 +544,15 @@ async function loadNoticias(){
 }
 
 // ─── AUTO REFRESH ────────────────────────────────────────────
-loadAll();
-setInterval(loadAll, REFRESH_MS);
+(async function(){
+  const perfil = await requireAuthServicio(SERVICIO_EMAIL, SERVICIO_PASSWORD);
+  if(!perfil){
+    console.error('Dashboard sin datos: no se pudo autenticar la cuenta de servicio.');
+    return;
+  }
+  loadAll();
+  setInterval(loadAll, REFRESH_MS);
+})();
 </script>
 </body>
 </html>
