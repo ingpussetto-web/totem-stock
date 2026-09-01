@@ -204,6 +204,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
         <span class="icon">📦</span> Equipos armados
       </div>
       <div class="nav-section">Sistema</div>
+      <div class="nav-item" id="nav-usuarios" onclick="showPage('usuarios')" style="display:none;">
+        <span class="icon">👤</span> Usuarios
+      </div>
       <div class="nav-item" onclick="showPage('config')">
         <span class="icon">⚙</span> Configuración
       </div>
@@ -441,6 +444,17 @@ tr:hover td{background:rgba(255,255,255,0.015);}
     </div>
 
     <!-- CONFIG -->
+    <div class="page" id="page-usuarios">
+      <div class="page-header">
+        <div class="page-title">Usuarios</div>
+        <div class="page-sub">Aprobar cuentas nuevas y administrar roles — solo Gerencia</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Cuentas registradas</div>
+        <div id="usuarios-lista">Cargando...</div>
+      </div>
+    </div>
+
     <div class="page" id="page-config">
       <div class="page-header">
         <div class="page-title">Configuración</div>
@@ -710,6 +724,7 @@ function showPage(id){
   if(id==='pendientes') loadPendientesIngreso();
   if(id==='unidades') loadUnidades();
   if(id==='equipos') loadEquipos();
+  if(id==='usuarios') loadUsuarios();
   if(id==='config') loadConfig();
 }
 
@@ -2076,6 +2091,81 @@ function mostrarUsuarioLogueado(usuario){
   badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:var(--text3);">· ' + usuario.rol + '</span> '
     + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
   document.body.appendChild(badge);
+
+  // Solo Gerencia ve la sección de administración de usuarios
+  if(usuario.rol === 'gerencia'){
+    const navUsuarios = document.getElementById('nav-usuarios');
+    if(navUsuarios) navUsuarios.style.display = 'flex';
+  }
+}
+
+// ─── GESTIÓN DE USUARIOS (solo Gerencia) ────────────────────────────────────
+async function loadUsuarios(){
+  const cont = document.getElementById('usuarios-lista');
+  if(window.currentUser?.rol !== 'gerencia'){
+    cont.innerHTML = '<div style="color:var(--text3);font-size:12px;">Esta sección es solo para Gerencia.</div>';
+    return;
+  }
+  cont.innerHTML = 'Cargando...';
+  try{
+    const usuarios = await api('usuarios?select=*&order=created_at.asc');
+    renderUsuarios(usuarios||[]);
+  }catch(e){
+    cont.innerHTML = '<div style="color:var(--red)">Error cargando usuarios: '+e.message+'</div>';
+  }
+}
+
+function renderUsuarios(usuarios){
+  const cont = document.getElementById('usuarios-lista');
+  if(!usuarios.length){ cont.innerHTML = '<div style="color:var(--text3);font-size:12px;">Todavía no se registró nadie.</div>'; return; }
+
+  cont.innerHTML = `
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Registrado</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${usuarios.map(u => `
+          <tr>
+            <td>${u.nombre||'—'}</td>
+            <td style="font-family:'DM Mono',monospace;font-size:11px;">${u.email}</td>
+            <td>
+              <select class="form-select" style="padding:4px 8px;font-size:12px;" onchange="cambiarRolUsuario('${u.id}', this.value)" ${u.id===window.currentUser?.id?'disabled title="No podés cambiar tu propio rol desde acá"':''}>
+                <option value="operador" ${u.rol==='operador'?'selected':''}>Operador</option>
+                <option value="gerencia" ${u.rol==='gerencia'?'selected':''}>Gerencia</option>
+              </select>
+            </td>
+            <td>
+              <span class="badge ${u.activo?'ok':'sin'}">${u.activo?'Activo':'Pendiente'}</span>
+            </td>
+            <td style="font-size:11px;color:var(--text3);">${formatDate(u.created_at)}</td>
+            <td>
+              <button class="btn sm ${u.activo?'red':'green'}" onclick="toggleActivoUsuario('${u.id}', ${!u.activo})" ${u.id===window.currentUser?.id?'disabled title="No podés desactivarte a vos mismo"':''}>
+                ${u.activo?'Desactivar':'Activar'}
+              </button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    </div>`;
+}
+
+async function toggleActivoUsuario(id, nuevoActivo){
+  try{
+    await api(`usuarios?id=eq.${id}`, 'PATCH', {activo: nuevoActivo});
+    toast(nuevoActivo ? 'Usuario activado ✓' : 'Usuario desactivado');
+    loadUsuarios();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function cambiarRolUsuario(id, nuevoRol){
+  try{
+    await api(`usuarios?id=eq.${id}`, 'PATCH', {rol: nuevoRol});
+    toast('Rol actualizado ✓');
+    loadUsuarios();
+  }catch(e){ toast('Error: '+e.message); }
 }
 
 // Keyboard: Enter en variante nueva
