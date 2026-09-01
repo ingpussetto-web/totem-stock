@@ -147,10 +147,10 @@ textarea.form-input{resize:vertical;min-height:80px;}
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="logo">
+    <a class="logo" href="index.html" style="display:block;text-decoration:none;color:inherit;cursor:pointer;">
       <div class="logo-name">Totem Nube</div>
       <div class="logo-sub">PRODUCCIÓN · v1.0</div>
-    </div>
+    </a>
     <nav class="nav">
       <div class="nav-section">Trabajo</div>
       <div class="nav-item active" id="nav-ops" onclick="showPage('ops')">
@@ -1461,6 +1461,7 @@ async function init(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
   await loadOPs();
   // Si viene con ?vista=terminadas desde el calculador, activar ese filtro
   const params = new URLSearchParams(window.location.search);
@@ -1898,20 +1899,13 @@ function cancelarDestino(){
 </nav>
 <script>
 (function(){
-  const params = new URLSearchParams(window.location.search);
-  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
   const nav = document.querySelector('.gernav');
-  if(area !== 'gerencia'){ if(nav) nav.style.display='none'; return; }
+  if(nav) nav.style.display='flex';
   const page = window.location.pathname.split('/').pop().replace('.html','');
   const map = {'calculador_totem_nube_v16':'gnav-cotizador','ops_ventas':'gnav-ops','compras':'gnav-compras','recepcion':'gnav-recepcion','stock_fase1':'gnav-stock','produccion':'gnav-produccion','inventario_inicial':'gnav-inventario','noticias':'gnav-noticias','tablero':'gnav-tablero'};
   const activeId = map[page];
   if(activeId){ const el=document.getElementById(activeId); if(el) el.classList.add('active'); }
   document.body.style.paddingBottom = '70px';
-  document.querySelectorAll('.gernav-btn').forEach(a => {
-    if(a.href && !a.href.includes('index.html')){
-      try{ const url=new URL(a.href); url.searchParams.set('area','gerencia'); a.href=url.toString(); }catch(e){}
-    }
-  });
 })();
 </script>
 

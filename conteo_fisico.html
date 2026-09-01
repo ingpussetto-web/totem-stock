@@ -1543,6 +1543,7 @@ function cancelarAjuste(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
 
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || '';

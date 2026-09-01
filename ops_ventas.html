@@ -164,10 +164,10 @@ select.filter:focus{outline:none;border-color:var(--green);}
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="logo">
+    <a class="logo" href="index.html" style="display:block;text-decoration:none;color:inherit;cursor:pointer;">
       <div class="logo-name">Totem Nube</div>
       <div class="logo-sub">ÓRDENES DE PRODUCCIÓN · v1.0</div>
-    </div>
+    </a>
     <nav class="nav">
       <div class="nav-section">Gestión</div>
       <div class="nav-item active" onclick="showPage('ops')">
@@ -2363,14 +2363,8 @@ function resolverModalPlayers(confirmar){
 </nav>
 <script>
 (function(){
-  const params = new URLSearchParams(window.location.search);
-  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
-  if(area) sessionStorage.setItem('tn_area', area);
   const nav = document.querySelector('.gernav');
-  if(area !== 'gerencia'){
-    if(nav) nav.style.display = 'none';
-    return;
-  }
+  if(nav) nav.style.display = 'flex';
   // Marcar botón activo
   const page = window.location.pathname.split('/').pop().replace('.html','');
   const map = {
@@ -2386,14 +2380,6 @@ function resolverModalPlayers(confirmar){
   const activeId = map[page];
   if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
   document.body.style.paddingBottom = '70px';
-  // Propagar area=gerencia a todos los links de la barra
-  document.querySelectorAll('.gernav-btn').forEach(a => {
-    if(a.href && !a.href.endsWith('index.html')){
-      const url = new URL(a.href);
-      url.searchParams.set('area', 'gerencia');
-      a.href = url.toString();
-    }
-  });
 })();
 </script>
 

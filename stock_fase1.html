@@ -178,10 +178,10 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 <div class="app">
   <!-- SIDEBAR -->
   <aside class="sidebar">
-    <div class="logo">
+    <a class="logo" href="index.html" style="display:block;text-decoration:none;color:inherit;cursor:pointer;">
       <div class="logo-name">Totem Nube</div>
       <div class="logo-sub">STOCK · FASE 1 · v1.0</div>
-    </div>
+    </a>
     <nav class="nav">
       <div class="nav-section">Inventario</div>
       <div class="nav-item active" onclick="showPage('dashboard')">
@@ -2034,7 +2034,7 @@ function toast(msg){
 
 // ─── INIT ───────────────────────────────────────────────────────────────────
 // ─── MODO READONLY ───────────────────────────────────────────
-const IS_READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
+let IS_READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
 
 // Persistir area en sessionStorage para que no se pierda al navegar internamente
 (function(){
@@ -2042,8 +2042,8 @@ const IS_READONLY = new URLSearchParams(window.location.search).get('mode') === 
   const area = p.get('area');
   if(area) sessionStorage.setItem('tn_area', area);
 })();
-if(IS_READONLY){
-  // Agregar banner de solo lectura
+
+function mostrarBannerSoloLectura(){
   document.addEventListener('DOMContentLoaded', ()=>{
     const banner = document.createElement('div');
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(255,179,64,0.15);border-bottom:1px solid rgba(255,179,64,0.3);padding:6px 16px;text-align:center;font-size:11px;color:var(--amber);font-family:"DM Mono",monospace;letter-spacing:0.05em;';
@@ -2051,6 +2051,7 @@ if(IS_READONLY){
     document.body.prepend(banner);
   });
 }
+if(IS_READONLY) mostrarBannerSoloLectura();
 
 async function init(){
   // Exige login (ver auth-common.js). Si no hay sesión válida, requireAuth() ya
@@ -2058,6 +2059,14 @@ async function init(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
+
+  // Producción siempre ve el stock en modo consulta, aunque no vengan con
+  // ?mode=readonly en la URL (por ejemplo, si entran desde el acceso rápido).
+  if(usuario.rol === 'operador' && !IS_READONLY){
+    IS_READONLY = true;
+    mostrarBannerSoloLectura();
+  }
 
   showPage('dashboard');
   // Pre-load categorías y skus
@@ -2464,9 +2473,9 @@ async function confirmarConteoFisico(){
 <script>
 (function(){
   const params = new URLSearchParams(window.location.search);
-  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
+  const isReadonly = params.get('mode') === 'readonly';
   const nav = document.querySelector('.gernav');
-  if(area !== 'gerencia'){
+  if(isReadonly){
     if(nav) nav.style.display = 'none';
     return;
   }
@@ -2485,34 +2494,7 @@ async function confirmarConteoFisico(){
   };
   const activeId = map[page];
   if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
-  document.body.style.paddingBottom = '70px';
-  document.querySelectorAll('.gernav-btn').forEach(a => {
-    if(a.href && !a.href.includes('index.html')){
-      try{
-        const url = new URL(a.href);
-        url.searchParams.set('area', 'gerencia');
-        a.href = url.toString();
-      }catch(e){}
-    }
-  });
 })();
 </script>
 </body>
 </html>
-  <a class="gernav-btn" id="gnav-noticias" href="https://ingpussetto-web.github.io/totem-stock/noticias.html">
-    <span class="gernav-icon">📢</span>Noticias
-  </a>
-</nav>
-<script>
-(function(){
-  const params = new URLSearchParams(window.location.search);
-  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
-  const isReadonly = params.get('mode') === 'readonly';
-  const nav = document.querySelector('.gernav');
-  // Mostrar gernav solo en área gerencia y sin modo readonly
-  if(area === 'gerencia' && !isReadonly){
-    if(nav) nav.style.display = 'flex';
-  }
-  // Si no es gerencia, ya está oculta por el style="display:none" del HTML
-  if(area !== 'gerencia' && !isReadonly) return;
-  document.body.style

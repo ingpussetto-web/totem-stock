@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Sistema</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root{
   --bg:#080a0f;
@@ -573,6 +575,21 @@ document.querySelectorAll('a.mod-card').forEach(a => {
     window.location.replace(url.toString());
   });
 });
+
+// Si ya hay una sesión de producción activa, no tiene sentido mostrarle este
+// hub completo (con módulos de cotización, comercial y administrativos que
+// no puede usar) — la mandamos directo a su pantalla de trabajo. Si no hay
+// sesión, dejamos ver el hub igual (no forzamos login solo para esto).
+(async function(){
+  try{
+    const { data: { session } } = await _sb.auth.getSession();
+    if(!session) return;
+    const { data: perfil } = await _sb.from('usuarios').select('rol,activo').eq('id', session.user.id).single();
+    if(perfil && perfil.activo && perfil.rol === 'operador'){
+      location.href = 'produccion.html';
+    }
+  }catch(e){ /* si falla la consulta, dejamos ver el hub igual */ }
+})();
 </script>
 </body>
 </html>

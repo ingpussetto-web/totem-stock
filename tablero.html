@@ -273,13 +273,9 @@ select:focus,input:focus{outline:none;border-color:var(--border2)}
 </nav>
 <script>
 (function(){
-  const area=new URLSearchParams(window.location.search).get('area')||sessionStorage.getItem('tn_area')||'';
   const nav=document.querySelector('.gernav');
-  if(area!=='gerencia'){ if(nav) nav.style.display='none'; return; }
+  if(nav) nav.style.display='flex';
   document.body.style.paddingBottom='70px';
-  document.querySelectorAll('.gernav-btn').forEach(a=>{
-    if(a.href&&!a.href.endsWith('#')){ try{const u=new URL(a.href);u.searchParams.set('area','gerencia');a.href=u.toString();}catch(e){} }
-  });
 })();
 </script>
 

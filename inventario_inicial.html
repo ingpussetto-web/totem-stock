@@ -159,10 +159,10 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="logo">
+    <a class="logo" href="index.html" style="display:block;text-decoration:none;color:inherit;cursor:pointer;">
       <div class="logo-name">Totem Nube</div>
       <div class="logo-sub">INVENTARIO INICIAL · v1.0</div>
-    </div>
+    </a>
     <nav class="nav">
       <div class="nav-section">Proceso</div>
       <div class="nav-item active" onclick="showPage('inventariar')">
@@ -988,12 +988,8 @@ init();
 </nav>
 <script>
 (function(){
-  const params = new URLSearchParams(window.location.search);
   const nav = document.querySelector('.gernav');
-  if(params.get('area') !== 'gerencia'){
-    if(nav) nav.style.display = 'none';
-    return;
-  }
+  if(nav) nav.style.display = 'flex';
   // Marcar botón activo
   const page = window.location.pathname.split('/').pop().replace('.html','');
   const map = {
@@ -1009,14 +1005,6 @@ init();
   const activeId = map[page];
   if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
   document.body.style.paddingBottom = '70px';
-  // Propagar area=gerencia a todos los links de la barra
-  document.querySelectorAll('.gernav-btn').forEach(a => {
-    if(a.href && !a.href.endsWith('index.html')){
-      const url = new URL(a.href);
-      url.searchParams.set('area', 'gerencia');
-      a.href = url.toString();
-    }
-  });
 })();
 </script>
 

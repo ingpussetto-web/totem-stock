@@ -30,6 +30,12 @@ const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 window.currentUser = null;
 
+// Módulos a los que puede entrar el rol "operador" (producción). Gerencia no
+// tiene restricción: entra a todo. Si un operador intenta abrir cualquier otro
+// módulo (por link viejo, favorito guardado, o escribiendo la URL a mano),
+// requireAuth() lo manda de vuelta a produccion.html en lugar de dejarlo pasar.
+const MODULOS_PRODUCCION = ['produccion.html', 'recepcion.html', 'stock_fase1.html', 'conteo_fisico.html'];
+
 async function requireAuth(){
   try{
     const { data: { session } } = await _sb.auth.getSession();
@@ -54,6 +60,13 @@ async function requireAuth(){
       await _sb.auth.signOut();
       irALogin('inactivo');
       return null;
+    }
+    if(perfil.rol === 'operador'){
+      const pagina = location.pathname.split('/').pop();
+      if(!MODULOS_PRODUCCION.includes(pagina)){
+        location.href = 'produccion.html';
+        return null;
+      }
     }
     window.currentUser = perfil;
     window._authToken = session.access_token;
@@ -88,6 +101,20 @@ async function requireAuthServicio(email, password){
     console.error('[auth] Error autenticando cuenta de servicio:', e);
     return null;
   }
+}
+
+// Oculta de la barra de accesos rápidos (.gernav-btn / .prodnav-btn) los
+// módulos a los que el rol actual no tiene acceso. Llamar después de
+// requireAuth(), pasándole el usuario que devuelve. Gerencia no se filtra.
+function filtrarNavPorRol(usuario){
+  if(!usuario || usuario.rol !== 'operador') return;
+  document.querySelectorAll('.gernav-btn, .prodnav-btn').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    const pagina = href.split('/').pop().split('?')[0];
+    if(pagina && pagina !== '#' && !MODULOS_PRODUCCION.includes(pagina)){
+      a.style.display = 'none';
+    }
+  });
 }
 
 function irALogin(motivo){

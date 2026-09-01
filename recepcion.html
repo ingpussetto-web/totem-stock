@@ -163,10 +163,10 @@ textarea.form-input{resize:vertical;min-height:70px;}
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="logo">
+    <a class="logo" href="index.html" style="display:block;text-decoration:none;color:inherit;cursor:pointer;">
       <div class="logo-name">Totem Nube</div>
       <div class="logo-sub">RECEPCIÓN · v1.0</div>
-    </div>
+    </a>
     <nav class="nav">
       <div class="nav-section">Proceso</div>
       <div class="nav-item active" id="nav-pendientes" onclick="showPage('pendientes')">
@@ -1674,6 +1674,7 @@ async function init(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
   loadPendientes();
 }
 function mostrarUsuarioLogueado(usuario){
@@ -2012,13 +2013,8 @@ async function deshacerIngreso(recepcionId, ocNumero, ocId){
 </nav>
 <script>
 (function(){
-  const params = new URLSearchParams(window.location.search);
-  const area = params.get('area') || sessionStorage.getItem('tn_area') || '';
   const nav = document.querySelector('.gernav');
-  if(area !== 'gerencia'){
-    if(nav) nav.style.display = 'none';
-    return;
-  }
+  if(nav) nav.style.display = 'flex';
   const page = window.location.pathname.split('/').pop().replace('.html','');
   const map = {
     'calculador_totem_nube_v16':'gnav-cotizador',
@@ -2033,15 +2029,6 @@ async function deshacerIngreso(recepcionId, ocNumero, ocId){
   const activeId = map[page];
   if(activeId){ const el = document.getElementById(activeId); if(el) el.classList.add('active'); }
   document.body.style.paddingBottom = '70px';
-  document.querySelectorAll('.gernav-btn').forEach(a => {
-    if(a.href && !a.href.includes('index.html')){
-      try{
-        const url = new URL(a.href);
-        url.searchParams.set('area', 'gerencia');
-        a.href = url.toString();
-      }catch(e){}
-    }
-  });
 })();
 </script>
 
