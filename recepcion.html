@@ -499,12 +499,16 @@ async function abrirConteoPendiente(recId){
     for(const ri of (recItems||[])){
       const sku = ri.oc_items?.skus;
       if(!sku || sku.tracking !== 'cantidad') continue;
+      const skuId = ri.oc_items?.sku_id;
+      const variantes = skuId ? await api(`variantes?sku_id=eq.${skuId}&select=*&activo=eq.true`).catch(()=>[]) : [];
       itemsCantidad.push({
-        sku_id: ri.oc_items?.sku_id,
+        sku_id: skuId,
+        recepcion_id: ri.recepcion_id,
+        oc_item_id: ri.oc_item_id,
         nombre: sku.nombre || '—',
         cantidad_recibida: ri.cantidad_recibida,
         color_recibido: ri.color_recibido || null,
-        _variantes: []
+        _variantes: variantes || []
       });
     }
 
@@ -671,6 +675,18 @@ function checkDesvio(i){
 
 // ─── PROCESAR RECEPCIÓN ─────────────────────────────────────
 function procesarRecepcion(){
+  // Si el insumo tiene variantes de color, no dejar pasar sin elegir uno
+  // (ni siquiera queda "Sin color" — o se elige un color real, o se marca "A definir").
+  const sinColorElegido = itemsActual.filter((item,i)=>{
+    if(!(item._variantes?.length > 0)) return false;
+    const val = document.getElementById(`color-rec-${i}`)?.value;
+    return !val;
+  });
+  if(sinColorElegido.length){
+    toast('Elegí el color de: ' + sinColorElegido.map(i=>i.nombre).join(', '));
+    return;
+  }
+
   const btnConf = document.getElementById('btn-confirmar-recepcion');
   if(btnConf){ btnConf.disabled=true; btnConf.textContent='Procesando...'; }
   // Recolectar lo que ingresó el usuario
@@ -1426,13 +1442,13 @@ function toast(msg){
 
 // ─── VERIFICACIÓN DE CAJA ────────────────────────────────────
 let _vcajaItems = [];
+let _vcajaGrupos = []; // uno por insumo — si tiene variantes de color, un conteo por cada color existente
 let _vcajaRecId = null;
 
 async function mostrarVerificacionCaja(items, recId){
-  _vcajaItems = items;
   _vcajaRecId = recId;
 
-  // Cargar stock actual de cada item
+  // Cargar stock actual de cada item (para el fallback de ingresarCantidad, si hiciera falta)
   const lista = [];
   for(const ri of items){
     let varianteId = null;
@@ -1448,16 +1464,62 @@ async function mostrarVerificacionCaja(items, recId){
   }
   _vcajaItems = lista;
 
+  // Agrupar por insumo: si el SKU tiene variantes de color, se cuenta caja por cada color
+  // que exista (no solo el que se recibió ahora) — así el conteo queda completo aunque
+  // en la caja convivan colores de recepciones anteriores.
+  const gruposPorSku = {};
+  for(const ri of items){
+    if(!gruposPorSku[ri.sku_id]){
+      gruposPorSku[ri.sku_id] = { sku_id: ri.sku_id, nombre: ri.nombre, recibido_total: 0, variantesSku: ri._variantes||[] };
+    }
+    gruposPorSku[ri.sku_id].recibido_total += Number(ri.cantidad_recibida)||0;
+  }
+
+  const grupos = [];
+  for(const skuIdStr of Object.keys(gruposPorSku)){
+    const g = gruposPorSku[skuIdStr];
+    if(g.variantesSku?.length){
+      const colores = [];
+      for(const v of g.variantesSku){
+        const stockRows = await api(`stock?sku_id=eq.${g.sku_id}&variante_id=eq.${v.id}&select=id,cantidad`).catch(()=>[]);
+        colores.push({ variante_id: v.id, valor: v.valor, stockSistema: stockRows?.[0]?.cantidad || 0 });
+      }
+      g.colores = colores;
+    } else {
+      const stockRows = await api(`stock?sku_id=eq.${g.sku_id}&variante_id=is.null&select=id,cantidad`).catch(()=>[]);
+      g.stockSistema = stockRows?.[0]?.cantidad || 0;
+      g.colores = null;
+    }
+    grupos.push(g);
+  }
+  _vcajaGrupos = grupos;
+
   // Generar HTML del modal
-  const listaHtml = lista.map((ri, idx) => `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${ri.nombre}${ri.color_recibido?' — '+ri.color_recibido:''}</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Recibido ahora: <strong style="color:var(--green)">+${ri.cantidad_recibida}</strong> · Stock en sistema: <strong>${ri.stockSistema}</strong></div>
-      <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTEO FÍSICO ACTUAL EN CAJA (antes de guardar)</label>
-      <input type="number" min="0" id="vcaja-conteo-${idx}" placeholder="Ej: ${ri.stockSistema}"
-        style="width:100%;margin-top:4px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;">
-    </div>
-  `).join('');
+  const listaHtml = grupos.map((g, gi) => {
+    if(g.colores){
+      const inputsColores = g.colores.map((c, ci) => `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+          <label style="flex:1;font-size:12px;color:var(--text2);">${c.valor} <span style="color:var(--text3);">(sistema: ${c.stockSistema})</span></label>
+          <input type="number" min="0" id="vcaja-color-${gi}-${ci}" placeholder="Ej: ${c.stockSistema}"
+            style="width:90px;padding:6px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;text-align:center;">
+        </div>`).join('');
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${g.nombre}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Recibido ahora: <strong style="color:var(--green)">+${g.recibido_total}</strong></div>
+          <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTEO FÍSICO ACTUAL EN CAJA, POR COLOR (antes de guardar)</label>
+          ${inputsColores}
+        </div>`;
+    }
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${g.nombre}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Recibido ahora: <strong style="color:var(--green)">+${g.recibido_total}</strong> · Stock en sistema: <strong>${g.stockSistema}</strong></div>
+        <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTEO FÍSICO ACTUAL EN CAJA (antes de guardar)</label>
+        <input type="number" min="0" id="vcaja-simple-${gi}" placeholder="Ej: ${g.stockSistema}"
+          style="width:100%;margin-top:4px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;">
+      </div>`;
+  }).join('');
 
   document.getElementById('vcaja-lista').innerHTML = listaHtml;
   document.getElementById('vcaja-nombre').value = MI_NOMBRE || '';
@@ -1469,28 +1531,49 @@ async function confirmarVerificacionCaja(){
   const btnCaja = document.querySelector('[onclick="confirmarVerificacionCaja()"]');
   if(btnCaja){ btnCaja.disabled=true; btnCaja.textContent='Guardando...'; }
   const nombre = document.getElementById('vcaja-nombre').value.trim() || 'Sin nombre';
-  const fecha = new Date().toISOString();
   const alertas = [];
 
-  for(let idx=0; idx<_vcajaItems.length; idx++){
-    const ri = _vcajaItems[idx];
-    const conteoInput = document.getElementById(`vcaja-conteo-${idx}`);
-    const conteoFisico = parseInt(conteoInput?.value);
-
-    if(isNaN(conteoFisico)){
-      toast(`Ingresá el conteo de: ${ri.nombre}`);
-      return;
-    }
-
-    const diferencia = conteoFisico - ri.stockSistema;
-    if(diferencia !== 0){
-      const signo = diferencia > 0 ? '+' : '';
-      alertas.push({
-        tipo: 'diferencia_conteo_caja',
-        mensaje: `Diferencia en conteo de caja al recepcionar — ${ri.nombre}${ri.color_recibido?' ('+ri.color_recibido+')':''}: sistema decía ${ri.stockSistema}, conteo físico ${conteoFisico} (diferencia ${signo}${diferencia}). Registrado por: ${nombre}. Fecha: ${new Date().toLocaleString('es-AR')}.`,
-        leida: false,
-        sku_id: ri.sku_id || null
-      });
+  for(let gi=0; gi<_vcajaGrupos.length; gi++){
+    const g = _vcajaGrupos[gi];
+    if(g.colores){
+      for(let ci=0; ci<g.colores.length; ci++){
+        const c = g.colores[ci];
+        const conteoInput = document.getElementById(`vcaja-color-${gi}-${ci}`);
+        const conteoFisico = parseInt(conteoInput?.value);
+        if(isNaN(conteoFisico)){
+          toast(`Ingresá el conteo de: ${g.nombre} — ${c.valor}`);
+          if(btnCaja){ btnCaja.disabled=false; btnCaja.textContent='Confirmar y guardar'; }
+          return;
+        }
+        const diferencia = conteoFisico - c.stockSistema;
+        if(diferencia !== 0){
+          const signo = diferencia > 0 ? '+' : '';
+          alertas.push({
+            tipo: 'diferencia_conteo_caja',
+            mensaje: `Diferencia en conteo de caja al recepcionar — ${g.nombre} (${c.valor}): sistema decía ${c.stockSistema}, conteo físico ${conteoFisico} (diferencia ${signo}${diferencia}). Registrado por: ${nombre}. Fecha: ${new Date().toLocaleString('es-AR')}.`,
+            leida: false,
+            sku_id: g.sku_id || null
+          });
+        }
+      }
+    } else {
+      const conteoInput = document.getElementById(`vcaja-simple-${gi}`);
+      const conteoFisico = parseInt(conteoInput?.value);
+      if(isNaN(conteoFisico)){
+        toast(`Ingresá el conteo de: ${g.nombre}`);
+        if(btnCaja){ btnCaja.disabled=false; btnCaja.textContent='Confirmar y guardar'; }
+        return;
+      }
+      const diferencia = conteoFisico - g.stockSistema;
+      if(diferencia !== 0){
+        const signo = diferencia > 0 ? '+' : '';
+        alertas.push({
+          tipo: 'diferencia_conteo_caja',
+          mensaje: `Diferencia en conteo de caja al recepcionar — ${g.nombre}: sistema decía ${g.stockSistema}, conteo físico ${conteoFisico} (diferencia ${signo}${diferencia}). Registrado por: ${nombre}. Fecha: ${new Date().toLocaleString('es-AR')}.`,
+          leida: false,
+          sku_id: g.sku_id || null
+        });
+      }
     }
   }
 
