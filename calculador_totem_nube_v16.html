@@ -759,7 +759,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <label>Dólar de esta cotización</label>
           <div style="display:flex;gap:4px;">
             <input type="number" id="cot-dolar" value="1420" min="1" style="width:100%;" onchange="cambiarDolarCotizacion(this.value)" />
-            <button type="button" class="btn" title="Traer el dólar del día (BNA)" onclick="actualizarDolarCotizacion()" style="white-space:nowrap;padding:0 10px;">↻</button>
+            <button type="button" class="btn" title="Traer el dólar del día (BNA)" onclick="actualizarDolarCotizacion(event)" style="white-space:nowrap;padding:0 10px;">↻</button>
           </div>
           <div id="cot-dolar-inicial-info" style="font-size:10.5px;color:var(--text3);margin-top:4px;"></div>
         </div>
@@ -4065,10 +4065,19 @@ function cambiarDolarCotizacion(valor){
   aplicarNuevoDolarCotizacion(valor);
 }
 
-// Trae el dólar que está activo ahora mismo en el sistema (el mismo widget de la
-// barra lateral, "↻ Actualizar BNA") y lo aplica a la cotización en edición.
-function actualizarDolarCotizacion(){
-  aplicarNuevoDolarCotizacion(dolar);
+// Sale a buscar el dólar BNA del día (misma consulta que el widget de la barra
+// lateral) y lo aplica a la cotización en edición. Antes solo reusaba el valor
+// que ya estuviera cargado en la variable global — si no se había refrescado
+// en la sesión (o ya coincidía), el botón no mostraba ningún cambio.
+async function actualizarDolarCotizacion(evt){
+  const btn = evt && evt.target;
+  if(btn) btn.disabled = true;
+  try{
+    await fetchDolar();
+    aplicarNuevoDolarCotizacion(dolar);
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 
 function volverDolarInicial(){
