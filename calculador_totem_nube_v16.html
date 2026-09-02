@@ -1354,14 +1354,20 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
 // (que trabaja mayormente con datos en localStorage) y redirige a login.html
 // si no hay sesión válida — no se envuelve el resto del archivo para no romper
 // los onclick="..." inline que dependen de funciones globales.
-(async function(){
+// window._authReady: promesa que resuelve cuando requireAuth() terminó (con el
+// usuario, o null si falló/redirigió). stockAPI() la espera antes de armar los
+// headers de cada pedido — así ningún llamado de más abajo en este script
+// (que arrancan en paralelo, ej. iniciarCotizacionesSupabase) sale con la
+// clave anónima mientras el login todavía está resolviendo.
+window._authReady = (async function(){
   const usuario = await requireAuth();
-  if(!usuario) return;
+  if(!usuario) return null;
   const badge = document.createElement('div');
   badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
   badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
     + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
   document.body.appendChild(badge);
+  return usuario;
 })();
 
 const BASE_DOLAR = 1420;
@@ -8795,6 +8801,7 @@ function mostrarNotifOP(opNumero, cliente, producto, color){
 // ─── INTEGRACIÓN STOCK — CREAR OP ────────────────────────────────────────────
 
 async function stockAPI(path, method='GET', body=null){
+  if(window._authReady) await window._authReady;
   const opts = {
     method,
     headers: authHeaders({'Prefer': method==='POST' ? 'return=representation' : ''})
