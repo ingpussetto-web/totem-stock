@@ -140,7 +140,7 @@ async function requireAuthServicio(email, password){
 function filtrarNavPorRol(usuario){
   if(!usuario || usuario.rol !== 'operador') return;
   const permitidos = window._modulosPermitidos || MODULOS_PRODUCCION_DEFAULT;
-  document.querySelectorAll('.gernav-btn, .prodnav-btn').forEach(a => {
+  document.querySelectorAll('.gernav-btn, .prodnav-btn, a.logo').forEach(a => {
     const href = a.getAttribute('href') || '';
     const pagina = href.split('/').pop().split('?')[0];
     if(pagina === 'index.html'){

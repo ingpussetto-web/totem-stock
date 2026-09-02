@@ -755,6 +755,14 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
             <option value="0">Sin IVA</option>
           </select>
         </div>
+        <div class="modal-field">
+          <label>Dólar de esta cotización</label>
+          <div style="display:flex;gap:4px;">
+            <input type="number" id="cot-dolar" value="1420" min="1" style="width:100%;" onchange="cambiarDolarCotizacion(this.value)" />
+            <button type="button" class="btn" title="Traer el dólar del día (BNA)" onclick="actualizarDolarCotizacion()" style="white-space:nowrap;padding:0 10px;">↻</button>
+          </div>
+          <div id="cot-dolar-inicial-info" style="font-size:10.5px;color:var(--text3);margin-top:4px;"></div>
+        </div>
       </div>
 
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:monospace;margin:12px 0 8px;">Ítems</div>
@@ -3996,6 +4004,77 @@ let cotItemsTemp = [];
 let cotIvaHardwarePct = 0.105; // IVA aplicado a hardware (equipo, periféricos, transporte, param, ploteo) de la cotización en edición. La licencia de software NO usa esta variable — mantiene su propio tratamiento.
 let cotOtrosItems = []; // [{desc, precio, cant}] — lista repetible de "Otros ítems" en Adicionales
 
+// ─── DÓLAR DE LA COTIZACIÓN EN EDICIÓN ──────────────────────────────────────
+// cotDolarActual: el dólar "activo" ahora mismo — con éste se calculan los montos
+// en pesos de los ítems mientras se arma/edita la cotización.
+// cotDolarInicial / cotDolarInicialFecha: foto congelada del dólar del día en que
+// se CREÓ la cotización (nunca se vuelve a pisar). Sirve para volver a ese valor
+// si el cliente negocia mantener el dólar original después de una actualización.
+// Nota: esto es solo para cotizaciones nuevas de acá en adelante — las que ya
+// estaban guardadas no tienen este dato, así que no se les toca ningún precio.
+let cotDolarActual = 1420;
+let cotDolarInicial = null;
+let cotDolarInicialFecha = null;
+
+function fechaCortaAR(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+
+function renderDolarInicialInfo(){
+  const el = document.getElementById('cot-dolar-inicial-info');
+  if(!el) return;
+  if(!cotDolarInicial){
+    el.innerHTML = '';
+    return;
+  }
+  const mismoValor = cotDolarActual === cotDolarInicial;
+  el.innerHTML = 'Cotización inicial: fecha ' + fechaCortaAR(cotDolarInicialFecha) + ' con dólar $' + fmt(cotDolarInicial)
+    + (mismoValor ? '' : ' <button type="button" onclick="volverDolarInicial()" style="margin-left:4px;font-size:10px;padding:1px 6px;border:1px solid var(--border2);border-radius:4px;background:transparent;color:var(--text2);cursor:pointer;">Volver al inicial</button>');
+}
+
+// Recalcula en pesos todos los ítems de la cotización en edición (equipo, Mini PC
+// y periféricos extra) según la proporción entre el dólar nuevo y el que estaba
+// activo hasta ahora. No toca transporte/parametrización/licencia — esos montos
+// se cargan aparte y pueden estar en otra moneda (la licencia ya tiene su propio
+// selector ARS/USD).
+function aplicarNuevoDolarCotizacion(nuevoDolar){
+  nuevoDolar = parseFloat(nuevoDolar);
+  if(!nuevoDolar || nuevoDolar <= 0) return;
+  const ratio = nuevoDolar / cotDolarActual;
+  if(ratio !== 1){
+    cotItemsTemp.forEach(function(it){
+      it.precio = Math.round(it.precio * ratio);
+      if(it.minipc && it.minipc.precio) it.minipc.precio = Math.round(it.minipc.precio * ratio);
+      if(it.otrosPerifericos){
+        Object.keys(it.otrosPerifericos).forEach(function(k){
+          if(it.otrosPerifericos[k].precio) it.otrosPerifericos[k].precio = Math.round(it.otrosPerifericos[k].precio * ratio);
+        });
+      }
+    });
+  }
+  cotDolarActual = nuevoDolar;
+  const inp = document.getElementById('cot-dolar');
+  if(inp) inp.value = nuevoDolar;
+  renderDolarInicialInfo();
+  renderCotItemsTemp();
+  if(typeof calcPagoMontos === 'function') calcPagoMontos();
+}
+
+function cambiarDolarCotizacion(valor){
+  aplicarNuevoDolarCotizacion(valor);
+}
+
+// Trae el dólar que está activo ahora mismo en el sistema (el mismo widget de la
+// barra lateral, "↻ Actualizar BNA") y lo aplica a la cotización en edición.
+function actualizarDolarCotizacion(){
+  aplicarNuevoDolarCotizacion(dolar);
+}
+
+function volverDolarInicial(){
+  if(cotDolarInicial) aplicarNuevoDolarCotizacion(cotDolarInicial);
+}
+
 // ─── COTIZACIONES SUPABASE SYNC ──────────────────────────────────────────────
 async function cotSupaSave(c){
   try{
@@ -4401,10 +4480,26 @@ function abrirNuevaCotizacion(editId){
   const catEl = document.getElementById('cot-categoria');
   if(catEl) catEl.value = '';
 
+  if(!editId){
+    // Cotización nueva: arranca con el dólar activo del sistema y ESE queda
+    // como su "inicial" congelado — a partir de acá esta cotización lleva su
+    // propio dólar independiente, aunque el de la barra lateral siga cambiando.
+    cotDolarActual = dolar;
+    cotDolarInicial = dolar;
+    cotDolarInicialFecha = new Date().toISOString();
+  }
+
   if(editId){
     const c = cotizaciones.find(function(c){ return c.id===editId; });
     if(!c) return;
     document.getElementById('cot-edit-id').value = editId;
+    // Dólar de la cotización: si ya tiene el dato (cotización armada con esta
+    // función), se respeta tal cual quedó. Si es una cotización vieja, de antes
+    // de esta función, no hay nada que restaurar — arranca en el dólar actual
+    // del sistema, sin foto "inicial" (no aplica retroactivamente).
+    cotDolarActual = c.dolarActual || dolar;
+    cotDolarInicial = c.dolarInicial || null;
+    cotDolarInicialFecha = c.dolarInicialFecha || null;
     document.getElementById('cot-empresa').value = c.empresa;
     document.getElementById('cot-cuit').value = c.cuit||'';
     document.getElementById('cot-contacto').value = c.contacto||'';
@@ -4536,6 +4631,9 @@ function abrirNuevaCotizacion(editId){
 
   renderPagoOpciones();
   if(_cLoadedParaPago) restaurarPagoValores(_cLoadedParaPago);
+  const dolarEl = document.getElementById('cot-dolar');
+  if(dolarEl) dolarEl.value = cotDolarActual;
+  renderDolarInicialInfo();
   renderCotItemsTemp();
   modal.style.display = 'flex';
 }
@@ -4936,6 +5034,9 @@ function getCotizacionData(estado){
     notas: document.getElementById('cot-notas').value.trim(),
     items: [...cotItemsTemp],
     ivaHardwarePct: cotIvaHardwarePct,
+    dolarActual: cotDolarActual,
+    dolarInicial: cotDolarInicial,
+    dolarInicialFecha: cotDolarInicialFecha,
     transporte: tieneTransporte,
     transporteMonto: tieneTransporte ? parseFloat(document.getElementById('cot-transporte-monto').value)||0 : 0,
 

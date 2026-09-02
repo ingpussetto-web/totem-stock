@@ -135,7 +135,7 @@ const COLORES = ['green','blue','amber','cyan','purple'];
 function tarjetaHTML(mod, color, extra){
   const readonly = extra && extra.readonly ? ' readonly' : '';
   const href = extra && extra.href ? extra.href : ('https://ingpussetto-web.github.io/totem-stock/' + mod.file);
-  return '<a class="mod-card ' + color + readonly + '" href="' + href + '" target="_blank">'
+  return '<a class="mod-card ' + color + readonly + '" href="' + href + '">'
     + '<div class="mod-icon">' + mod.icon + '</div>'
     + '<div class="mod-info">'
     +   '<div class="mod-name">' + mod.label + '</div>'
@@ -168,9 +168,9 @@ function renderModulos(usuario){
   }
 
   html += '<div class="col-title" style="margin-top:8px;">📺 Consulta rápida</div>';
-  html += '<a class="mod-card blue" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST" target="_blank">'
+  html += '<a class="mod-card blue" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST">'
     + '<div class="mod-icon">📱</div><div class="mod-info"><div class="mod-name">Escaneo QR</div><div class="mod-desc">Consulta de insumos desde el celular</div></div><div class="mod-arrow">→</div></a>';
-  html += '<a class="mod-card cyan" href="https://ingpussetto-web.github.io/totem-stock/dashboard_produccion.html" target="_blank" style="grid-column:1/-1;">'
+  html += '<a class="mod-card cyan" href="https://ingpussetto-web.github.io/totem-stock/dashboard_produccion.html" style="grid-column:1/-1;">'
     + '<div class="mod-icon">📺</div><div class="mod-info"><div class="mod-name">Dashboard TV</div><div class="mod-desc">Panel en tiempo real para el televisor del taller</div></div><div class="mod-arrow">→</div></a>';
 
   grid.innerHTML = html;
