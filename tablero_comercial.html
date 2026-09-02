@@ -246,6 +246,7 @@ async function init(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
   try{
     [_proyectos, _templates, _interacciones] = await Promise.all([
       api('proyectos_comercial?select=*&order=id.desc'),

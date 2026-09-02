@@ -3656,6 +3656,7 @@ async function init(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
   await loadData();loadOCs();checkBadges();
 }
 function mostrarUsuarioLogueado(usuario){

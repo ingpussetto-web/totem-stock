@@ -53,6 +53,18 @@ select.rol-select:disabled{opacity:0.4;cursor:not-allowed;}
 .empty-msg{color:var(--text3);font-size:12px;padding:20px;text-align:center;font-style:italic;}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:10px 18px;font-size:12px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:10000;}
 
+/* Modal módulos */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10500;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 20px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:420px;padding:22px;}
+.modal-title{font-size:14px;font-weight:600;margin-bottom:2px;}
+.modal-sub{font-size:11px;color:var(--text2);margin-bottom:16px;}
+.mod-check-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);font-size:12.5px;}
+.mod-check-row:last-child{border-bottom:none;}
+.mod-check-row input{width:15px;height:15px;accent-color:var(--green);cursor:pointer;}
+.mod-check-row label{cursor:pointer;flex:1;}
+.modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;}
+
 /* Nav */
 .gernav{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;background:rgba(8,10,15,0.97);border-top:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);overflow-x:auto;}
 .gernav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#7a8099;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;text-decoration:none;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
@@ -79,6 +91,7 @@ select.rol-select:disabled{opacity:0.4;cursor:not-allowed;}
           <th>Nombre</th>
           <th>Email</th>
           <th>Rol</th>
+          <th>Módulos</th>
           <th>Estado</th>
           <th>Registrado</th>
           <th></th>
@@ -92,6 +105,18 @@ select.rol-select:disabled{opacity:0.4;cursor:not-allowed;}
 </div>
 
 <div id="toast" class="toast"></div>
+
+<div class="modal-overlay" id="modal-modulos" onclick="if(event.target===this) cerrarModalModulos()">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-modulos-nombre">Módulos habilitados</div>
+    <div class="modal-sub">Elegí a qué pantallas puede entrar esta persona. Los módulos de trabajo diario (Producción, Recepción, Stock, Conteo) vienen tildados por defecto.</div>
+    <div id="modal-modulos-lista"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModalModulos()">Cancelar</button>
+      <button class="btn green" onclick="guardarModulos()">Guardar</button>
+    </div>
+  </div>
+</div>
 
 <nav class="gernav" id="gernav">
   <a class="gernav-btn" href="https://ingpussetto-web.github.io/totem-stock/index.html"><span class="gernav-icon">🏠</span>Inicio</a>
@@ -153,6 +178,9 @@ function renderTabla(){
   }
   tbody.innerHTML = _usuarios.map(u => {
     const esYo = u.id === _miId;
+    const modulosCell = u.rol === 'gerencia'
+      ? '<span style="color:var(--text3);font-style:italic;">Todos</span>'
+      : `<button class="btn" onclick="abrirModalModulos('${u.id}')">Editar (${moduloCount(u)})</button>`;
     return `
     <tr>
       <td class="nombre">${esc(u.nombre||'—')}</td>
@@ -163,6 +191,7 @@ function renderTabla(){
           <option value="gerencia" ${u.rol==='gerencia'?'selected':''}>Gerencia</option>
         </select>
       </td>
+      <td>${modulosCell}</td>
       <td><span class="badge ${u.activo?'activo':'pendiente'}">${u.activo?'Activo':'Pendiente'}</span></td>
       <td>${formatDate(u.created_at)}</td>
       <td>
@@ -172,6 +201,15 @@ function renderTabla(){
       </td>
     </tr>`;
   }).join('');
+}
+
+// Cuántos módulos tiene habilitados este usuario (si nunca se configuró a mano,
+// cuenta el set por defecto de producción, que es el que aplica hoy en la práctica).
+function moduloCount(u){
+  const lista = (Array.isArray(u.modulos_habilitados) && u.modulos_habilitados.length)
+    ? u.modulos_habilitados
+    : MODULOS_PRODUCCION_DEFAULT;
+  return lista.length;
 }
 
 async function toggleActivoUsuario(id, nuevoActivo){
@@ -186,6 +224,44 @@ async function cambiarRolUsuario(id, nuevoRol){
   try{
     await api(`usuarios?id=eq.${id}`, 'PATCH', {rol: nuevoRol});
     toast('Rol actualizado ✓');
+    cargarUsuarios();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+let _modalModulosUserId = null;
+
+function abrirModalModulos(id){
+  const u = _usuarios.find(x => x.id === id);
+  if(!u) return;
+  _modalModulosUserId = id;
+  document.getElementById('modal-modulos-nombre').textContent = 'Módulos de ' + (u.nombre || u.email);
+  const actuales = (Array.isArray(u.modulos_habilitados) && u.modulos_habilitados.length)
+    ? u.modulos_habilitados
+    : MODULOS_PRODUCCION_DEFAULT;
+  const lista = document.getElementById('modal-modulos-lista');
+  lista.innerHTML = MODULOS_CATALOGO.map(m => `
+    <div class="mod-check-row">
+      <input type="checkbox" id="chk-mod-${m.file}" value="${m.file}" ${actuales.includes(m.file) ? 'checked' : ''}>
+      <label for="chk-mod-${m.file}">${m.icon} ${esc(m.label)}</label>
+    </div>
+  `).join('');
+  document.getElementById('modal-modulos').classList.add('open');
+}
+
+function cerrarModalModulos(){
+  document.getElementById('modal-modulos').classList.remove('open');
+  _modalModulosUserId = null;
+}
+
+async function guardarModulos(){
+  if(!_modalModulosUserId) return;
+  const elegidos = MODULOS_CATALOGO
+    .map(m => m.file)
+    .filter(file => document.getElementById(`chk-mod-${file}`)?.checked);
+  try{
+    await api(`usuarios?id=eq.${_modalModulosUserId}`, 'PATCH', {modulos_habilitados: elegidos});
+    toast('Módulos actualizados ✓');
+    cerrarModalModulos();
     cargarUsuarios();
   }catch(e){ toast('Error: '+e.message); }
 }

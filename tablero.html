@@ -373,6 +373,7 @@ async function init(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
   try{
     [_areas] = await Promise.all([
       api('areas?select=*&order=codigo.asc'),

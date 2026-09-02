@@ -30,11 +30,35 @@ const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 window.currentUser = null;
 
-// Módulos a los que puede entrar el rol "operador" (producción). Gerencia no
-// tiene restricción: entra a todo. Si un operador intenta abrir cualquier otro
-// módulo (por link viejo, favorito guardado, o escribiendo la URL a mano),
-// requireAuth() lo manda de vuelta a produccion.html en lugar de dejarlo pasar.
-const MODULOS_PRODUCCION = ['produccion.html', 'recepcion.html', 'stock_fase1.html', 'conteo_fisico.html'];
+// Catálogo de módulos "de trabajo" del sistema — se usa para armar el
+// checklist de permisos en usuarios.html y las tarjetas del hub de producción
+// (index_produccion.html). Agregar un módulo nuevo acá alcanza para que
+// aparezca en ambos lugares.
+const MODULOS_CATALOGO = [
+  { file: 'produccion.html',                 label: 'Producción',              icon: '🔧', desc: 'Checklist de insumos y escaneo por OP' },
+  { file: 'recepcion.html',                  label: 'Recepción',               icon: '📥', desc: 'Ingreso de insumos comprados al stock' },
+  { file: 'stock_fase1.html',                label: 'Stock',                   icon: '📦', desc: 'Catálogo, cantidades y unidades físicas' },
+  { file: 'conteo_fisico.html',              label: 'Conteo Físico',           icon: '🔢', desc: 'Verificación y ajuste de stock real vs sistema' },
+  { file: 'calculador_totem_nube_v16.html',  label: 'Cotizador',               icon: '💰', desc: 'Cotizaciones, costeo y detalle de ventas' },
+  { file: 'ops_ventas.html',                 label: 'Órdenes de Producción',   icon: '✅', desc: 'Revisar BOM, confirmar y liberar OPs' },
+  { file: 'compras.html',                    label: 'Compras',                 icon: '🛒', desc: 'Órdenes de compra y proveedores' },
+  { file: 'inventario_inicial.html',         label: 'Inventario Inicial',      icon: '🏷', desc: 'Etiquetas, UIDs y seteo de stock inicial' },
+  { file: 'noticias.html',                   label: 'Noticias',                icon: '📢', desc: 'Breaking news para el dashboard de producción' },
+  { file: 'tablero.html',                    label: 'Tablero de Proyectos',    icon: '🗂', desc: 'Kanban interno · seguimiento de OPs' },
+  { file: 'bienes_personal.html',            label: 'Bienes y Personal',       icon: '🧰', desc: 'Bienes por área, fallas/service y personal' },
+  { file: 'licencias_clientes.html',         label: 'Licencias Clientes',      icon: '🔑', desc: 'Sincronización con Gestor de Licencias' },
+  { file: 'tablero_comercial.html',          label: 'Tablero Comercial',       icon: '🤝', desc: 'Pipeline de leads · presupuestos · seguimiento' },
+  { file: 'mensajeria_comercial.html',       label: 'Mensajería Comercial',    icon: '📲', desc: 'Encuestas · newsletter · reventa' },
+];
+
+// Set por defecto para operadores que todavía no tienen permisos configurados
+// a mano en usuarios.html (columna modulos_habilitados) — así ningún usuario
+// existente pierde acceso de golpe el día que se activa esta función.
+const MODULOS_PRODUCCION_DEFAULT = ['produccion.html', 'recepcion.html', 'stock_fase1.html', 'conteo_fisico.html'];
+
+// Páginas que cualquier usuario logueado puede abrir sin importar sus permisos
+// (no son "módulos de trabajo" en sí, son puntos de entrada/navegación).
+const PAGINAS_SIEMPRE_PERMITIDAS = ['index_produccion.html'];
 
 async function requireAuth(){
   try{
@@ -45,7 +69,7 @@ async function requireAuth(){
     }
     const { data: perfil, error } = await _sb
       .from('usuarios')
-      .select('id,nombre,email,rol,activo')
+      .select('id,nombre,email,rol,activo,modulos_habilitados')
       .eq('id', session.user.id)
       .single();
 
@@ -62,11 +86,17 @@ async function requireAuth(){
       return null;
     }
     if(perfil.rol === 'operador'){
+      const permitidos = (Array.isArray(perfil.modulos_habilitados) && perfil.modulos_habilitados.length)
+        ? perfil.modulos_habilitados
+        : MODULOS_PRODUCCION_DEFAULT;
+      window._modulosPermitidos = permitidos;
       const pagina = location.pathname.split('/').pop();
-      if(!MODULOS_PRODUCCION.includes(pagina)){
-        location.href = 'produccion.html';
+      if(!PAGINAS_SIEMPRE_PERMITIDAS.includes(pagina) && !permitidos.includes(pagina)){
+        location.href = 'index_produccion.html';
         return null;
       }
+    } else {
+      window._modulosPermitidos = null; // null = gerencia, sin restricción
     }
     window.currentUser = perfil;
     window._authToken = session.access_token;
@@ -104,16 +134,21 @@ async function requireAuthServicio(email, password){
 }
 
 // Oculta de la barra de accesos rápidos (.gernav-btn / .prodnav-btn) los
-// módulos a los que el rol actual no tiene acceso. Llamar después de
+// módulos a los que este usuario no tiene acceso, y manda el link "Inicio" a
+// su hub de producción en vez del hub general. Llamar después de
 // requireAuth(), pasándole el usuario que devuelve. Gerencia no se filtra.
 function filtrarNavPorRol(usuario){
   if(!usuario || usuario.rol !== 'operador') return;
+  const permitidos = window._modulosPermitidos || MODULOS_PRODUCCION_DEFAULT;
   document.querySelectorAll('.gernav-btn, .prodnav-btn').forEach(a => {
     const href = a.getAttribute('href') || '';
     const pagina = href.split('/').pop().split('?')[0];
-    if(pagina && pagina !== '#' && !MODULOS_PRODUCCION.includes(pagina)){
-      a.style.display = 'none';
+    if(pagina === 'index.html'){
+      a.setAttribute('href', 'index_produccion.html');
+      return;
     }
+    if(!pagina || pagina === '#') return;
+    if(!permitidos.includes(pagina)) a.style.display = 'none';
   });
 }
 

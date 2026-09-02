@@ -586,7 +586,7 @@ document.querySelectorAll('a.mod-card').forEach(a => {
     if(!session) return;
     const { data: perfil } = await _sb.from('usuarios').select('rol,activo').eq('id', session.user.id).single();
     if(perfil && perfil.activo && perfil.rol === 'operador'){
-      location.href = 'produccion.html';
+      location.href = 'index_produccion.html';
     }
   }catch(e){ /* si falla la consulta, dejamos ver el hub igual */ }
 })();

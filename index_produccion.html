@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Totem Nube — Producción</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
 <style>
 :root{
   --bg:#080a0f;
@@ -80,6 +82,8 @@ body::before{
 .modules-grid{animation:fadeUp 0.5s ease-out;}
 .header{animation:fadeUp 0.4s ease-out;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+
+.empty-msg{color:var(--text3);font-size:12px;text-align:center;grid-column:1/-1;padding:20px;}
 </style>
 </head>
 <body>
@@ -91,7 +95,7 @@ body::before{
       <div class="logo-name">Totem Nube</div>
     </div>
     <div class="logo-sub">Sistema de gestión integral</div>
-    <div class="logo-area">▸ Área de Producción</div>
+    <div class="logo-area" id="logo-area">▸ Área de Producción</div>
     <div class="header-line"></div>
   </div>
 
@@ -101,88 +105,8 @@ body::before{
     <div class="clock-date" id="clock-date">--/--/----</div>
   </div>
 
-  <div class="modules-grid">
-
-    <div class="col-title">🏭 Trabajo</div>
-
-    <a class="mod-card green" href="https://ingpussetto-web.github.io/totem-stock/produccion.html" target="_blank">
-      <div class="mod-icon">🔧</div>
-      <div class="mod-info">
-        <div class="mod-name">Producción</div>
-        <div class="mod-desc">Checklist de insumos y escaneo por OP</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
-    <a class="mod-card amber" href="https://ingpussetto-web.github.io/totem-stock/recepcion.html" target="_blank">
-      <div class="mod-icon">📥</div>
-      <div class="mod-info">
-        <div class="mod-name">Recepción</div>
-        <div class="mod-desc">Ingreso de insumos comprados al stock</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
-    <div class="col-title" style="margin-top:8px;">📦 Consulta</div>
-
-    <a class="mod-card blue readonly" href="https://ingpussetto-web.github.io/totem-stock/stock_fase1.html?mode=readonly&area=produccion" target="_blank">
-      <div class="mod-icon">📊</div>
-      <div class="mod-info">
-        <div class="mod-name">Stock actual</div>
-        <div class="mod-desc">Catálogo, cantidades y unidades físicas</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
-    <a class="mod-card cyan" href="https://ingpussetto-web.github.io/totem-stock/tablero.html" target="_blank">
-      <div class="mod-icon">🗂</div>
-      <div class="mod-info">
-        <div class="mod-name">Tablero de Proyectos</div>
-        <div class="mod-desc">Kanban interno · seguimiento de OPs</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
-    <a class="mod-card blue" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST" target="_blank">
-      <div class="mod-icon">📱</div>
-      <div class="mod-info">
-        <div class="mod-name">Escaneo QR</div>
-        <div class="mod-desc">Consulta de insumos desde el celular</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
-    <a class="mod-card amber readonly" href="https://ingpussetto-web.github.io/totem-stock/conteo_fisico.html?mode=readonly&area=produccion" target="_blank">
-      <div class="mod-icon">🔢</div>
-      <div class="mod-info">
-        <div class="mod-name">Conteo Físico</div>
-        <div class="mod-desc">Consulta de movimientos por insumo</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
-    <div class="col-title" style="margin-top:8px;">🔒 Acceso restringido</div>
-
-    <div class="mod-card purple" onclick="abrirBienesPersonal()">
-      <div class="mod-icon">🖥</div>
-      <div class="mod-info">
-        <div class="mod-name">Bienes y Personal</div>
-        <div class="mod-desc">Bienes por área, fallas/service y asignación a empleados</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </div>
-
-    <div class="col-title" style="margin-top:8px;">📺 Panel</div>
-
-    <a class="mod-card cyan" href="https://ingpussetto-web.github.io/totem-stock/dashboard_produccion.html" target="_blank" style="grid-column:1/-1;">
-      <div class="mod-icon">📺</div>
-      <div class="mod-info">
-        <div class="mod-name">Dashboard TV</div>
-        <div class="mod-desc">Panel en tiempo real para el televisor del taller</div>
-      </div>
-      <div class="mod-arrow">→</div>
-    </a>
-
+  <div class="modules-grid" id="modules-grid">
+    <div class="empty-msg">Cargando tus módulos...</div>
   </div>
 
   <div class="footer" style="margin-top:32px;">
@@ -205,32 +129,67 @@ function updateClock(){
 setInterval(updateClock, 1000);
 updateClock();
 
-document.querySelectorAll('a.mod-card').forEach(a => {
-  a.addEventListener('click', function(e) {
-    e.preventDefault();
-    const url = new URL(this.href);
-    url.searchParams.set('area', 'produccion');
-    url.searchParams.set('v', Date.now());
-    window.location.replace(url.toString());
-  });
-});
+// Colores que se van rotando para las tarjetas de módulos (solo estética).
+const COLORES = ['green','blue','amber','cyan','purple'];
 
-// Bienes y Personal: acceso restringido solo desde este index (producción) —
-// pide la misma contraseña que el resto del sistema, más el nombre de quien ingresa.
-function abrirBienesPersonal(){
-  const pass = prompt('Esta sección requiere autorización.\nIngresá la contraseña:');
-  if(pass === null) return;
-  if(pass !== 'picone001'){ alert('Contraseña incorrecta.'); return; }
-  const nombre = prompt('Ingresá tu nombre para continuar:');
-  if(nombre === null) return;
-  if(!nombre.trim()){ alert('Tenés que ingresar un nombre para continuar.'); return; }
-  try{ localStorage.setItem('tn_usuario', nombre.trim()); }catch(e){}
-  const url = new URL('https://ingpussetto-web.github.io/totem-stock/bienes_personal.html');
-  url.searchParams.set('area', 'produccion');
-  url.searchParams.set('ingreso', nombre.trim());
-  url.searchParams.set('v', Date.now());
-  window.location.replace(url.toString());
+function tarjetaHTML(mod, color, extra){
+  const readonly = extra && extra.readonly ? ' readonly' : '';
+  const href = extra && extra.href ? extra.href : ('https://ingpussetto-web.github.io/totem-stock/' + mod.file);
+  return '<a class="mod-card ' + color + readonly + '" href="' + href + '" target="_blank">'
+    + '<div class="mod-icon">' + mod.icon + '</div>'
+    + '<div class="mod-info">'
+    +   '<div class="mod-name">' + mod.label + '</div>'
+    +   '<div class="mod-desc">' + mod.desc + '</div>'
+    + '</div>'
+    + '<div class="mod-arrow">→</div>'
+    + '</a>';
 }
+
+function renderModulos(usuario){
+  const grid = document.getElementById('modules-grid');
+  const esGerencia = usuario.rol === 'gerencia';
+  const permitidos = esGerencia ? null : (window._modulosPermitidos || MODULOS_PRODUCCION_DEFAULT);
+
+  const propios = MODULOS_CATALOGO.filter(function(m){
+    return esGerencia || permitidos.includes(m.file);
+  });
+
+  let html = '';
+  if(propios.length){
+    html += '<div class="col-title">🏭 Tus módulos</div>';
+    propios.forEach(function(m, i){
+      const extra = (m.file === 'stock_fase1.html' && !esGerencia)
+        ? { readonly: true, href: 'https://ingpussetto-web.github.io/totem-stock/stock_fase1.html?mode=readonly' }
+        : null;
+      html += tarjetaHTML(m, COLORES[i % COLORES.length], extra);
+    });
+  } else {
+    html += '<div class="empty-msg">Todavía no tenés módulos habilitados — pedile a Gerencia que te los active desde Gestión de Usuarios.</div>';
+  }
+
+  html += '<div class="col-title" style="margin-top:8px;">📺 Consulta rápida</div>';
+  html += '<a class="mod-card blue" href="https://ingpussetto-web.github.io/totem-stock/scan.html?uid=TEST" target="_blank">'
+    + '<div class="mod-icon">📱</div><div class="mod-info"><div class="mod-name">Escaneo QR</div><div class="mod-desc">Consulta de insumos desde el celular</div></div><div class="mod-arrow">→</div></a>';
+  html += '<a class="mod-card cyan" href="https://ingpussetto-web.github.io/totem-stock/dashboard_produccion.html" target="_blank" style="grid-column:1/-1;">'
+    + '<div class="mod-icon">📺</div><div class="mod-info"><div class="mod-name">Dashboard TV</div><div class="mod-desc">Panel en tiempo real para el televisor del taller</div></div><div class="mod-arrow">→</div></a>';
+
+  grid.innerHTML = html;
+}
+
+(async function(){
+  const usuario = await requireAuth();
+  if(!usuario) return;
+
+  document.getElementById('logo-area').textContent = usuario.rol === 'gerencia' ? '▸ Gerencia' : '▸ Área de Producción';
+
+  const badge = document.createElement('div');
+  badge.style.cssText = 'position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:8px;font-size:11px;color:#9098b0;font-family:"DM Mono",monospace;background:#1a1e29;border:1px solid rgba(255,255,255,0.13);padding:5px 10px;border-radius:20px;';
+  badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
+    + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
+  document.body.appendChild(badge);
+
+  renderModulos(usuario);
+})();
 </script>
 </body>
 </html>

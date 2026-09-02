@@ -710,6 +710,7 @@ function showMsg(txt, tipo){
   badge.innerHTML = '👤 ' + (usuario.nombre||usuario.email) + ' <span style="color:#666;">· ' + usuario.rol + '</span> '
     + '<button onclick="cerrarSesion()" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:11px;text-decoration:underline;margin-left:4px;">Salir</button>';
   document.body.appendChild(badge);
+  filtrarNavPorRol(usuario);
 
   const params = new URLSearchParams(window.location.search);
   const area = params.get('area') || sessionStorage.getItem('tn_area') || 'gerencia';

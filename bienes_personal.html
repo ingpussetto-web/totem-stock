@@ -1834,6 +1834,7 @@ async function confirmarDevolucionPrestamo(){
   const usuario = await requireAuth();
   if(!usuario) return;
   mostrarUsuarioLogueado(usuario);
+  filtrarNavPorRol(usuario);
   loadDashboard();
 })();
 </script>
