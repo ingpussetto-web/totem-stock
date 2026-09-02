@@ -2708,34 +2708,24 @@ function addExtraInsumo(){
 // ─── USUARIO ─────────────────────────────────────────────────────────────────
 let usuarioActual = '';
 
+// Antes de tener login real, esto le preguntaba el nombre a quien fuera con un
+// prompt() del navegador — un diálogo NATIVO que congela todo el hilo de JS
+// hasta que alguien lo cierra. Eso incluía la redirección a login.html de
+// requireAuth(), que quedaba trabada detrás del prompt: alguien sin sesión
+// podía llegar a ver la pantalla armándose antes de que el login lo mandara
+// de vuelta. Ahora que cada persona tiene su cuenta real, tomamos el nombre
+// directamente de ahí (window._authReady, la misma promesa que usa stockAPI())
+// y no hace falta preguntar nada ni bloquear un dialogo.
 function iniciarUsuario(){
-  const guardado = localStorage.getItem('tn_usuario');
-  if(guardado){
-    usuarioActual = guardado;
-    actualizarChipUsuario();
-  } else {
-    pedirUsuario();
-  }
-}
-
-function pedirUsuario(){
-  const nombre = prompt('¿Con qué nombre querés identificarte en el sistema?\n(Este nombre quedará registrado en cada cambio que hagas)', '');
-  if(nombre && nombre.trim()){
-    usuarioActual = nombre.trim();
-    localStorage.setItem('tn_usuario', usuarioActual);
-    actualizarChipUsuario();
-  } else {
-    usuarioActual = 'Sin nombre';
-    actualizarChipUsuario();
-  }
-}
-
-function cambiarUsuario(){
-  const nuevo = prompt('Cambiar usuario. Nombre actual: '+usuarioActual, usuarioActual);
-  if(nuevo && nuevo.trim() && nuevo.trim() !== usuarioActual){
-    usuarioActual = nuevo.trim();
-    localStorage.setItem('tn_usuario', usuarioActual);
-    actualizarChipUsuario();
+  usuarioActual = localStorage.getItem('tn_usuario') || '';
+  actualizarChipUsuario();
+  if(window._authReady){
+    window._authReady.then(function(usuario){
+      if(!usuario) return;
+      usuarioActual = usuario.nombre || usuario.email;
+      localStorage.setItem('tn_usuario', usuarioActual);
+      actualizarChipUsuario();
+    });
   }
 }
 
