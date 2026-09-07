@@ -258,7 +258,7 @@ async function init(){
     } else if(unidadActual.estado === 'reservado'){
       await renderReservado();
     } else if(unidadActual.estado === 'producido'){
-      renderProducido();
+      await renderProducido();
     } else if(unidadActual.estado === 'asignado_personal'){
       renderAsignadoPersonal();
     } else if(unidadActual.estado === 'transferido_personal'){
@@ -513,8 +513,25 @@ async function ejecutarDesasignacion(nombre){
   }
 }
 
-function renderProducido(){
+async function renderProducido(){
   const u = unidadActual;
+  const variante = u.variantes?.valor || '';
+
+  // Buscar en qué OP quedó incorporado. La fila de op_bom_items no se borra
+  // aunque la OP ya esté terminada — así se puede rastrear el origen de
+  // cualquier etiqueta suelta (como esta), aunque hayan pasado meses.
+  let op = null;
+  try{
+    const bomItems = await api(
+      `op_bom_items?uid_asignado=eq.${encodeURIComponent(u.uid)}&select=*,ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete,codigo_op_interno,fecha_cierre)`
+    );
+    op = bomItems?.[0]?.ordenes_produccion || null;
+  }catch(e){ console.warn('No se pudo buscar la OP de este insumo:', e); }
+
+  const fechaCierre = op?.fecha_cierre
+    ? new Date(op.fecha_cierre).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'})
+    : '—';
+
   document.getElementById('container').innerHTML = `
     <div class="estado-card producido">
       <div class="estado-icon">📦</div>
@@ -522,11 +539,21 @@ function renderProducido(){
     </div>
     <div class="insumo-card">
       <div class="insumo-nombre">${esc(u.skus?.nombre)||'—'}</div>
+      ${variante?`<div class="insumo-variante">● ${variante}</div>`:''}
       <div class="insumo-uid">${esc(u.uid)}</div>
     </div>
+    ${op ? `
+    <div class="asig-card">
+      <div class="asig-title">Quedó incorporado en</div>
+      <div class="asig-row"><div class="asig-key">N° Orden</div><div class="asig-val">${esc(op.op_numero)}${op.codigo_op_interno?' ('+esc(op.codigo_op_interno)+')':''}</div></div>
+      <div class="asig-row"><div class="asig-key">Cliente</div><div class="asig-val">${esc(op.cliente)}</div></div>
+      <div class="asig-row"><div class="asig-key">Producto</div><div class="asig-val">${esc(op.producto_nombre)}</div></div>
+      ${op.color_gabinete?`<div class="asig-row"><div class="asig-key">Color</div><div class="asig-val" style="color:var(--amber)">${esc(op.color_gabinete)}</div></div>`:''}
+      <div class="asig-row"><div class="asig-key">Cerrada</div><div class="asig-val">${fechaCierre}</div></div>
+    </div>` : `
     <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px;font-family:'DM Mono',monospace;">
-      Este insumo ya fue incorporado a un equipo terminado.
-    </div>
+      Este insumo ya fue incorporado a un equipo terminado, pero no se encontró el detalle de la orden.
+    </div>`}
   `;
 }
 
