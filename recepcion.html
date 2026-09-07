@@ -344,7 +344,21 @@ let etiquetasSeleccionadas = new Set();
 async function api(path, method='GET', body=null){
   const opts={method,headers:authHeaders({'Prefer':method==='POST'?'return=representation':method==='PATCH'?'return=representation':''})};
   if(body) opts.body=JSON.stringify(body);
-  const res=await fetch(SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+path,opts);
+  // Timeout de red: si el wifi se corta a mitad de camino, sin esto el fetch queda
+  // colgado para siempre y cualquier pantalla que esté esperando (ej: el botón de
+  // "Confirmar y guardar" del conteo de caja) se queda trabada sin aviso. Con esto,
+  // a los 20s se cancela solo y se convierte en un error manejable.
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(()=>ctrl.abort(), 20000);
+  let res;
+  try{
+    res = await fetch(SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+path, {...opts, signal: ctrl.signal});
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('Sin respuesta del servidor (revisá tu conexión) — se canceló tras 20s.');
+    throw e;
+  }finally{
+    clearTimeout(timeoutId);
+  }
   if(!res.ok) throw new Error(await res.text());
   if(res.status===204) return null;
   return res.json();
@@ -1582,50 +1596,58 @@ async function confirmarVerificacionCaja(){
     }
   }
 
-  // Generar alertas si hay diferencias
-  if(alertas.length){
-    try {
-      await api('alertas_gerencia','POST', alertas);
-      toast('⚠️ Diferencias detectadas — alerta enviada a gerencia');
-    } catch(e){ console.warn('Error alertas:', e); }
-  }
+  try{
+    // Generar alertas si hay diferencias
+    if(alertas.length){
+      try {
+        await api('alertas_gerencia','POST', alertas);
+        toast('⚠️ Diferencias detectadas — alerta enviada a gerencia');
+      } catch(e){ console.warn('Error alertas:', e); }
+    }
 
-  // Verificar si el stock ya fue ingresado en confirmarRecepcion
-  // Si no hay items pendientes, solo procesar alertas de diferencia (sin re-ingresar stock)
-  const riPendientes = await api(`recepcion_items?recepcion_id=eq.${_vcajaRecId}&ingresado_a_stock=eq.false&select=id`).catch(()=>[]);
-  if(riPendientes?.length){
-    // Flujo legacy o pendiente_conteo: ingresar stock ahora como fallback
-    const errores = [];
-    for(const ri of _vcajaItems){
-      try{
-        await ingresarCantidad(ri);
-      }catch(e){
-        console.error('Error ingresando', ri.nombre, e);
-        errores.push(ri.nombre + ': ' + e.message);
+    // Verificar si el stock ya fue ingresado en confirmarRecepcion
+    // Si no hay items pendientes, solo procesar alertas de diferencia (sin re-ingresar stock)
+    const riPendientes = await api(`recepcion_items?recepcion_id=eq.${_vcajaRecId}&ingresado_a_stock=eq.false&select=id`).catch(()=>[]);
+    if(riPendientes?.length){
+      // Flujo legacy o pendiente_conteo: ingresar stock ahora como fallback
+      const errores = [];
+      for(const ri of _vcajaItems){
+        try{
+          await ingresarCantidad(ri);
+        }catch(e){
+          console.error('Error ingresando', ri.nombre, e);
+          errores.push(ri.nombre + ': ' + e.message);
+        }
+      }
+      if(errores.length){
+        toast('⚠ Algunos ítems no se ingresaron al stock: ' + errores.join(', '));
       }
     }
-    if(errores.length){
-      toast('⚠ Algunos ítems no se ingresaron al stock: ' + errores.join(', '));
+
+    // Marcar recepción como confirmada
+    if(_vcajaRecId){
+      await api(`recepciones?id=eq.${_vcajaRecId}`, 'PATCH', {estado: 'confirmada'}).catch(()=>{});
     }
+
+    // Cerrar modal
+    document.getElementById('modal-verificacion-caja').style.display = 'none';
+
+    // Si viene de conteo pendiente (no hay recNum), volver a pendientes
+    if(!window._recNum){
+      toast('✅ Conteo confirmado — stock actualizado');
+      showPage('pendientes');
+      loadPendientes();
+      return;
+    }
+
+    mostrarResultado(window._recNum, window._esParcial, window._hayDesvios);
+  }catch(e){
+    // Red de contención: cualquier error inesperado acá (típicamente wifi cortado)
+    // no debe dejar el botón trabado en "Guardando..." sin aviso ni forma de reintentar.
+    console.error('Error guardando conteo de caja:', e);
+    toast('⚠ No se pudo guardar: ' + e.message + ' — probá de nuevo');
+    if(btnCaja){ btnCaja.disabled=false; btnCaja.textContent='Confirmar y guardar'; }
   }
-
-  // Marcar recepción como confirmada
-  if(_vcajaRecId){
-    await api(`recepciones?id=eq.${_vcajaRecId}`, 'PATCH', {estado: 'confirmada'}).catch(()=>{});
-  }
-
-  // Cerrar modal
-  document.getElementById('modal-verificacion-caja').style.display = 'none';
-
-  // Si viene de conteo pendiente (no hay recNum), volver a pendientes
-  if(!window._recNum){
-    toast('✅ Conteo confirmado — stock actualizado');
-    showPage('pendientes');
-    loadPendientes();
-    return;
-  }
-
-  mostrarResultado(window._recNum, window._esParcial, window._hayDesvios);
 }
 
 // ─── POSPONER CONTEO ──────────────────────────────────────────
