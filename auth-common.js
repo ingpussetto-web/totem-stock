@@ -177,9 +177,18 @@ function authHeaders(extra){
 // Excepción: las pantallas de cuenta de servicio (TV, celular de escaneo) definen
 // window._onAuthSignedOutServicio para reautenticarse solas en vez de terminar
 // mostrando una pantalla de login que nadie va a completar.
-_sb.auth.onAuthStateChange((event)=>{
+//
+// Además: Supabase renueva el token de acceso solo, en segundo plano, mientras la
+// pestaña sigue abierta (evento TOKEN_REFRESHED). Si no actualizamos acá
+// window._authToken con ese token nuevo, authHeaders() sigue mandando el viejo —
+// y pasado un rato (~1h) las llamadas a la API empiezan a fallar con
+// "JWT expired" aunque la sesión siga activa. Por eso lo sincronizamos en cada
+// evento que traiga una sesión válida.
+_sb.auth.onAuthStateChange((event, session)=>{
   if(event === 'SIGNED_OUT'){
     if(typeof window._onAuthSignedOutServicio === 'function') window._onAuthSignedOutServicio();
     else irALogin();
+    return;
   }
+  if(session?.access_token) window._authToken = session.access_token;
 });
