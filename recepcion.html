@@ -981,6 +981,7 @@ function generarPrefijo(nombre, color){
 }
 
 function mostrarResultado(recNum, esParcial, hayDesvios){
+  document.getElementById('rec-panel1').style.display='none';
   document.getElementById('rec-panel2').style.display='none';
   document.getElementById('rec-panel3').style.display='block';
   setStep(3);
@@ -1510,16 +1511,16 @@ async function mostrarVerificacionCaja(items, recId){
       return `
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
           <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${g.nombre}</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Recibido ahora: <strong style="color:var(--green)">+${g.recibido_total}</strong></div>
-          <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTEO FÍSICO ACTUAL EN CAJA, POR COLOR (antes de guardar)</label>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Recibido ahora: <strong style="color:var(--green)">+${g.recibido_total}</strong> <span style="color:var(--text3);">(el sistema ya lo sumó al stock de abajo)</span></div>
+          <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTÁ TODO LO QUE HAY AHORA EN EL DEPÓSITO, POR COLOR (incluye lo recién recibido)</label>
           ${inputsColores}
         </div>`;
     }
     return `
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${g.nombre}</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Recibido ahora: <strong style="color:var(--green)">+${g.recibido_total}</strong> · Stock en sistema: <strong>${g.stockSistema}</strong></div>
-        <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTEO FÍSICO ACTUAL EN CAJA (antes de guardar)</label>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Recibido ahora: <strong style="color:var(--green)">+${g.recibido_total}</strong> · Stock en sistema (ya incluye lo recibido): <strong>${g.stockSistema}</strong></div>
+        <label style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">CONTÁ TODO LO QUE HAY AHORA EN EL DEPÓSITO (no solo lo recién recibido)</label>
         <input type="number" min="0" id="vcaja-simple-${gi}" placeholder="Ej: ${g.stockSistema}"
           style="width:100%;margin-top:4px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;">
       </div>`;
