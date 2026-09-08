@@ -39,6 +39,7 @@ const MODULOS_CATALOGO = [
   { file: 'recepcion.html',                  label: 'Recepción',               icon: '📥', desc: 'Ingreso de insumos comprados al stock' },
   { file: 'stock_fase1.html',                label: 'Stock',                   icon: '📦', desc: 'Catálogo, cantidades y unidades físicas' },
   { file: 'conteo_fisico.html',              label: 'Conteo Físico',           icon: '🔢', desc: 'Verificación y ajuste de stock real vs sistema' },
+  { file: 'conteo_dinamico.html',            label: 'Conteo Dinámico',         icon: '📷', desc: 'Conteo por escaneo de QR, uno por uno, desde el celular' },
   { file: 'calculador_totem_nube_v16.html',  label: 'Cotizador',               icon: '💰', desc: 'Cotizaciones, costeo y detalle de ventas' },
   { file: 'ops_ventas.html',                 label: 'Órdenes de Producción',   icon: '✅', desc: 'Revisar BOM, confirmar y liberar OPs' },
   { file: 'compras.html',                    label: 'Compras',                 icon: '🛒', desc: 'Órdenes de compra y proveedores' },
@@ -54,7 +55,7 @@ const MODULOS_CATALOGO = [
 // Set por defecto para operadores que todavía no tienen permisos configurados
 // a mano en usuarios.html (columna modulos_habilitados) — así ningún usuario
 // existente pierde acceso de golpe el día que se activa esta función.
-const MODULOS_PRODUCCION_DEFAULT = ['produccion.html', 'recepcion.html', 'stock_fase1.html', 'conteo_fisico.html'];
+const MODULOS_PRODUCCION_DEFAULT = ['produccion.html', 'recepcion.html', 'stock_fase1.html', 'conteo_fisico.html', 'conteo_dinamico.html'];
 
 // Páginas que cualquier usuario logueado puede abrir sin importar sus permisos
 // (no son "módulos de trabajo" en sí, son puntos de entrada/navegación).

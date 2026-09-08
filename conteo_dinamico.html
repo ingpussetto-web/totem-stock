@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Conteo TN">
+<meta name="theme-color" content="#0f0f11">
+<title>Totem Nube — Conteo Dinámico</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f0;--text2:#888;--text3:#666;
+  --green:#00c896;--green-dim:rgba(0,200,150,0.12);--green-border:rgba(0,200,150,0.3);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.12);--amber-border:rgba(245,166,35,0.3);
+  --red:#ff5e5e;--red-dim:rgba(255,94,94,0.1);--red-border:rgba(255,94,94,0.3);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.1);--blue-border:rgba(77,159,255,0.3);
+  --radius:10px;--radius-lg:16px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;}
+
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:500;}
+.header-logo{font-size:13px;font-weight:600;}
+.header-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+.header-user{font-size:11px;color:var(--text2);text-align:right;}
+.header-user a{color:var(--text3);text-decoration:underline;margin-left:6px;}
+.header-back{font-size:11px;color:var(--text3);text-decoration:none;}
+
+.container{padding:16px 14px 40px;max-width:520px;margin:0 auto;}
+
+.loading-wrap{text-align:center;padding:60px 20px;}
+.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-txt{font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.card-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace;margin-bottom:10px;}
+
+.btn{width:100%;background:transparent;border:1px solid var(--border2);border-radius:var(--radius);color:var(--text2);font-size:13px;padding:11px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.btn.green{background:var(--green);border:none;color:#000;font-weight:600;font-size:14px;padding:13px;}
+.btn.red{background:transparent;border:1px solid var(--red-border);color:var(--red);}
+.btn.sm{width:auto;padding:6px 12px;font-size:12px;}
+.btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+.search-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;color:var(--text);font-size:15px;font-family:'DM Sans',sans-serif;margin-bottom:10px;}
+.search-input:focus{outline:none;border-color:var(--green);}
+
+.sku-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;border:1px solid transparent;}
+.sku-row:hover{border-color:var(--border2);}
+.sku-nombre{font-size:13px;font-weight:500;}
+.sku-cat{font-size:10px;color:var(--text3);}
+.badge{font-size:9px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;}
+.badge.uid{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue-border);}
+.badge.caja{background:var(--surface);color:var(--text3);border:1px solid var(--border2);}
+
+.resume-card{background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:14px;}
+.resume-title{font-size:11px;color:var(--amber);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;}
+.resume-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid rgba(255,179,64,0.2);}
+.resume-row:first-of-type{border-top:none;}
+.resume-info{font-size:12px;}
+.resume-info b{font-size:13px;}
+.resume-actions{display:flex;gap:6px;}
+
+.summary-bar{display:flex;gap:10px;margin-bottom:14px;}
+.summary-box{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;text-align:center;}
+.summary-num{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;}
+.summary-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;}
+
+#scanner-box{margin-bottom:12px;}
+#video{width:100%;border-radius:var(--radius-lg);background:#000;display:block;}
+.scan-frame-hint{text-align:center;font-size:11px;color:var(--text3);margin-top:6px;font-family:'DM Mono',monospace;}
+
+.manual-row{display:flex;gap:8px;margin-bottom:14px;}
+.manual-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;}
+
+.chk-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-family:'DM Mono',monospace;margin:16px 0 8px;}
+.chk-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);margin-bottom:6px;gap:10px;}
+.chk-uid{font-size:11px;font-family:'DM Mono',monospace;word-break:break-all;}
+.chk-badge{font-size:9px;padding:3px 8px;border-radius:10px;white-space:nowrap;font-family:'DM Mono',monospace;}
+.chk-badge.disponible{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border);}
+.chk-badge.reservado{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue-border);}
+.chk-badge.consumido{background:var(--red-dim);color:var(--red);border:1px solid var(--red-border);}
+.chk-badge.otro{background:var(--surface);color:var(--text3);border:1px solid var(--border2);}
+.chk-badge.pendiente{background:transparent;color:var(--text3);border:1px solid var(--border2);}
+.chk-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+
+.report-text{white-space:pre-wrap;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:12px;font-family:'DM Mono',monospace;line-height:1.6;max-height:50vh;overflow-y:auto;margin-bottom:14px;}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--green-border);color:var(--green);font-size:12px;font-family:'DM Mono',monospace;padding:10px 18px;border-radius:var(--radius);z-index:9999;transition:opacity 0.3s;opacity:0;pointer-events:none;max-width:90vw;text-align:center;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-logo">Totem Nube</div>
+    <div class="header-sub">CONTEO DINÁMICO</div>
+  </div>
+  <div class="header-user" id="header-user"></div>
+</div>
+
+<div class="container" id="container">
+  <div class="loading-wrap">
+    <div class="spinner"></div>
+    <div class="loading-txt">Cargando...</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const esc = str => (str||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.opacity = '0'; }, 2200);
+}
+
+let MI_NOMBRE = '';
+let skusCache = [];
+let skuActual = null;      // {id, nombre, tracking, categoria}
+let sesionActual = null;   // fila de conteos_dinamicos
+let unidadesTeoricas = []; // solo para tracking=uid — stock+reservado
+let escaneados = new Map(); // uid -> {estado_encontrado, op_info}
+
+// ─── AUTH ────────────────────────────────────────────────────
+(async function(){
+  const usuario = await requireAuth();
+  if(!usuario) return;
+  MI_NOMBRE = usuario.nombre || usuario.email;
+  document.getElementById('header-user').innerHTML =
+    `👤 ${esc(MI_NOMBRE)} <a href="javascript:void(0)" onclick="cerrarSesion()">Salir</a>`;
+  await pantallaSelector();
+})();
+
+// ─── HELPERS DE API (mismo patrón que el resto del sistema) ───
+async function api(path, method='GET', body=null){
+  const opts = { method, headers: authHeaders({'Prefer': method==='POST'?'return=representation':method==='PATCH'?'return=representation':''}) };
+  if(body) opts.body = JSON.stringify(body);
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(()=>ctrl.abort(), 20000);
+  let res;
+  try{
+    res = await fetch(SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+path, {...opts, signal: ctrl.signal});
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('Sin respuesta del servidor (revisá tu conexión).');
+    throw e;
+  }finally{ clearTimeout(timeoutId); }
+  if(!res.ok) throw new Error(await res.text());
+  if(res.status===204) return null;
+  return res.json();
+}
+
+function fmtFecha(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+// ─── PANTALLA 1: SELECTOR DE PRODUCTO ─────────────────────────
+async function pantallaSelector(){
+  detenerCamara();
+  skuActual = null; sesionActual = null; unidadesTeoricas = []; escaneados = new Map();
+
+  const cont = document.getElementById('container');
+  cont.innerHTML = `<div class="loading-wrap"><div class="spinner"></div><div class="loading-txt">Cargando productos...</div></div>`;
+
+  let abiertos = [];
+  try{
+    abiertos = await api(`conteos_dinamicos?estado=eq.abierto&select=id,sku_id,tracking,iniciado_por,iniciado_en,skus(nombre)&order=iniciado_en.desc`);
+  }catch(e){ console.warn('No se pudieron cargar conteos abiertos:', e); }
+
+  if(!skusCache.length){
+    try{
+      skusCache = await api('skus?select=id,nombre,tracking,categorias(nombre)&order=nombre.asc');
+    }catch(e){
+      cont.innerHTML = `<div class="card"><div style="color:var(--red);font-size:13px;">Error cargando productos: ${esc(e.message)}</div></div>`;
+      return;
+    }
+  }
+
+  const resumeHtml = abiertos.length ? `
+    <div class="resume-card">
+      <div class="resume-title">⏳ Conteos en curso</div>
+      ${abiertos.map(a => `
+        <div class="resume-row">
+          <div class="resume-info"><b>${esc(a.skus?.nombre||'—')}</b><br>Iniciado por ${esc(a.iniciado_por||'—')} · ${fmtFecha(a.iniciado_en)}</div>
+          <div class="resume-actions">
+            <button class="btn green sm" onclick="retomarConteo(${a.id})">Continuar</button>
+            <button class="btn red sm" onclick="descartarConteo(${a.id})">✕</button>
+          </div>
+        </div>`).join('')}
+    </div>` : '';
+
+  cont.innerHTML = `
+    ${resumeHtml}
+    <div class="card">
+      <div class="card-title">Elegí el producto a contar</div>
+      <input type="text" class="search-input" id="buscador-sku" placeholder="Buscar producto..." oninput="filtrarListaSkus()">
+      <div id="lista-skus"></div>
+    </div>
+  `;
+  renderListaSkus(skusCache);
+  document.getElementById('buscador-sku').focus();
+}
+
+function filtrarListaSkus(){
+  const q = document.getElementById('buscador-sku').value.trim().toLowerCase();
+  const filtrados = q ? skusCache.filter(s => s.nombre.toLowerCase().includes(q)) : skusCache;
+  renderListaSkus(filtrados);
+}
+
+function renderListaSkus(lista){
+  const el = document.getElementById('lista-skus');
+  if(!lista.length){ el.innerHTML = `<div style="color:var(--text3);font-size:12px;padding:8px;">Sin resultados</div>`; return; }
+  el.innerHTML = lista.slice(0,60).map(s => `
+    <div class="sku-row" onclick="elegirSku(${s.id})">
+      <div>
+        <div class="sku-nombre">${esc(s.nombre)}</div>
+        ${s.categorias?.nombre ? `<div class="sku-cat">${esc(s.categorias.nombre)}</div>` : ''}
+      </div>
+      <span class="badge ${s.tracking==='uid'?'uid':'caja'}">${s.tracking==='uid'?'Individual':'Caja'}</span>
+    </div>`).join('');
+}
+
+async function descartarConteo(conteoId){
+  if(!confirm('¿Descartar este conteo en curso? Se pierde el progreso escaneado.')) return;
+  try{
+    await api(`conteos_dinamicos?id=eq.${conteoId}`, 'PATCH', {estado:'cerrado', cerrado_en:new Date().toISOString(), informe_texto:'(descartado sin generar informe)'});
+    toast('Conteo descartado');
+    pantallaSelector();
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function elegirSku(skuId){
+  skuActual = skusCache.find(s => s.id === skuId);
+  if(!skuActual) return;
+
+  const cont = document.getElementById('container');
+  cont.innerHTML = `<div class="loading-wrap"><div class="spinner"></div><div class="loading-txt">Preparando conteo...</div></div>`;
+
+  try{
+    // ¿Hay una sesión abierta para este SKU puntual? si no, crear una nueva.
+    const existentes = await api(`conteos_dinamicos?sku_id=eq.${skuId}&estado=eq.abierto&select=id&order=iniciado_en.desc&limit=1`);
+    if(existentes?.length){
+      await cargarSesion(existentes[0].id);
+    } else {
+      const nueva = await api('conteos_dinamicos', 'POST', [{
+        sku_id: skuId, tracking: skuActual.tracking, iniciado_por: MI_NOMBRE
+      }]);
+      sesionActual = nueva[0];
+      escaneados = new Map();
+      if(skuActual.tracking === 'uid') await cargarUnidadesTeoricas();
+      renderPantallaConteo();
+    }
+  }catch(e){
+    toast('Error: '+e.message);
+    pantallaSelector();
+  }
+}
+
+async function retomarConteo(conteoId){
+  const cont = document.getElementById('container');
+  cont.innerHTML = `<div class="loading-wrap"><div class="spinner"></div><div class="loading-txt">Retomando conteo...</div></div>`;
+  try{
+    await cargarSesion(conteoId);
+  }catch(e){
+    toast('Error: '+e.message);
+    pantallaSelector();
+  }
+}
+
+async function cargarSesion(conteoId){
+  const rows = await api(`conteos_dinamicos?id=eq.${conteoId}&select=*,skus(id,nombre,tracking,categorias(nombre))`);
+  sesionActual = rows[0];
+  skuActual = sesionActual.skus;
+
+  const escaneos = await api(`conteos_dinamicos_escaneos?conteo_id=eq.${conteoId}&select=uid,estado_encontrado,op_info`);
+  escaneados = new Map((escaneos||[]).map(e => [e.uid, {estado: e.estado_encontrado, opInfo: e.op_info}]));
+
+  if(skuActual.tracking === 'uid') await cargarUnidadesTeoricas();
+  renderPantallaConteo();
+}
+
+async function cargarUnidadesTeoricas(){
+  unidadesTeoricas = await api(`unidades?sku_id=eq.${skuActual.id}&estado=in.(stock,reservado)&select=id,uid,estado&order=uid.asc`);
+}
+
+// ─── PANTALLA 2: CONTEO (uid o cantidad) ──────────────────────
+function renderPantallaConteo(){
+  if(skuActual.tracking === 'uid') renderPantallaConteoUid();
+  else renderPantallaConteoCantidad();
+}
+
+function renderPantallaConteoUid(){
+  const encontrados = [...escaneados.entries()];
+  const pendientes = unidadesTeoricas.filter(u => !escaneados.has(u.uid));
+
+  const cont = document.getElementById('container');
+  cont.innerHTML = `
+    <button class="btn sm" style="width:auto;margin-bottom:10px;" onclick="volverASelector()">← Otro producto</button>
+    <div class="card">
+      <div class="card-title">${esc(skuActual.nombre)}</div>
+      <div class="summary-bar">
+        <div class="summary-box"><div class="summary-num" style="color:var(--green);">${encontrados.length}</div><div class="summary-lbl">Encontrados</div></div>
+        <div class="summary-box"><div class="summary-num">${unidadesTeoricas.length}</div><div class="summary-lbl">Teórico</div></div>
+        <div class="summary-box"><div class="summary-num" style="color:${pendientes.length?'var(--amber)':'var(--green)'};">${pendientes.length}</div><div class="summary-lbl">Pendientes</div></div>
+      </div>
+      <button class="btn green" id="btn-camara" onclick="iniciarCamara()">📷 Iniciar cámara</button>
+      <div id="scanner-box" style="display:none;">
+        <video id="video" playsinline muted></video>
+        <div class="scan-frame-hint">Apuntá al código QR de la etiqueta</div>
+      </div>
+      <div class="manual-row">
+        <input type="text" id="uid-manual" placeholder="o escribí/pegá el UID a mano" onkeydown="if(event.key==='Enter') agregarUidManual()">
+        <button class="btn sm" style="width:auto;" onclick="agregarUidManual()">Agregar</button>
+      </div>
+      <button class="btn green" onclick="finalizarConteoUid()">✓ Finalizar conteo</button>
+    </div>
+
+    <div class="chk-section-title">✅ Encontrados (${encontrados.length})</div>
+    <div id="lista-encontrados">${encontrados.length ? '' : '<div style="color:var(--text3);font-size:12px;">Todavía no escaneaste nada.</div>'}</div>
+
+    <div class="chk-section-title">⏳ Pendientes de escanear (${pendientes.length})</div>
+    <div id="lista-pendientes"></div>
+  `;
+  renderListasUid();
+}
+
+function etiquetaBadge(estado){
+  if(estado==='disponible') return {clase:'disponible', txt:'Disponible'};
+  if(estado==='reservado') return {clase:'reservado', txt:'Reservado'};
+  if(estado==='consumido') return {clase:'consumido', txt:'⚠ Consumido'};
+  return {clase:'otro', txt:'Otro estado'};
+}
+
+function renderListasUid(){
+  const encontrados = [...escaneados.entries()];
+  const pendientes = unidadesTeoricas.filter(u => !escaneados.has(u.uid));
+
+  document.getElementById('lista-encontrados').innerHTML = encontrados.map(([uid, e]) => {
+    const b = etiquetaBadge(e.estado);
+    const sub = e.opInfo ? `${esc(e.opInfo.op_numero||'')} · ${esc(e.opInfo.cliente||'')}` : '';
+    return `<div class="chk-row">
+      <div><div class="chk-uid">${esc(uid)}</div>${sub?`<div class="chk-sub">${sub}</div>`:''}</div>
+      <span class="chk-badge ${b.clase}">${b.txt}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('lista-pendientes').innerHTML = pendientes.length
+    ? pendientes.map(u => `<div class="chk-row"><div class="chk-uid">${esc(u.uid)}</div><span class="chk-badge pendiente">Sin escanear</span></div>`).join('')
+    : `<div style="color:var(--green);font-size:12px;">✓ No quedan pendientes.</div>`;
+}
+
+function extraerUidDeQR(texto){
+  try{
+    const url = new URL(texto);
+    const uidParam = url.searchParams.get('uid');
+    if(uidParam) return decodeURIComponent(uidParam);
+  }catch(e){ /* no era una URL, seguimos con el texto tal cual */ }
+  return (texto||'').trim();
+}
+
+let _procesandoUid = false;
+let _cooldownUid = null;
+let _cooldownHasta = 0;
+
+async function procesarUidEscaneado(textoDecodificado){
+  const uid = extraerUidDeQR(textoDecodificado);
+  if(!uid) return;
+  if(_procesandoUid) return;
+  if(uid === _cooldownUid && Date.now() < _cooldownHasta) return;
+
+  if(escaneados.has(uid)){
+    _cooldownUid = uid; _cooldownHasta = Date.now()+1500;
+    toast('Ya estaba escaneado');
+    return;
+  }
+
+  _procesandoUid = true;
+  try{
+    const rows = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=id,uid,sku_id,estado`);
+    if(!rows?.length){ toast('⚠ UID no encontrado: '+uid); return; }
+    const u = rows[0];
+    if(u.sku_id !== skuActual.id){
+      toast('⚠ Ese código no es de este producto');
+      return;
+    }
+
+    let estado = 'otro';
+    let opInfo = null;
+    if(u.estado === 'stock'){
+      estado = 'disponible';
+    } else if(u.estado === 'reservado' || u.estado === 'producido'){
+      estado = (u.estado === 'reservado') ? 'reservado' : 'consumido';
+      try{
+        const bom = await api(`op_bom_items?uid_asignado=eq.${encodeURIComponent(uid)}&select=ordenes_produccion(op_numero,cliente,producto_nombre,color_gabinete)`);
+        opInfo = bom?.[0]?.ordenes_produccion || null;
+      }catch(e){ console.warn('No se pudo buscar la OP:', e); }
+    }
+
+    try{
+      await api('conteos_dinamicos_escaneos', 'POST', [{
+        conteo_id: sesionActual.id, uid, estado_encontrado: estado, op_info: opInfo
+      }]);
+    }catch(e){
+      if(!/duplicate|unique/i.test(e.message)) throw e;
+    }
+
+    escaneados.set(uid, {estado, opInfo});
+    _cooldownUid = uid; _cooldownHasta = Date.now()+1500;
+    renderListasUid();
+    renderResumenSummary();
+    if(navigator.vibrate) navigator.vibrate(60);
+    const b = etiquetaBadge(estado);
+    toast('✓ '+uid+' — '+b.txt);
+  }catch(e){
+    toast('Error: '+e.message);
+  }finally{
+    _procesandoUid = false;
+  }
+}
+
+function renderResumenSummary(){
+  // Refresca solo los 3 numeritos de arriba sin redibujar toda la pantalla
+  const encontrados = escaneados.size;
+  const pendientes = unidadesTeoricas.filter(u => !escaneados.has(u.uid)).length;
+  const boxes = document.querySelectorAll('.summary-num');
+  if(boxes.length === 3){
+    boxes[0].textContent = encontrados;
+    boxes[2].textContent = pendientes;
+    boxes[2].style.color = pendientes ? 'var(--amber)' : 'var(--green)';
+  }
+}
+
+function agregarUidManual(){
+  const inp = document.getElementById('uid-manual');
+  const val = inp.value.trim();
+  if(!val) return;
+  inp.value = '';
+  procesarUidEscaneado(val);
+}
+
+// ─── CÁMARA ────────────────────────────────────────────────────
+let streamActivo = null;
+let scanRAF = null;
+let _ultimoIntento = 0;
+
+async function iniciarCamara(){
+  try{
+    streamActivo = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  }catch(e){
+    toast('No se pudo abrir la cámara — usá el campo manual de abajo');
+    return;
+  }
+  const video = document.getElementById('video');
+  video.srcObject = streamActivo;
+  await video.play();
+  document.getElementById('scanner-box').style.display = 'block';
+  const btn = document.getElementById('btn-camara');
+  if(btn){ btn.textContent = '⏸ Detener cámara'; btn.onclick = detenerCamara; }
+  loopEscaneo();
+}
+
+function detenerCamara(){
+  if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+  if(streamActivo){ streamActivo.getTracks().forEach(t => t.stop()); streamActivo = null; }
+  const box = document.getElementById('scanner-box');
+  if(box) box.style.display = 'none';
+  const btn = document.getElementById('btn-camara');
+  if(btn){ btn.textContent = '📷 Iniciar cámara'; btn.onclick = iniciarCamara; }
+}
+
+function loopEscaneo(){
+  const video = document.getElementById('video');
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', {willReadFrequently:true});
+
+  function tick(ts){
+    if(!streamActivo){ return; }
+    if(video.readyState === video.HAVE_ENOUGH_DATA){
+      if(!_ultimoIntento || ts - _ultimoIntento > 150){
+        _ultimoIntento = ts;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try{
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if(code && code.data) procesarUidEscaneado(code.data);
+        }catch(e){ /* frame inválido, se ignora */ }
+      }
+    }
+    scanRAF = requestAnimationFrame(tick);
+  }
+  scanRAF = requestAnimationFrame(tick);
+}
+
+// ─── CONTEO DE CAJA (tracking=cantidad) ───────────────────────
+async function renderPantallaConteoCantidad(){
+  const cont = document.getElementById('container');
+  cont.innerHTML = `<div class="loading-wrap"><div class="spinner"></div><div class="loading-txt">Cargando stock...</div></div>`;
+
+  let teorico = 0;
+  try{
+    const rows = await api(`stock?sku_id=eq.${skuActual.id}&select=cantidad`);
+    teorico = (rows||[]).reduce((s,r) => s + (r.cantidad||0), 0);
+  }catch(e){ console.warn('No se pudo leer stock:', e); }
+
+  cont.innerHTML = `
+    <button class="btn sm" style="width:auto;margin-bottom:10px;" onclick="volverASelector()">← Otro producto</button>
+    <div class="card">
+      <div class="card-title">${esc(skuActual.nombre)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Este producto es de caja — no tiene UID individual, así que se cuenta a mano.</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Teórico en sistema: <strong style="color:var(--text);">${teorico}</strong></div>
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Cantidad contada físicamente</label>
+      <input type="number" min="0" id="conteo-cantidad-input" class="search-input" placeholder="Ej: ${teorico}">
+      <button class="btn green" onclick="finalizarConteoCantidad(${teorico})">✓ Finalizar conteo</button>
+    </div>
+  `;
+}
+
+async function finalizarConteoCantidad(teorico){
+  const inp = document.getElementById('conteo-cantidad-input');
+  const contado = parseInt(inp.value);
+  if(isNaN(contado)){ toast('Ingresá la cantidad contada'); return; }
+
+  const diff = contado - teorico;
+  let txt = `📋 CONTEO — ${skuActual.nombre}\n`;
+  txt += `Fecha: ${new Date().toLocaleString('es-AR')}\n`;
+  txt += `Realizado por: ${MI_NOMBRE}\n\n`;
+  txt += `Teórico en sistema: ${teorico}\n`;
+  txt += `Contado físicamente: ${contado}\n`;
+  txt += diff !== 0 ? `\n⚠️ Diferencia: ${diff>0?'+':''}${diff}` : `\n✅ Coincide con el sistema.`;
+
+  try{
+    await api(`conteos_dinamicos?id=eq.${sesionActual.id}`, 'PATCH', {
+      estado: 'cerrado', cerrado_en: new Date().toISOString(),
+      conteo_manual_cantidad: contado, informe_texto: txt
+    });
+  }catch(e){ toast('Error guardando: '+e.message); return; }
+
+  renderInforme(txt);
+}
+
+// ─── FINALIZAR CONTEO UID + INFORME ───────────────────────────
+async function finalizarConteoUid(){
+  detenerCamara();
+  const encontrados = [...escaneados.entries()];
+  const disponibles = encontrados.filter(([_,e]) => e.estado==='disponible');
+  const reservados = encontrados.filter(([_,e]) => e.estado==='reservado');
+  const consumidos = encontrados.filter(([_,e]) => e.estado==='consumido');
+  const otros = encontrados.filter(([_,e]) => e.estado==='otro');
+  const pendientes = unidadesTeoricas.filter(u => !escaneados.has(u.uid));
+
+  let txt = `📋 CONTEO DINÁMICO — ${skuActual.nombre}\n`;
+  txt += `Fecha: ${new Date().toLocaleString('es-AR')}\n`;
+  txt += `Realizado por: ${MI_NOMBRE}\n\n`;
+  txt += `Teórico esperado: ${unidadesTeoricas.length}\n`;
+  txt += `Encontrados: ${encontrados.length}\n`;
+  txt += `Sin encontrar: ${pendientes.length}\n`;
+
+  txt += `\n✅ DISPONIBLES (${disponibles.length})`;
+  txt += disponibles.length ? ':\n' + disponibles.map(([uid]) => `• ${uid}`).join('\n') : ' — ninguno';
+
+  txt += `\n\n📦 RESERVADOS — asignados a OP en curso (${reservados.length})`;
+  txt += reservados.length ? ':\n' + reservados.map(([uid,e]) => `• ${uid} → ${e.opInfo?.op_numero||'?'} · ${e.opInfo?.cliente||'?'}`).join('\n') : ' — ninguno';
+
+  if(consumidos.length){
+    txt += `\n\n⚠️ ALERTA — CONSTAN COMO YA INSTALADOS, PERO SIGUEN EN PLANTA (${consumidos.length}):\n`;
+    txt += consumidos.map(([uid,e]) => `• ${uid} → figura en ${e.opInfo?.op_numero||'?'} · ${e.opInfo?.cliente||'?'} (OP ya entregada) — revisar`).join('\n');
+  }
+  if(otros.length){
+    txt += `\n\n❔ OTRO ESTADO — revisar a mano (${otros.length}):\n`;
+    txt += otros.map(([uid]) => `• ${uid}`).join('\n');
+  }
+
+  txt += pendientes.length
+    ? `\n\n❌ SIN ENCONTRAR (${pendientes.length}):\n` + pendientes.map(u => `• ${u.uid}`).join('\n')
+    : `\n\n✅ Se encontraron todas las unidades esperadas.`;
+
+  try{
+    await api(`conteos_dinamicos?id=eq.${sesionActual.id}`, 'PATCH', {
+      estado: 'cerrado', cerrado_en: new Date().toISOString(), informe_texto: txt
+    });
+  }catch(e){ toast('Error guardando: '+e.message); return; }
+
+  renderInforme(txt);
+}
+
+function renderInforme(texto){
+  const cont = document.getElementById('container');
+  cont.innerHTML = `
+    <div class="card">
+      <div class="card-title">✓ Conteo cerrado — informe</div>
+      <div class="report-text">${esc(texto)}</div>
+      <button class="btn green" onclick="compartirInforme()" style="margin-bottom:8px;">📤 Compartir</button>
+      <button class="btn" onclick="pantallaSelector()">Contar otro producto</button>
+    </div>
+  `;
+  window._informeActual = texto;
+}
+
+async function compartirInforme(){
+  const texto = window._informeActual || '';
+  if(navigator.share){
+    try{ await navigator.share({text: texto}); return; }catch(e){ /* usuario canceló o no soportado, seguimos al fallback */ }
+  }
+  try{
+    await navigator.clipboard.writeText(texto);
+    toast('Copiado — pegalo en WhatsApp');
+  }catch(e){
+    toast('No se pudo copiar automáticamente — seleccioná el texto a mano');
+  }
+}
+
+function volverASelector(){
+  detenerCamara();
+  pantallaSelector();
+}
+</script>
+</body>
+</html>
