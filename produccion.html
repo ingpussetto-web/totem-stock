@@ -408,9 +408,10 @@ function aplicarFiltros(){
 
   let lista = todasLasOPs;
 
-  // Filtro vista
+  // Filtro vista — las canceladas no son ni "vigentes" (no hay nada que producir)
+  // ni "terminadas" (no se completaron), así que se excluyen de las dos vistas.
   if(vista === 'vigentes'){
-    lista = lista.filter(o => o.estado !== 'completada');
+    lista = lista.filter(o => o.estado !== 'completada' && o.estado !== 'cancelada');
   } else {
     lista = lista.filter(o => o.estado === 'completada');
   }
