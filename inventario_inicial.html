@@ -910,6 +910,20 @@ async function guardarStockCaja(){
   if(diff <= 0){ toast('No hay diferencia para registrar'); return; }
 
   try{
+    // Dejar trazabilidad del ajuste antes de tocar stock.cantidad (mismo patrón
+    // que conteo_fisico.html), para que el movimiento quede documentado en
+    // stock_ajustes y no sea un pisado de valor sin rastro.
+    if(diff !== 0){
+      await api('stock_ajustes', 'POST', {
+        sku_id: parseInt(skuId),
+        cantidad_contada: totalContado,
+        cantidad_anterior: actual,
+        diferencia: diff,
+        motivo: 'Carga de stock — Inventario Inicial',
+        usuario: nombre
+      }).catch(e=>console.warn('No se pudo registrar stock_ajustes:', e));
+    }
+
     // Buscar si ya existe fila de stock y setear el total contado directamente
     const stockRows = await api(`stock?sku_id=eq.${skuId}&variante_id=is.null&select=id,cantidad`);
     if(stockRows?.length){
