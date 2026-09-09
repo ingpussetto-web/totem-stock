@@ -407,9 +407,12 @@ function setFiltro(filtro){
 }
 
 async function cargarOps(){
-  _ops = await api(
-    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,contacto,cliente,producto_nombre,descripcion_extra,cantidad,etapa_tablero,tipo_proyecto_id,para_stock,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
+  const ops = await api(
+    'ordenes_produccion?select=id,op_numero,v14_orden,codigo_op_interno,contacto,cliente,producto_nombre,descripcion_extra,cantidad,estado,etapa_tablero,tipo_proyecto_id,para_stock,fecha_entrega,tipos_proyecto(nombre),op_areas(area_id,areas(codigo,nombre)),op_etiquetas(id,etiqueta_id,etiquetas_accion(titulo,area_id,areas(codigo))),op_bom_items(id,estado,incluido)&order=id.desc'
   );
+  // Las OPs canceladas no deben seguir apareciendo en ninguna columna del tablero —
+  // cancelar desde OPs/ops_ventas.html debe reflejarse acá también.
+  _ops = ops.filter(o => o.estado !== 'cancelada');
   computarFaltantes();
   renderBoard();
 }

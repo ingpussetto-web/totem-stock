@@ -1940,7 +1940,8 @@ async function loadProyectosAmpliacion(){
   const proys = await api('proyectos_cotizador?select=orden,estado').catch(()=>[]);
   const proyMap = {};
   (proys||[]).forEach(p=>{ proyMap[p.orden] = p; });
-  ampliacionProyectosData = (ops||[]).map(o=>{
+  // No tiene sentido ofrecer ampliar un proyecto que ya se canceló.
+  ampliacionProyectosData = (ops||[]).filter(o => o.estado !== 'cancelada').map(o=>{
     const pv = proyMap[o.v14_orden];
     return {
       v14_orden: o.v14_orden, cliente: o.cliente||'',
