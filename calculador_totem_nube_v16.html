@@ -4301,7 +4301,9 @@ function actualizarAdicionalesVisibles(){
   const wrapHdmi = document.getElementById('add-hdmi-wrap');
 
   const conPlayer = CATS_CON_PLAYER.includes(cat);
-  const conPloteo = CATS_CON_PLOTEO.includes(cat);
+  // Ploteo personalizado: cualquier modelo puede pedirlo o no, así que ya no
+  // depende de la categoría — se ofrece siempre.
+  const conPloteo = true;
 
   if(conPlayer || conPloteo){
     if(divAd) divAd.style.display = 'block';
