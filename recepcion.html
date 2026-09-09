@@ -207,6 +207,21 @@ textarea.form-input{resize:vertical;min-height:70px;}
         <div class="metric blue"><div class="metric-label">Recep. parciales</div><div class="metric-value" id="m-parciales">—</div></div>
         <div class="metric red"><div class="metric-label">Con desvíos hoy</div><div class="metric-value" id="m-desvios">—</div></div>
       </div>
+      <div class="card" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+          <label class="form-label">Proveedor</label>
+          <select class="form-input" id="pend-filtro-proveedor" onchange="aplicarFiltrosPendientes()" style="min-width:200px;"><option value="">Todos los proveedores</option></select>
+        </div>
+        <div>
+          <label class="form-label">Desde</label>
+          <input type="date" class="form-input" id="pend-filtro-desde" onchange="aplicarFiltrosPendientes()">
+        </div>
+        <div>
+          <label class="form-label">Hasta</label>
+          <input type="date" class="form-input" id="pend-filtro-hasta" onchange="aplicarFiltrosPendientes()">
+        </div>
+        <button class="btn" style="font-size:12px;" onclick="limpiarFiltrosPendientes()">✕ Limpiar filtros</button>
+      </div>
       <div id="pendientes-list"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
     </div>
 
@@ -293,6 +308,21 @@ textarea.form-input{resize:vertical;min-height:70px;}
       <div class="page-header">
         <div><div class="page-title">Historial de recepciones</div></div>
         <button class="btn" onclick="loadHistorial()">↻ Actualizar</button>
+      </div>
+      <div class="card" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+          <label class="form-label">Proveedor</label>
+          <select class="form-input" id="hist-filtro-proveedor" onchange="aplicarFiltrosHistorial()" style="min-width:200px;"><option value="">Todos los proveedores</option></select>
+        </div>
+        <div>
+          <label class="form-label">Desde</label>
+          <input type="date" class="form-input" id="hist-filtro-desde" onchange="aplicarFiltrosHistorial()">
+        </div>
+        <div>
+          <label class="form-label">Hasta</label>
+          <input type="date" class="form-input" id="hist-filtro-hasta" onchange="aplicarFiltrosHistorial()">
+        </div>
+        <button class="btn" style="font-size:12px;" onclick="limpiarFiltrosHistorial()">✕ Limpiar filtros</button>
       </div>
       <div id="historial-list"><div class="loading"><div class="spinner"></div>Cargando...</div></div>
     </div>
@@ -384,9 +414,52 @@ async function checkConnection(){
   catch(e){dot.className='conn-dot';txt.textContent='Sin conexión';return false;}
 }
 
+// ─── FILTROS COMPARTIDOS (proveedor + rango de fechas) ────────
+let _proveedoresCache = [];
+async function cargarProveedoresCache(){
+  if(_proveedoresCache.length) return;
+  try{ _proveedoresCache = await api('proveedores?select=id,razon_social&order=razon_social.asc'); }catch(e){}
+}
+function poblarSelectsProveedor(){
+  const opts = '<option value="">Todos los proveedores</option>'
+    + _proveedoresCache.map(p=>`<option value="${esc(p.razon_social)}">${esc(p.razon_social)}</option>`).join('');
+  const s1 = document.getElementById('pend-filtro-proveedor'); if(s1) s1.innerHTML = opts;
+  const s2 = document.getElementById('hist-filtro-proveedor'); if(s2) s2.innerHTML = opts;
+}
+function filtrarPorProveedorYFecha(lista, prefijo, getProveedor, getFechaISO){
+  const proveedor = document.getElementById(prefijo+'-filtro-proveedor')?.value || '';
+  const desde = document.getElementById(prefijo+'-filtro-desde')?.value || '';
+  const hasta = document.getElementById(prefijo+'-filtro-hasta')?.value || '';
+  return lista.filter(item=>{
+    if(proveedor && (getProveedor(item)||'') !== proveedor) return false;
+    const fecha = (getFechaISO(item)||'').slice(0,10);
+    if(desde && fecha < desde) return false;
+    if(hasta && fecha > hasta) return false;
+    return true;
+  });
+}
+function hayFiltrosActivos(prefijo){
+  return !!(document.getElementById(prefijo+'-filtro-proveedor')?.value
+    || document.getElementById(prefijo+'-filtro-desde')?.value
+    || document.getElementById(prefijo+'-filtro-hasta')?.value);
+}
+
 // ─── PENDIENTES ─────────────────────────────────────────────
+let _pendOcsRaw = [], _pendConteosRaw = [], _pendDevolucionesRaw = [];
+
+function aplicarFiltrosPendientes(){ renderPendientesList(); }
+function limpiarFiltrosPendientes(){
+  document.getElementById('pend-filtro-proveedor').value='';
+  document.getElementById('pend-filtro-desde').value='';
+  document.getElementById('pend-filtro-hasta').value='';
+  renderPendientesList();
+}
+
 async function loadPendientes(){
   try{
+    await cargarProveedoresCache();
+    poblarSelectsProveedor();
+
     // OCs aprobadas o con recepción parcial — SIN datos de proveedor ni precio
     // OCs con entrega pendiente
     let ocs = await api('ordenes_compra?estado=in.(aprobada,recibida_parcial)&select=id,oc_numero,estado,created_at,condicion_pago,proveedores(razon_social)&order=created_at.asc');
@@ -406,7 +479,7 @@ async function loadPendientes(){
     }
     ocs = ocs.filter(o=>!o._esServicio);
 
-    // Métricas
+    // Métricas (sobre el total real, sin aplicar los filtros de la lista)
     document.getElementById('m-pendientes').textContent = ocs.filter(o=>o.estado==='aprobada').length;
     document.getElementById('m-parciales').textContent = ocs.filter(o=>o.estado==='recibida_parcial').length;
 
@@ -415,77 +488,95 @@ async function loadPendientes(){
     const desviosHoy = await api(`recepciones?tiene_desvios=eq.true&created_at=gte.${hoy}T00:00:00&select=id`);
     document.getElementById('m-desvios').textContent = desviosHoy?.length||0;
 
-    const el = document.getElementById('pendientes-list');
+    _pendOcsRaw = ocs;
+    _pendConteosRaw = recsPendientes||[];
+    _pendDevolucionesRaw = devolucionesFalla||[];
 
-    // Sección conteos pendientes
-    let htmlConteos = '';
-    if(recsPendientes && recsPendientes.length){
-      htmlConteos = `<div style="margin-bottom:16px;">
-        <div style="font-size:10px;font-weight:600;color:var(--amber);letter-spacing:0.08em;margin-bottom:8px;">⏳ CONTEOS PENDIENTES — Stock no disponible hasta completar</div>
-        ${recsPendientes.map(r=>{
-          const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-          return `<div class="oc-card" style="border-color:rgba(255,160,0,0.3);cursor:pointer;" onclick="abrirConteoPendiente(${r.id})">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div class="oc-numero">${r.recepcion_numero} · ${fecha}</div>
-                <div style="font-size:14px;font-weight:600;margin:2px 0;">${r.ordenes_compra?.proveedores?.razon_social||'—'}</div>
-                <div style="font-size:12px;color:var(--text2);">${r.ordenes_compra?.oc_numero||'—'}</div>
-              </div>
-              <span class="badge amber">Conteo pendiente</span>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }
-
-    // Sección devoluciones por falla
-    let htmlDevoluciones = '';
-    if(devolucionesFalla && devolucionesFalla.length){
-      htmlDevoluciones = `<div style="margin-bottom:16px;">
-        <div style="font-size:10px;font-weight:600;color:var(--red);letter-spacing:0.08em;margin-bottom:8px;">🛠 DEVOLUCIONES POR FALLA — esperando que llegue del cliente</div>
-        ${devolucionesFalla.map(f=>{
-          const fecha = new Date(f.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-          const op = f.ordenes_produccion;
-          const nombre = f.skus?.nombre || 'Insumo #'+f.item_id;
-          return `<div class="oc-card" style="border-color:rgba(255,94,94,0.3);cursor:pointer;" onclick="marcarRecibidaDevolucionRec(${f.id})">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div class="oc-numero">Falla #${f.id} · ${fecha}</div>
-                <div style="font-size:14px;font-weight:600;margin:2px 0;">${nombre}</div>
-                <div style="font-size:12px;color:var(--text2);">${op?(op.codigo_op_interno||op.op_numero)+' · '+op.cliente:'—'} — ${f.descripcion_falla}</div>
-              </div>
-              <span class="badge red">Toca "✓ Recibido"</span>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }
-
-    if(!ocs.length && !recsPendientes?.length && !devolucionesFalla?.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Sin entregas pendientes</div>';
-      return;
-    }
-
-    el.innerHTML = htmlDevoluciones + htmlConteos + ocs.map(oc=>{
-      const fecha = new Date(oc.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-      const diasAtras = Math.floor((Date.now()-new Date(oc.created_at))/(1000*60*60*24));
-      const esParcial = oc.estado==='recibida_parcial';
-      const insumosStr = oc._items.map(i=>`${i.nombre}${i.color?' ('+i.color+')':''} x${i.cantidad-(i.cantidad_recibida||0)}`).join(', ');
-      return `<div class="oc-card ${esParcial?'parcial':''}" onclick="abrirRecepcion(${oc.id})">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div class="oc-numero">${oc.oc_numero} · ${fecha}</div>
-            <div style="font-size:14px;font-weight:600;margin:2px 0;">${oc.proveedores?.razon_social||'—'}</div>
-            <div style="font-size:12px;color:var(--text2);margin:3px 0;">${insumosStr}</div>
-            <div class="oc-fecha">hace ${diasAtras} día${diasAtras!==1?'s':''} · ${oc.condicion_pago||'—'}</div>
-          </div>
-          <span class="badge ${esParcial?'blue':'amber'}">${esParcial?'Parcial pendiente':'En espera'}</span>
-        </div>
-      </div>`;
-    }).join('');
+    renderPendientesList();
   }catch(e){
     document.getElementById('pendientes-list').innerHTML='<div class="empty">Error cargando pendientes</div>';
   }
+}
+
+function renderPendientesList(){
+  const el = document.getElementById('pendientes-list');
+  const ocs = filtrarPorProveedorYFecha(_pendOcsRaw, 'pend', o=>o.proveedores?.razon_social, o=>o.created_at);
+  const recsPendientes = filtrarPorProveedorYFecha(_pendConteosRaw, 'pend', r=>r.ordenes_compra?.proveedores?.razon_social, r=>r.created_at);
+  // Las devoluciones por falla no tienen proveedor (vienen de un cliente): si hay un
+  // proveedor puntual seleccionado no corresponde mostrarlas, pero sí respetan el rango
+  // de fechas si no hay proveedor elegido.
+  const filtroProveedorActivo = document.getElementById('pend-filtro-proveedor')?.value || '';
+  const devolucionesFalla = filtroProveedorActivo
+    ? []
+    : filtrarPorProveedorYFecha(_pendDevolucionesRaw, 'pend', ()=>'', f=>f.created_at);
+
+  // Sección conteos pendientes
+  let htmlConteos = '';
+  if(recsPendientes && recsPendientes.length){
+    htmlConteos = `<div style="margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:600;color:var(--amber);letter-spacing:0.08em;margin-bottom:8px;">⏳ CONTEOS PENDIENTES — Stock no disponible hasta completar</div>
+      ${recsPendientes.map(r=>{
+        const fecha = new Date(r.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+        return `<div class="oc-card" style="border-color:rgba(255,160,0,0.3);cursor:pointer;" onclick="abrirConteoPendiente(${r.id})">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div class="oc-numero">${r.recepcion_numero} · ${fecha}</div>
+              <div style="font-size:14px;font-weight:600;margin:2px 0;">${r.ordenes_compra?.proveedores?.razon_social||'—'}</div>
+              <div style="font-size:12px;color:var(--text2);">${r.ordenes_compra?.oc_numero||'—'}</div>
+            </div>
+            <span class="badge amber">Conteo pendiente</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Sección devoluciones por falla
+  let htmlDevoluciones = '';
+  if(devolucionesFalla && devolucionesFalla.length){
+    htmlDevoluciones = `<div style="margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:600;color:var(--red);letter-spacing:0.08em;margin-bottom:8px;">🛠 DEVOLUCIONES POR FALLA — esperando que llegue del cliente</div>
+      ${devolucionesFalla.map(f=>{
+        const fecha = new Date(f.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+        const op = f.ordenes_produccion;
+        const nombre = f.skus?.nombre || 'Insumo #'+f.item_id;
+        return `<div class="oc-card" style="border-color:rgba(255,94,94,0.3);cursor:pointer;" onclick="marcarRecibidaDevolucionRec(${f.id})">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div class="oc-numero">Falla #${f.id} · ${fecha}</div>
+              <div style="font-size:14px;font-weight:600;margin:2px 0;">${nombre}</div>
+              <div style="font-size:12px;color:var(--text2);">${op?(op.codigo_op_interno||op.op_numero)+' · '+op.cliente:'—'} — ${f.descripcion_falla}</div>
+            </div>
+            <span class="badge red">Toca "✓ Recibido"</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  if(!ocs.length && !recsPendientes.length && !devolucionesFalla.length){
+    const msg = hayFiltrosActivos('pend') ? 'Sin resultados para estos filtros' : 'Sin entregas pendientes';
+    el.innerHTML=`<div class="empty"><div class="empty-icon">✓</div>${msg}</div>`;
+    return;
+  }
+
+  el.innerHTML = htmlDevoluciones + htmlConteos + ocs.map(oc=>{
+    const fecha = new Date(oc.created_at).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    const diasAtras = Math.floor((Date.now()-new Date(oc.created_at))/(1000*60*60*24));
+    const esParcial = oc.estado==='recibida_parcial';
+    const insumosStr = oc._items.map(i=>`${i.nombre}${i.color?' ('+i.color+')':''} x${i.cantidad-(i.cantidad_recibida||0)}`).join(', ');
+    return `<div class="oc-card ${esParcial?'parcial':''}" onclick="abrirRecepcion(${oc.id})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="oc-numero">${oc.oc_numero} · ${fecha}</div>
+          <div style="font-size:14px;font-weight:600;margin:2px 0;">${oc.proveedores?.razon_social||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);margin:3px 0;">${insumosStr}</div>
+          <div class="oc-fecha">hace ${diasAtras} día${diasAtras!==1?'s':''} · ${oc.condicion_pago||'—'}</div>
+        </div>
+        <span class="badge ${esParcial?'blue':'amber'}">${esParcial?'Parcial pendiente':'En espera'}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ─── DEVOLUCIONES POR FALLA ──────────────────────────────────
@@ -1377,18 +1468,55 @@ function toggleHistorial(id){
   if(flecha) flecha.textContent = visible ? '▼' : '▲';
 }
 
+let _historialRecsRaw = [];
+
+function aplicarFiltrosHistorial(){ renderHistorialList(); }
+function limpiarFiltrosHistorial(){
+  document.getElementById('hist-filtro-proveedor').value='';
+  document.getElementById('hist-filtro-desde').value='';
+  document.getElementById('hist-filtro-hasta').value='';
+  renderHistorialList();
+}
+
 async function loadHistorial(){
   try{
-    const recs = await api('recepciones?select=*,ordenes_compra(id,oc_numero,estado,proveedores(razon_social))&order=created_at.desc&limit=30');
+    await cargarProveedoresCache();
+    poblarSelectsProveedor();
+
     const el = document.getElementById('historial-list');
-    if(!recs?.length){el.innerHTML='<div class="empty"><div class="empty-icon">▤</div>Sin recepciones registradas</div>';return;}
-    // Cargar items de cada recepcion
-    for(const r of recs){
-      try{
-        const items = await api('recepcion_items?recepcion_id=eq.'+r.id+'&select=id,cantidad_esperada,cantidad_recibida,color_esperado,color_recibido,tiene_desvio,oc_items(nombre,skus(nombre))');
-        r._items = items||[];
-      }catch(e){ r._items=[]; }
-    }
+    const recs = await api('recepciones?select=*,ordenes_compra(id,oc_numero,estado,proveedores(razon_social))&order=created_at.desc&limit=300');
+    if(!recs?.length){ _historialRecsRaw = []; el.innerHTML='<div class="empty"><div class="empty-icon">▤</div>Sin recepciones registradas</div>'; return; }
+
+    // Traer los items de todas las recepciones en una sola consulta (en vez de una por
+    // recepción) para poder manejar un historial más largo sin que tarde una eternidad.
+    const ids = recs.map(r=>r.id).join(',');
+    let itemsTodos = [];
+    try{
+      itemsTodos = await api(`recepcion_items?recepcion_id=in.(${ids})&select=id,recepcion_id,cantidad_esperada,cantidad_recibida,color_esperado,color_recibido,tiene_desvio,oc_items(nombre,skus(nombre))`);
+    }catch(e){ itemsTodos = []; }
+    const itemsPorRecepcion = {};
+    (itemsTodos||[]).forEach(i=>{
+      if(!itemsPorRecepcion[i.recepcion_id]) itemsPorRecepcion[i.recepcion_id] = [];
+      itemsPorRecepcion[i.recepcion_id].push(i);
+    });
+    recs.forEach(r=>{ r._items = itemsPorRecepcion[r.id] || []; });
+
+    _historialRecsRaw = recs;
+    renderHistorialList();
+  }catch(e){ document.getElementById('historial-list').innerHTML='<div class="empty">Error cargando historial</div>'; }
+}
+
+function renderHistorialList(){
+  const el = document.getElementById('historial-list');
+  const recs = filtrarPorProveedorYFecha(_historialRecsRaw, 'hist', r=>r.ordenes_compra?.proveedores?.razon_social, r=>r.created_at);
+
+  if(!recs.length){
+    const msg = hayFiltrosActivos('hist') ? 'Sin resultados para estos filtros' : 'Sin recepciones registradas';
+    el.innerHTML = `<div class="empty"><div class="empty-icon">▤</div>${msg}</div>`;
+    return;
+  }
+
+  try{
     let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
     recs.forEach(r=>{
       const fecha=new Date(r.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
