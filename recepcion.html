@@ -420,6 +420,7 @@ async function cargarProveedoresCache(){
   if(_proveedoresCache.length) return;
   try{ _proveedoresCache = await api('proveedores?select=id,razon_social&order=razon_social.asc'); }catch(e){}
 }
+function esc(str){ return (str||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function poblarSelectsProveedor(){
   const opts = '<option value="">Todos los proveedores</option>'
     + _proveedoresCache.map(p=>`<option value="${esc(p.razon_social)}">${esc(p.razon_social)}</option>`).join('');
