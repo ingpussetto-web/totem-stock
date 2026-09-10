@@ -361,20 +361,22 @@ async function checkConnection(){
 // ─── LOAD OPs ───────────────────────────────────────────────
 let todasLasOPs = [];
 
-let docOpCodigos = {}; // { v14_orden: codigo_op_interno }
+let docOpCodigos = {}; // { op_id: codigo_op_interno }
 
 async function loadOPs(){
   try{
     // Cargar todas las OPs (vigentes y terminadas)
     todasLasOPs = await api('op_progreso?select=*&order=created_at.desc');
     ops = todasLasOPs.filter(o => o.estado === 'en_produccion' || o.estado === 'iniciada' || o.estado === 'bom_confirmada');
-    // Cargar códigos internos desde doc_op_config
+    // Cargar códigos internos (número consecutivo tipo "OP561/26") directo desde
+    // ordenes_produccion.codigo_op_interno — es la misma columna que asigna/edita
+    // Tablero de Proyectos. Antes esto se leía de doc_op_config, una tabla vieja
+    // que quedó sin actualizarse cuando el código interno se pasó a esta columna.
     try {
-      const docs = await api('doc_op_config?select=cot_numero,datos');
+      const rows = await api('ordenes_produccion?codigo_op_interno=not.is.null&select=id,codigo_op_interno');
       docOpCodigos = {};
-      (docs||[]).forEach(function(r){
-        const cod = (r.datos||{}).codigo_op_interno||'';
-        if(cod) docOpCodigos[r.cot_numero.replace(/^COT-/, '')] = cod;
+      (rows||[]).forEach(function(r){
+        if(r.codigo_op_interno) docOpCodigos[r.id] = r.codigo_op_interno;
       });
     } catch(e){ /* no bloquear si falla */ }
     poblarFiltroMes();
@@ -428,7 +430,7 @@ function aplicarFiltros(){
   // Filtro búsqueda por texto libre (cliente, producto, N° de OP)
   if(busqueda){
     lista = lista.filter(o=>{
-      const codigoInterno = docOpCodigos[o.v14_orden] || '';
+      const codigoInterno = docOpCodigos[o.id] || '';
       const campos = [o.cliente, o.producto_nombre, o.op_numero, o.v14_orden, codigoInterno];
       return campos.some(c => (c||'').toLowerCase().includes(busqueda));
     });
@@ -437,7 +439,7 @@ function aplicarFiltros(){
   // Ordenar por código OP interno (numérico), los sin código al final
   lista = lista.slice().sort(function(a, b){
     const getCod = function(o){
-      const cod = docOpCodigos[o.v14_orden] || '';
+      const cod = docOpCodigos[o.id] || '';
       const m = cod.match(/OP(\d+)\//);
       return m ? parseInt(m[1]) : Infinity;
     };
@@ -489,7 +491,7 @@ function renderOPs(lista, vista){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div style="display:flex;align-items:center;gap:4px;">
-            <div class="op-numero">${o.op_numero}${docOpCodigos[o.v14_orden]?' / '+docOpCodigos[o.v14_orden]:''}</div>
+            <div class="op-numero">${o.op_numero}${docOpCodigos[o.id]?' / '+docOpCodigos[o.id]:''}</div>
           </div>
           <div class="op-cliente">${o.cliente}${o.para_stock?' <span style="font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(139,107,214,0.15);color:#8b6bd6;white-space:nowrap;">📦 para stock</span>':''}</div>
           <div class="op-producto">${o.producto_nombre} × ${o.cantidad}</div>
