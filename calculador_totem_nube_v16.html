@@ -984,7 +984,6 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <option value="">Todos los estados</option>
           <option value="iniciado">Iniciado</option>
           <option value="produccion">En producción</option>
-          <option value="listo_despacho">Listo para despacho</option>
           <option value="despachado">Despachado</option>
           <option value="instalado">Instalado</option>
           <option value="cancelado">Cancelado</option>
@@ -8798,12 +8797,15 @@ async function cargarInfoOP(proyId, orden){
     // hay que mandar a Ops_ventas a armar/revisar la BOM, no a Producción.
     const opUrlBOM = 'https://ingpussetto-web.github.io/totem-stock/ops_ventas.html?op='+encodeURIComponent(op.op_numero)+'&area=gerencia';
 
-    // Sincronizar estado del proyecto con el estado real de la OP
-    if(op.estado === 'en_produccion' && estadoProy !== 'produccion' && estadoProy !== 'listo_despacho' && estadoProy !== 'despachado'){
+    // Sincronizar estado del proyecto con el estado real de la OP.
+    // "Listo para despacho" ya no es una categoría/estado aparte del proyecto —
+    // es solo el aviso visual de más abajo (banner verde) mientras la OP está
+    // completada. El proyecto se mantiene clasificado como "En producción"
+    // (y por lo tanto sigue apareciendo bajo ese filtro) hasta que se despache.
+    // Esto también corrige solo, la primera vez que se abre, a cualquier
+    // proyecto que haya quedado marcado 'listo_despacho' de antes de este cambio.
+    if((op.estado === 'en_produccion' || op.estado === 'completada') && estadoProy !== 'produccion' && estadoProy !== 'despachado'){
       cambiarEstadoProyecto(proyId, 'produccion');
-    }
-    if(op.estado === 'completada' && estadoProy !== 'listo_despacho' && estadoProy !== 'despachado'){
-      cambiarEstadoProyecto(proyId, 'listo_despacho');
     }
 
     const esCompletada = op.estado === 'completada';
