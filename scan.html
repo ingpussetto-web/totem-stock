@@ -282,7 +282,7 @@ async function renderEnStock(){
 
   // Filtrar OPs en producción — si es gabinete, filtrar también por color
   const esGabinete = variante && ['Negro','Blanco','Gris Claro','Gris Plomo'].includes(variante);
-  const itemsValidos = (bomItems||[]).filter(b=>{
+  let itemsValidos = (bomItems||[]).filter(b=>{
     if(!['en_produccion','bom_confirmada'].includes(b.ordenes_produccion?.estado)) return false;
     if(esGabinete){
       const colorOP = b.ordenes_produccion?.color_gabinete || '';
@@ -292,6 +292,32 @@ async function renderEnStock(){
     if(u.variante_id != null) return b.variante_id == null || b.variante_id === u.variante_id;
     return true;
   });
+
+  // Si no hay match exacto por sku, pero el SKU pertenece a una familia de
+  // insumos intercambiables (ej: Mini PC Beelink / Vyse), buscar OPs que
+  // tengan pendiente otro modelo de la misma familia y no estén marcadas
+  // "sin sustituto" — mismo criterio que ya usa produccion.html al escanear
+  // dentro de una OP puntual, pero acá barriendo TODAS las OPs activas.
+  let viaFamilia = false;
+  const familiaId = u.skus?.familia_id;
+  if(!itemsValidos.length && familiaId){
+    const bomFamilia = await api(
+      `op_bom_items?estado=eq.pendiente&incluido=eq.true&sin_sustituto=eq.false&select=*,skus(familia_id),ordenes_produccion(id,op_numero,cliente,producto_nombre,color_gabinete,estado)`
+    );
+    itemsValidos = (bomFamilia||[]).filter(b=>{
+      if(b.sku_id === u.sku_id) return false;
+      if(b.skus?.familia_id !== familiaId) return false;
+      if(!['en_produccion','bom_confirmada'].includes(b.ordenes_produccion?.estado)) return false;
+      if(esGabinete){
+        const colorOP = b.ordenes_produccion?.color_gabinete || '';
+        return colorOP === variante || colorOP === 'A definir' || colorOP === '';
+      }
+      if(u.variante_id != null) return b.variante_id == null || b.variante_id === u.variante_id;
+      return true;
+    });
+    viaFamilia = itemsValidos.length > 0;
+  }
+  window._viaFamiliaStock = viaFamilia;
 
   // Agrupar por OP — guardar TODOS los items pendientes por OP
   const opsPorId = {};
@@ -318,6 +344,7 @@ async function renderEnStock(){
           <div class="op-item-producto">${esc(op.producto_nombre)}</div>
           ${op.color_gabinete?`<div class="op-item-color">● Color: ${esc(op.color_gabinete)}</div>`:''}
           ${pendientesEnOP>1?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">Quedan ${pendientesEnOP} unidades por asignar en esta OP</div>`:''}
+          ${viaFamilia?`<div style="font-size:10px;color:var(--amber);font-family:monospace;margin-top:4px;">⚠ Se va a asignar como modelo alternativo (la BOM pedía otro modelo de la misma familia)</div>`:''}
           <button class="btn-asignar"
             data-op-id="${op.id}"
             data-op-numero="${op.op_numero}"
@@ -325,6 +352,7 @@ async function renderEnStock(){
             data-usa-selector="${usaSelector}"
             data-bom-id="${!usaSelector ? items[0].id : ''}"
             data-notas="${(!usaSelector ? (items[0].notas||'') : '').replace(/"/g,'&quot;')}"
+            data-via-familia="${viaFamilia}"
             onclick="handleAsignarBtn(this)">
             Asignar a esta OP
           </button>
@@ -927,22 +955,24 @@ let pendingOpId = null;
 let pendingBomNotas = '';
 let pendingOpNumero = '';
 let pendingCliente = '';
+let pendingViaFamilia = false;
 
 function handleAsignarBtn(btn){
   const opId = parseInt(btn.dataset.opId);
   const opNumero = btn.dataset.opNumero;
   const cliente = btn.dataset.cliente;
   const usaSelector = btn.dataset.usaSelector === 'true';
+  const viaFamilia = btn.dataset.viaFamilia === 'true';
   if(usaSelector){
-    mostrarSelectorSlot(opId, opNumero, cliente);
+    mostrarSelectorSlot(opId, opNumero, cliente, viaFamilia);
   } else {
     const bomId = parseInt(btn.dataset.bomId);
     const notas = btn.dataset.notas;
-    prepararAsignacion(bomId, opId, opNumero, cliente, notas);
+    prepararAsignacion(bomId, opId, opNumero, cliente, notas, viaFamilia);
   }
 }
 
-function mostrarSelectorSlot(opId, opNumero, cliente){
+function mostrarSelectorSlot(opId, opNumero, cliente, viaFamilia){
   const entrada = window._slotItemsPorOp?.[opId];
   if(!entrada) return;
   const items = entrada.items;
@@ -965,8 +995,8 @@ function mostrarSelectorSlot(opId, opNumero, cliente){
     } else {
       label = '📦 Equipo (sin número)';
     }
-    return `<button 
-      data-bom-id="${item.id}" data-op-id="${opId}" data-op-numero="${opNumero}" data-cliente="${cliente.replace(/"/g,'&quot;')}" data-notas="${(notas||'').replace(/"/g,'&quot;')}"
+    return `<button
+      data-bom-id="${item.id}" data-op-id="${opId}" data-op-numero="${opNumero}" data-cliente="${cliente.replace(/"/g,'&quot;')}" data-notas="${(notas||'').replace(/"/g,'&quot;')}" data-via-familia="${viaFamilia}"
       onclick="seleccionarSlotBtn(this)"
       style="width:100%;padding:14px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:14px;font-weight:500;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif;">
       ${label}
@@ -983,13 +1013,14 @@ function seleccionarSlotBtn(btn){
   const opNumero = btn.dataset.opNumero;
   const cliente = btn.dataset.cliente;
   const notas = btn.dataset.notas;
+  const viaFamilia = btn.dataset.viaFamilia === 'true';
   cerrarSlotOverlay();
-  prepararAsignacion(bomId, opId, opNumero, cliente, notas);
+  prepararAsignacion(bomId, opId, opNumero, cliente, notas, viaFamilia);
 }
 
-function seleccionarSlot(bomId, opId, opNumero, cliente, notas){
+function seleccionarSlot(bomId, opId, opNumero, cliente, notas, viaFamilia){
   cerrarSlotOverlay();
-  prepararAsignacion(bomId, opId, opNumero, cliente, notas);
+  prepararAsignacion(bomId, opId, opNumero, cliente, notas, viaFamilia);
 }
 
 function cerrarSlotOverlay(){
@@ -997,12 +1028,13 @@ function cerrarSlotOverlay(){
   if(overlay) overlay.style.display = 'none';
 }
 
-function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales){
+function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales, viaFamilia){
   pendingBomId = bomId;
   pendingOpId = opId;
   pendingBomNotas = notasOriginales || '';
   pendingOpNumero = opNumero;
   pendingCliente = cliente;
+  pendingViaFamilia = !!viaFamilia;
 
   // Obtener nombre actual (puede completarse en el confirm)
   const nombreActual = document.getElementById('inp-nombre')?.value.trim() || '';
@@ -1011,6 +1043,7 @@ function prepararAsignacion(bomId, opId, opNumero, cliente, notasOriginales){
   document.getElementById('confirm-body').innerHTML =
     `<strong>${unidadActual.skus?.nombre}</strong> ${unidadActual.variantes?.valor?'('+unidadActual.variantes.valor+')':''}<br><br>` +
     `→ <strong>${opNumero}</strong> · ${cliente}<br><br>` +
+    (pendingViaFamilia ? `<div style="color:var(--amber);font-size:12px;margin-bottom:10px;">⚠ La BOM de esta OP pedía otro modelo de la misma familia — se va a registrar "${unidadActual.skus?.nombre}" como el modelo efectivamente instalado.</div>` : '') +
     `<label style="font-size:12px;color:var(--text3);">Tu nombre:</label><br>` +
     `<input id="confirm-nombre" type="text" value="${nombreActual}" placeholder="Ej: Juan García" ` +
     `style="width:100%;margin-top:6px;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;">`;
@@ -1046,11 +1079,18 @@ async function ejecutarAsignacion(nombre){
     // Actualizar op_bom_items
     // Preservar prefijo 🖥 PLAYER si el item era un player
     const prefixPlayer = pendingBomNotas.startsWith('🖥') ? '🖥 PLAYER — ' : '';
-    await api(`op_bom_items?id=eq.${pendingBomId}`, 'PATCH', {
+    const patchBom = {
       estado: 'asignado',
       uid_asignado: unidadActual.uid,
       notas: `${prefixPlayer}Asignado por: ${nombre} — ${new Date().toLocaleString('es-AR')}`
-    });
+    };
+    // Si se asignó como modelo alternativo de la familia (ej: Vyse en lugar de
+    // Beelink), reflejar en la BOM el modelo que realmente se instaló.
+    if(pendingViaFamilia){
+      patchBom.sku_id = unidadActual.sku_id;
+      patchBom.nombre = unidadActual.skus?.nombre;
+    }
+    await api(`op_bom_items?id=eq.${pendingBomId}`, 'PATCH', patchBom);
 
     // Actualizar unidad → reservado
     await api(`unidades?id=eq.${unidadActual.id}`, 'PATCH', {
