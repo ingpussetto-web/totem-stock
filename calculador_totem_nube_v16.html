@@ -9009,6 +9009,22 @@ async function crearOP(proyId){
   }
   if(!p){ alert('Proyecto no encontrado.'); return; }
 
+  // Asegurar que el proyecto ya quedó guardado en Supabase ANTES de generar la OP.
+  // El guardado normal de proyectos es debounced (autoSave espera ~5s), así que si
+  // se genera la OP muy rápido después de crear/editar el proyecto, podía quedar
+  // creada la OP sin que el proyecto correspondiente llegara a existir en
+  // proyectos_cotizador — y el proyecto directamente desaparecía de "Detalle de
+  // ventas" en la próxima carga, aunque la OP siguiera viéndose bien en Producción
+  // y Tablero (que leen directo de ordenes_produccion).
+  try{
+    const yaGuardado = await stockAPI('proyectos_cotizador?orden=eq.'+encodeURIComponent(p.orden)+'&select=id');
+    if(!yaGuardado || !yaGuardado.length){
+      const postBody = { orden: p.orden, cliente: p.cliente, mes: p.mes, anio: p.anio, estado: p.estado, notas: p.notas||'', items: JSON.stringify(p.items) };
+      const res = await stockAPI('proyectos_cotizador', 'POST', [postBody]);
+      if(res && res[0]) p.id = res[0].id;
+    }
+  }catch(e){ console.warn('No se pudo verificar/guardar el proyecto antes de generar la OP:', e); }
+
   // Verificar si ya tiene OP creada (no se permite duplicar)
   if(opsPorOrden[p.orden]){
     verOP(p.orden);
