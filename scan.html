@@ -238,7 +238,7 @@ async function init(){
 
   try{
     // Buscar la unidad física
-    const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre,tracking,categorias(nombre)),variantes(id,valor)`);
+    const unidades = await api(`unidades?uid=eq.${encodeURIComponent(uid)}&select=*,skus(id,codigo,nombre,tracking,familia_id,categorias(nombre)),variantes(id,valor)`);
 
     if(!unidades || !unidades.length){
       // Fallback: buscar por código de SKU (etiqueta de caja)
