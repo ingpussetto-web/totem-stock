@@ -672,6 +672,14 @@ async function abrirRecepcion(ocId){
     renderItemsRecepcion();
     showPage('recepcion');
     setStep(1);
+    // Bug: al terminar una recepción, mostrarResultado() deja el panel3 (resumen
+    // "Recepción registrada") visible y panel1/panel2 ocultos vía style.display.
+    // setStep() solo pinta el encabezado 01/02/03 — nunca vuelve a mostrar los
+    // paneles. Si no se resetea acá, la próxima recepción que se abre arranca
+    // mostrando el resumen de la recepción anterior en vez del checklist nuevo.
+    document.getElementById('rec-panel1').style.display='block';
+    document.getElementById('rec-panel2').style.display='none';
+    document.getElementById('rec-panel3').style.display='none';
   }catch(e){toast('Error: '+e.message);}
 }
 
