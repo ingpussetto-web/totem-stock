@@ -6708,6 +6708,30 @@ function quitarItemTemp(idx){
   renderItemsTemp();
 }
 
+// ─── HANDOFF DESDE PRESUPUESTOS.HTML ────────────────────────────────────────
+// presupuestos.html deja acá los ítems que el cliente eligió del presupuesto
+// enviado (checklist "Enviar a Cotizador"). Al entrar al calculador, si hay
+// algo pendiente, ofrecemos abrir un proyecto nuevo ya precargado con esos
+// ítems — el usuario los sigue pudiendo editar, sacar o sumar otros por fuera
+// del presupuesto, como cualquier proyecto normal.
+function revisarHandoffPresupuesto(){
+  try{
+    const raw = localStorage.getItem('tn_handoff_presupuesto');
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    localStorage.removeItem('tn_handoff_presupuesto');
+    if(!data || !Array.isArray(data.items) || !data.items.length) return;
+    if(!confirm('Hay '+data.items.length+' ítem(s) elegidos desde un presupuesto'+(data.cliente?' de "'+data.cliente+'"':'')+'. ¿Crear un proyecto nuevo con esos ítems?')) return;
+    showPage('ventas', document.querySelector('[onclick*="ventas"]'));
+    Promise.resolve(abrirModalProyecto()).then(function(){
+      const cEl = document.getElementById('proy-cliente');
+      if(cEl) cEl.value = data.cliente||'';
+      itemsTemp = data.items.map(function(i){ return {desc:i.desc||'', cat:i.cat||'equipo', cant:i.cant||1, precio:i.precio||0}; });
+      renderItemsTemp();
+    });
+  }catch(e){ console.warn('No se pudo aplicar el handoff de presupuesto:', e); }
+}
+
 function renderItemsTemp(){
   const el = document.getElementById('proy-items-lista');
   if(!el) return;
@@ -8744,6 +8768,7 @@ sincronizarTodoElHistorial();
 // Then load from Sheets (authoritative, may override localStorage)
 setSyncStatus('Conectando...', '#f5a623');
 loadFromSheets();
+revisarHandoffPresupuesto();
 // Precios actualizados se aplican al final de loadFromSheets
 cargarCostosEventuales();
 cargarCostosNoInventariables();

@@ -49,6 +49,7 @@ const MODULOS_CATALOGO = [
   { file: 'bienes_personal.html',            label: 'Bienes y Personal',       icon: '🧰', desc: 'Bienes por área, fallas/service y personal' },
   { file: 'licencias_clientes.html',         label: 'Licencias Clientes',      icon: '🔑', desc: 'Sincronización con Gestor de Licencias' },
   { file: 'tablero_comercial.html',          label: 'Tablero Comercial',       icon: '🤝', desc: 'Pipeline de leads · presupuestos · seguimiento' },
+  { file: 'presupuestos.html',               label: 'Editor de Presupuestos',  icon: '📐', desc: 'Armar propuestas comerciales editables y exportar a PDF' },
   { file: 'mensajeria_comercial.html',       label: 'Mensajería Comercial',    icon: '📲', desc: 'Encuestas · newsletter · reventa' },
 ];
 
