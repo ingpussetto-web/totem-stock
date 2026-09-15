@@ -726,6 +726,7 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <label>Categoría de producto</label>
           <select id="cot-categoria" onchange="filtrarProductosPorCategoria()" style="width:100%;height:36px;font-size:12px;">
             <option value="">— Todas las categorías —</option>
+            <option value="Turnero">Turnero</option>
             <option value="Turnero sin software">Turnero sin software</option>
             <option value="Turnero con software">Turnero con software</option>
             <option value="Vigilancia Remota">Vigilancia Remota</option>
@@ -1453,13 +1454,19 @@ const PRODUCTOS = [
   // ══════════════════════════════════════════════════════════════
   // TURNERO CON IMPRESORA — sin software
   // ══════════════════════════════════════════════════════════════
-  {id:"turn_sin_sw_19_atril",name:"Turnero sin SW — Atril 19\"",categoria:"Turnero sin software",
+  // ══════════════════════════════════════════════════════════════
+  // TURNERO — fusionado con/sin software (piloto). El software ya no
+  // define el producto: es una elección aparte en la cotización (como
+  // ya pasa con "Terminal Autogestión"). BOM real consolidada en
+  // bom_maestra bajo estos ids nuevos — ver turn_19_atril/22_atril/22_incl.
+  // ══════════════════════════════════════════════════════════════
+  {id:"turn_19_atril",name:"Turnero — Atril 19\"",categoria:"Turnero",
    precioLista:Math.round(1730.4*dolar),_usd:1730.4, precioListaConMiniPC:Math.round((1730.4+430)*dolar),_usdConMini:2160.4, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_19_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_19",qty:1},{key:"vidrio_19",qty:1},{key:"monitor_19",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sin_sw_22_atril",name:"Turnero sin SW — Atril 22\"",categoria:"Turnero sin software",
+  {id:"turn_22_atril",name:"Turnero — Atril 22\"",categoria:"Turnero",
    precioLista:Math.round(1823.1*dolar),_usd:1823.1, precioListaConMiniPC:Math.round((1823.1+430)*dolar),_usdConMini:2253.1, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sin_sw_22_incl",name:"Turnero sin SW — Inclinado 22\"",categoria:"Turnero sin software",
+  {id:"turn_22_incl",name:"Turnero — Inclinado 22\"",categoria:"Turnero",
    precioLista:Math.round(1904.47*dolar),_usd:1904.47, precioListaConMiniPC:Math.round((1904.47+430)*dolar),_usdConMini:2334.4700000000003, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_22",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
   {id:"turn_sin_sw_32_incl",name:"Turnero sin SW — Inclinado 32\"",categoria:"Turnero sin software",
@@ -1499,18 +1506,9 @@ const PRODUCTOS = [
   {id:"turn_sw_pos_15",name:"Turnero con SW — Módulo Terminal POS 15\"",categoria:"Turnero con software",
    precioLista:Math.round(1380.0*dolar),_usd:1380.0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1}],warning:"⚠️ Revisar insumos: módulo POS 15\""},
-  {id:"turn_sw_19_atril",name:"Turnero con SW — Atril 19\"",categoria:"Turnero con software",
-   precioLista:Math.round(2150.64*dolar),_usd:2150.64, precioListaConMiniPC:Math.round(2150.64*dolar),_usdConMini:2150.64, keyMiniPC:"minipc_beelink_n95",
-   insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_19_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_19",qty:1},{key:"vidrio_19",qty:1},{key:"monitor_19",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sw_22_atril",name:"Turnero con SW — Atril 22\"",categoria:"Turnero con software",
-   precioLista:Math.round(2247.46*dolar),_usd:2247.46, precioListaConMiniPC:Math.round(2247.46*dolar),_usdConMini:2247.46, keyMiniPC:"minipc_beelink_n95",
-   insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
   {id:"turn_sw_22_atril_imp",name:"Turnero con SW — Atril Importado 22\"",categoria:"Turnero con software",
    precioLista:Math.round(2200.0*dolar),_usd:2200.0, precioListaConMiniPC:Math.round(2200.0*dolar),_usdConMini:2200.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: unidad importada, verificar gabinete"},
-  {id:"turn_sw_22_incl",name:"Turnero con SW — Inclinado 22\"",categoria:"Turnero con software",
-   precioLista:Math.round(2295.87*dolar),_usd:2295.87, precioListaConMiniPC:Math.round(2295.87*dolar),_usdConMini:2295.87, keyMiniPC:"minipc_beelink_n95",
-   insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_22",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
   {id:"turn_sw_32_incl",name:"Turnero con SW — Inclinado 32\"",categoria:"Turnero con software",
    precioLista:Math.round(2549.25*dolar),_usd:2549.25, precioListaConMiniPC:Math.round(2549.25*dolar),_usdConMini:2549.25, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_32",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
@@ -4237,7 +4235,7 @@ function filtrarProductosPorCategoria(){
     if(licTipo) licTipo.value = licConfig.tipo;
     if(licModulos) licModulos.style.display = licConfig.modulos ? 'block' : 'none';
   } else {
-    const sinLicencia = ['Turnero sin software','VideoWall','Terminal Autogestión','Accesorios'];
+    const sinLicencia = ['Turnero sin software','VideoWall','Terminal Autogestión','Accesorios','Turnero'];
     if(sinLicencia.includes(cat)){
       if(licCheck){ licCheck.checked = false; }
       if(licPanel) licPanel.style.display = 'none';
@@ -4255,8 +4253,8 @@ function recalcLicenciaTotal(){
   if(licMonto) licMonto.value = total;
 }
 
-const CATS_CON_PLAYER = ['Turnero con software','Turnero sin software','Totem Publicidad','VideoWall','Atención Remota','Terminal Autogestión'];
-const CATS_CON_PLOTEO = ['Turnero con software','Turnero sin software','Totem Publicidad','Terminal Autogestión','Vigilancia Remota','Atención Remota','Totem NubiPay','Encuesta Satisfacción'];
+const CATS_CON_PLAYER = ['Turnero con software','Turnero sin software','Totem Publicidad','VideoWall','Atención Remota','Terminal Autogestión','Turnero'];
+const CATS_CON_PLOTEO = ['Turnero con software','Turnero sin software','Totem Publicidad','Terminal Autogestión','Vigilancia Remota','Atención Remota','Totem NubiPay','Encuesta Satisfacción','Turnero'];
 
 // Busca el precio neto del último ítem cotizado (guardado en cotizaciones_crm) que haya
 // usado este producto. `cotizaciones` ya viene ordenado por updated_at.desc (cotSupaLoad),
@@ -7819,6 +7817,7 @@ async function getCategoriaPorOrden(){
 }
 
 const CATEGORIA_COLORES = {
+  'Turnero': '#00c896',
   'Turnero sin software': '#4d9fff',
   'Turnero con software': '#00c896',
   'Totem Publicidad': '#f5a623',
