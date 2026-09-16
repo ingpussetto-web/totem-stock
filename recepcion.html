@@ -623,8 +623,9 @@ async function abrirConteoPendiente(recId){
       return;
     }
 
-    window._vcajaRecId = recId;
-    await mostrarVerificacionCaja(itemsCantidad, recId);
+    // No hay recNum acá (no es parte de una recepción recién confirmada, es un conteo
+    // pospuesto que se retoma después) — se pasa null explícito.
+    await mostrarVerificacionCaja(itemsCantidad, recId, null, false, false);
   }catch(e){ toast('Error: '+e.message); console.error(e); }
 }
 
@@ -961,12 +962,6 @@ async function confirmarRecepcion(){
       }]);
     }
 
-    // Guardar recId para uso posterior
-    window._recId = recId;
-    window._recNum = recNum;
-    window._esParcial = esParcial;
-    window._hayDesvios = hayDesvios;
-
     // Separar items por tracking
     const itemsUID = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking === 'uid');
     const itemsCantidad = recepcionItems.filter(ri => ri.cantidad_recibida > 0 && ri.tracking !== 'uid');
@@ -984,9 +979,11 @@ async function confirmarRecepcion(){
     }
 
     // Si hay items de cantidad, mostrar modal de verificación de caja (solo para conteo físico)
+    // recNum/esParcial/hayDesvios viajan como parámetros (no por variable global) para que no
+    // se pisen si mientras tanto arrancás otra recepción distinta.
     if(itemsCantidad.length > 0){
-      await mostrarVerificacionCaja(itemsCantidad, recId);
-      return; // El flujo continúa desde confirmarVerificacionCaja (solo alertas de diferencia)
+      await mostrarVerificacionCaja(itemsCantidad, recId, recNum, esParcial, hayDesvios);
+      return; // El flujo continúa desde confirmarVerificacionCaja o finalizarSinConteo
     }
 
     // Si no hay items de cantidad, mostrar resultado directamente
@@ -1600,12 +1597,24 @@ function toast(msg){
 let _vcajaItems = [];
 let _vcajaGrupos = []; // uno por insumo — si tiene variantes de color, un conteo por cada color existente
 let _vcajaRecId = null;
+// Datos de ESTA recepción puntual, capturados en el momento (no en variables globales
+// tipo window._recNum) para que no se pisen si el usuario ya arrancó otra recepción
+// mientras esta todavía está terminando de procesarse en segundo plano.
+let _vcajaRecNum = null;
+let _vcajaEsParcial = false;
+let _vcajaHayDesvios = false;
 
-async function mostrarVerificacionCaja(items, recId){
+async function mostrarVerificacionCaja(items, recId, recNum, esParcial, hayDesvios){
   _vcajaRecId = recId;
+  _vcajaRecNum = recNum ?? null;
+  _vcajaEsParcial = !!esParcial;
+  _vcajaHayDesvios = !!hayDesvios;
 
   // Cargar stock actual de cada item (para el fallback de ingresarCantidad, si hiciera falta)
+  // y registrar cuánto se recibió por sku+color en ESTA recepción, para poder calcular
+  // más abajo el stock que había ANTES (y así saltear el conteo cuando no había nada previo).
   const lista = [];
+  const recibidoPorColor = {}; // key: skuId_varianteId(o 'null') → cantidad recibida en esta recepción
   for(const ri of items){
     let varianteId = null;
     if(ri.color_recibido && ri._variantes?.length){
@@ -1617,6 +1626,9 @@ async function mostrarVerificacionCaja(items, recId){
       : await api(`stock?sku_id=eq.${ri.sku_id}&variante_id=is.null&select=id,cantidad`);
     const stockActual = stockRows?.[0]?.cantidad || 0;
     lista.push({...ri, stockSistema: stockActual, varianteId});
+
+    const keyColor = ri.sku_id+'_'+(varianteId||'null');
+    recibidoPorColor[keyColor] = (recibidoPorColor[keyColor]||0) + (Number(ri.cantidad_recibida)||0);
   }
   _vcajaItems = lista;
 
@@ -1638,17 +1650,39 @@ async function mostrarVerificacionCaja(items, recId){
       const colores = [];
       for(const v of g.variantesSku){
         const stockRows = await api(`stock?sku_id=eq.${g.sku_id}&variante_id=eq.${v.id}&select=id,cantidad`).catch(()=>[]);
-        colores.push({ variante_id: v.id, valor: v.valor, stockSistema: stockRows?.[0]?.cantidad || 0 });
+        const stockSistema = stockRows?.[0]?.cantidad || 0;
+        // Stock que había de este color ANTES de esta recepción. Si era 0 (o no había),
+        // lo que se cuente va a coincidir sí o sí con lo recién recibido — no hace falta pedir el conteo.
+        const recibidoEsteColor = recibidoPorColor[g.sku_id+'_'+v.id] || 0;
+        const stockAntes = stockSistema - recibidoEsteColor;
+        if(stockAntes > 0){
+          colores.push({ variante_id: v.id, valor: v.valor, stockSistema });
+        }
       }
-      g.colores = colores;
+      g.colores = colores.length ? colores : null;
+      g._skip = colores.length === 0;
     } else {
       const stockRows = await api(`stock?sku_id=eq.${g.sku_id}&variante_id=is.null&select=id,cantidad`).catch(()=>[]);
       g.stockSistema = stockRows?.[0]?.cantidad || 0;
       g.colores = null;
+      // Idem: sin variantes de color — si no había stock previo (primera compra o venía en cero),
+      // el conteo va a coincidir por definición con lo recibido, se saltea el banner.
+      const stockAntes = g.stockSistema - g.recibido_total;
+      g._skip = stockAntes <= 0;
     }
-    grupos.push(g);
+    if(!g._skip) grupos.push(g);
   }
   _vcajaGrupos = grupos;
+
+  // Si ningún insumo tenía stock previo real (todo era primera compra / venía en cero),
+  // no hace falta mostrar el banner de verificación de caja — se guarda directo.
+  // Se pasan recId/recNum/esParcial/hayDesvios/lista como parámetros locales (no via
+  // window.*) para que esta recepción no se pise con otra que arranque mientras esta
+  // sigue terminando en segundo plano (no hay modal acá que bloquee al usuario).
+  if(!grupos.length){
+    await finalizarSinConteo(recId, recNum, esParcial, hayDesvios, lista);
+    return;
+  }
 
   // Generar HTML del modal
   const listaHtml = grupos.map((g, gi) => {
@@ -1681,6 +1715,48 @@ async function mostrarVerificacionCaja(items, recId){
   document.getElementById('vcaja-nombre').value = MI_NOMBRE || '';
   const modal = document.getElementById('modal-verificacion-caja');
   modal.style.display = 'flex';
+}
+
+// Cierra la recepción sin pedir conteo físico, para cuando ningún insumo tenía stock
+// previo real (primera compra, o el stock estaba en cero) — el conteo coincidiría sí o sí.
+async function finalizarSinConteo(recId, recNum, esParcial, hayDesvios, items){
+  try{
+    // Verificar si el stock ya fue ingresado en confirmarRecepcion (idem confirmarVerificacionCaja)
+    const riPendientes = await api(`recepcion_items?recepcion_id=eq.${recId}&ingresado_a_stock=eq.false&select=id`).catch(()=>[]);
+    if(riPendientes?.length){
+      // Flujo legacy o pendiente_conteo: ingresar stock ahora como fallback.
+      // Usa la lista "items" recibida por parámetro (no _vcajaItems) para no pisarse
+      // si otra recepción arrancó su propio flujo mientras esta terminaba.
+      const errores = [];
+      for(const ri of (items||[])){
+        try{
+          await ingresarCantidad(ri);
+        }catch(e){
+          console.error('Error ingresando', ri.nombre, e);
+          errores.push(ri.nombre + ': ' + e.message);
+        }
+      }
+      if(errores.length){
+        toast('⚠ Algunos ítems no se ingresaron al stock: ' + errores.join(', '));
+      }
+    }
+
+    if(recId){
+      await api(`recepciones?id=eq.${recId}`, 'PATCH', {estado: 'confirmada'}).catch(()=>{});
+    }
+
+    if(!recNum){
+      toast('✅ Sin stock previo que verificar — stock actualizado');
+      showPage('pendientes');
+      loadPendientes();
+      return;
+    }
+
+    mostrarResultado(recNum, esParcial, hayDesvios);
+  }catch(e){
+    console.error('Error finalizando sin conteo:', e);
+    toast('⚠ No se pudo guardar: ' + e.message + ' — probá de nuevo');
+  }
 }
 
 async function confirmarVerificacionCaja(){
@@ -1770,14 +1846,14 @@ async function confirmarVerificacionCaja(){
     document.getElementById('modal-verificacion-caja').style.display = 'none';
 
     // Si viene de conteo pendiente (no hay recNum), volver a pendientes
-    if(!window._recNum){
+    if(!_vcajaRecNum){
       toast('✅ Conteo confirmado — stock actualizado');
       showPage('pendientes');
       loadPendientes();
       return;
     }
 
-    mostrarResultado(window._recNum, window._esParcial, window._hayDesvios);
+    mostrarResultado(_vcajaRecNum, _vcajaEsParcial, _vcajaHayDesvios);
   }catch(e){
     // Red de contención: cualquier error inesperado acá (típicamente wifi cortado)
     // no debe dejar el botón trabado en "Guardando..." sin aviso ni forma de reintentar.
