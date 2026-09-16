@@ -126,6 +126,8 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 .semaforo-dot.verde{background:var(--green);}
 .semaforo-dot.amarillo{background:var(--amber);}
 .semaforo-dot.rojo{background:var(--red);}
+.semaforo-item.recomendado{border-color:var(--blue);background:var(--blue-dim);}
+.semaforo-pendiente-badge{font-size:9px;font-weight:600;color:var(--blue);background:rgba(77,159,255,0.15);border:1px solid rgba(77,159,255,0.35);border-radius:10px;padding:2px 7px;white-space:nowrap;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.04em;}
 .semaforo-nombre{font-size:11px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .semaforo-fecha{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;}
 
@@ -185,6 +187,7 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
     <div style="height:12px;"></div>
     <div class="semaforo-filters">
       <button class="semaforo-filter active" onclick="filtrarSemaforo('todos',this)">Todos</button>
+      <button class="semaforo-filter" onclick="filtrarSemaforo('pendiente',this)">📥 Recomendado</button>
       <button class="semaforo-filter" onclick="filtrarSemaforo('rojo',this)">🔴 Sin controlar</button>
       <button class="semaforo-filter" onclick="filtrarSemaforo('amarillo',this)">🟡 Demorados</button>
       <button class="semaforo-filter" onclick="filtrarSemaforo('verde',this)">🟢 Al día</button>
@@ -250,6 +253,31 @@ function fmt_fecha(str){
 let _todosLosSkus = [];
 let _ultimosConteos = {};
 let _uidsEnStockPorVariante = {}; // varianteId('null' si no tiene) -> [uid,...] en stock, para el picker de "marcar como baja"
+let _skusPendienteConteo = {}; // sku_id -> {recepcion_numero, fecha} — recepciones que se pospusieron sin contar ("Realizar conteo luego")
+
+// Recepciones marcadas "pendiente_conteo" (se pospuso el conteo físico al recibir) —
+// cruzamos contra sus SKUs para poder recomendar el control acá, ya que el stock
+// quedó cargado con el valor teórico (recibido + lo que había) sin verificar.
+async function cargarRecepcionesPendientesConteo(){
+  try{
+    const recs = await api('recepciones?estado=eq.pendiente_conteo&select=id,recepcion_numero,created_at').catch(()=>[]);
+    if(!recs || !recs.length){ _skusPendienteConteo = {}; return; }
+    const recIds = recs.map(r=>r.id);
+    const recMap = {};
+    recs.forEach(r=>{ recMap[r.id] = r; });
+    const items = await api(`recepcion_items?recepcion_id=in.(${recIds.join(',')})&select=recepcion_id,oc_items(sku_id)`).catch(()=>[]);
+    const map = {};
+    (items||[]).forEach(it=>{
+      const skuId = it.oc_items?.sku_id;
+      const rec = recMap[it.recepcion_id];
+      if(!skuId || !rec) return;
+      if(!map[skuId] || new Date(rec.created_at) > new Date(map[skuId].fecha)){
+        map[skuId] = { recepcion_numero: rec.recepcion_numero, fecha: rec.created_at };
+      }
+    });
+    _skusPendienteConteo = map;
+  }catch(e){ _skusPendienteConteo = {}; }
+}
 
 async function cargarSkus(){
   try {
@@ -263,6 +291,8 @@ async function cargarSkus(){
     (conteos||[]).forEach(c=>{
       if(!_ultimosConteos[c.sku_id]) _ultimosConteos[c.sku_id] = c;
     });
+
+    await cargarRecepcionesPendientesConteo();
 
     // Poblar select de categorías
     const cats = [...new Map(_todosLosSkus.map(s=>[s.categorias?.id, s.categorias]).filter(([id])=>id)).values()];
@@ -342,17 +372,25 @@ function renderSemaforo(){
     else if(dias <= 30){ color='verde'; label=`Hace ${dias}d`; }
     else if(dias <= 60){ color='amarillo'; label=`Hace ${dias}d`; }
     else { color='rojo'; label=`Hace ${dias}d`; }
-    return {s, color, label};
+    const pendiente = _skusPendienteConteo[s.id] || null;
+    return {s, color, label, pendiente};
   }).sort((a,b)=>{
+    // Lo que tiene una recepción sin contar se recomienda primero, sin importar
+    // el color del semáforo — es la señal más accionable (llegó mercadería nueva
+    // y el stock quedó en el valor teórico, sin verificar).
+    if(!!b.pendiente - !!a.pendiente !== 0) return (b.pendiente?1:0) - (a.pendiente?1:0);
     const orden = {rojo:0,amarillo:1,verde:2};
     return orden[a.color]-orden[b.color];
   });
 
-  const filtrados = _semaforoFiltro === 'todos' ? items : items.filter(i=>i.color===_semaforoFiltro);
-  grid.innerHTML = filtrados.length ? filtrados.map(({s,color,label})=>`
-    <div class="semaforo-item" onclick="seleccionarDesdeSemaforo(${s.id}, ${s.categorias?.id||'null'})">
+  const filtrados = _semaforoFiltro === 'todos' ? items
+    : _semaforoFiltro === 'pendiente' ? items.filter(i=>i.pendiente)
+    : items.filter(i=>i.color===_semaforoFiltro);
+  grid.innerHTML = filtrados.length ? filtrados.map(({s,color,label,pendiente})=>`
+    <div class="semaforo-item ${pendiente?'recomendado':''}" onclick="seleccionarDesdeSemaforo(${s.id}, ${s.categorias?.id||'null'})">
       <div class="semaforo-dot ${color}"></div>
       <span class="semaforo-nombre">${s.nombre}</span>
+      ${pendiente?`<span class="semaforo-pendiente-badge" title="${pendiente.recepcion_numero} · recepción sin contar (${fmt_fecha(pendiente.fecha)})">📥 sin contar</span>`:''}
       <span class="semaforo-fecha">${label}</span>
     </div>
   `).join('') : `<div style="color:var(--text3);font-size:12px;padding:8px;">Sin insumos en esta categoría de control.</div>`;

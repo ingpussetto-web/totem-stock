@@ -1703,14 +1703,17 @@ function abrirOPDesdeURL(){
 // ─── BOM MAESTRA ──────────────────────────────────────────────────────────────
 
 const PRODUCTOS_BOM = [
+  // Turnero — fusionado con/sin software (piloto). Ver turn_19_atril/22_atril/22_incl
+  // más abajo: reemplazan a los pares turn_sw_*/turn_sin_sw_* de estos 3 modelos,
+  // que ya no se usan para OPs nuevas (bom_maestra vieja queda archivada, no se borró).
+  {id:'turn_19_atril', nombre:'Turnero — Atril 19"', categoria:'Turnero'},
+  {id:'turn_22_atril', nombre:'Turnero — Atril 22"', categoria:'Turnero'},
+  {id:'turn_22_incl', nombre:'Turnero — Inclinado 22"', categoria:'Turnero'},
   // Turnero con SW
   {id:'turn_sw_lite_pared', nombre:'Turnero con SW — Lite Plus Pared', categoria:'Turnero con SW'},
   {id:'turn_sw_lite_pie', nombre:'Turnero con SW — Lite Plus Pie', categoria:'Turnero con SW'},
   {id:'turn_sw_pos_15', nombre:'Turnero con SW — POS 15"', categoria:'Turnero con SW'},
-  {id:'turn_sw_19_atril', nombre:'Turnero con SW — Atril 19"', categoria:'Turnero con SW'},
-  {id:'turn_sw_22_atril', nombre:'Turnero con SW — Atril 22"', categoria:'Turnero con SW'},
   {id:'turn_sw_22_atril_imp', nombre:'Turnero con SW — Atril Importado 22"', categoria:'Turnero con SW'},
-  {id:'turn_sw_22_incl', nombre:'Turnero con SW — Inclinado 22"', categoria:'Turnero con SW'},
   {id:'turn_sw_32_incl', nombre:'Turnero con SW — Inclinado 32"', categoria:'Turnero con SW'},
   {id:'turn_sw_32_vert', nombre:'Turnero con SW — Vertical 32"', categoria:'Turnero con SW'},
   {id:'turn_sw_22_ecube', nombre:'Turnero con SW — E-Cube 22"', categoria:'Turnero con SW'},
@@ -1719,9 +1722,6 @@ const PRODUCTOS_BOM = [
   {id:'turn_sw_22_vert_silver', nombre:'Turnero con SW — Vertical Metálico Silver 22"', categoria:'Turnero con SW'},
   {id:'turn_sw_22_vert_ia', nombre:'Turnero con SW — Vertical 22" IA', categoria:'Turnero con SW'},
   // Turnero sin SW
-  {id:'turn_sin_sw_19_atril', nombre:'Turnero sin SW — Atril 19"', categoria:'Turnero sin SW'},
-  {id:'turn_sin_sw_22_atril', nombre:'Turnero sin SW — Atril 22"', categoria:'Turnero sin SW'},
-  {id:'turn_sin_sw_22_incl', nombre:'Turnero sin SW — Inclinado 22"', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_32_incl', nombre:'Turnero sin SW — Inclinado 32"', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_32_vert', nombre:'Turnero sin SW — Vertical 32"', categoria:'Turnero sin SW'},
   {id:'turn_sin_sw_22_ecube', nombre:'Turnero sin SW — E-Cube 22"', categoria:'Turnero sin SW'},
@@ -1747,6 +1747,7 @@ const PRODUCTOS_BOM = [
   {id:'auto_32_ultraslim', nombre:'Autogestión — Ultra Slim 32"', categoria:'Autogestión'},
   {id:'auto_32_vert', nombre:'Autogestión — Vertical 32"', categoria:'Autogestión'},
   {id:'auto_43_vert', nombre:'Autogestión — Vertical 43"', categoria:'Autogestión'},
+  {id:'auto_50_vert', nombre:'Autogestión — Vertical 50"', categoria:'Autogestión'},
   {id:'auto_50_tactil', nombre:'Autogestión — Pantalla Táctil 50"', categoria:'Autogestión'},
   {id:'auto_43_horiz_acc', nombre:'Autogestión — Horizontal 43" Accesibilidad', categoria:'Autogestión'},
   {id:'auto_acceso_vehicular', nombre:'Autogestión — Acceso Vehicular', categoria:'Autogestión'},
