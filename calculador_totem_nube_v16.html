@@ -727,8 +727,6 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <select id="cot-categoria" onchange="filtrarProductosPorCategoria()" style="width:100%;height:36px;font-size:12px;">
             <option value="">— Todas las categorías —</option>
             <option value="Turnero">Turnero</option>
-            <option value="Turnero sin software">Turnero sin software</option>
-            <option value="Turnero con software">Turnero con software</option>
             <option value="Vigilancia Remota">Vigilancia Remota</option>
             <option value="Terminal Autogestión">Terminal Autogestión</option>
             <option value="Totem Publicidad">Totem Publicidad</option>
@@ -1470,65 +1468,65 @@ const PRODUCTOS = [
   {id:"turn_22_incl",name:"Turnero — Inclinado 22\"",categoria:"Turnero",
    precioLista:Math.round(1904.47*dolar),_usd:1904.47, precioListaConMiniPC:Math.round((1904.47+430)*dolar),_usdConMini:2334.4700000000003, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_22",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sin_sw_32_incl",name:"Turnero sin SW — Inclinado 32\"",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_32_incl",name:"Turnero sin SW — Inclinado 32\"",categoria:"Turnero",
    precioLista:Math.round(2242.31*dolar),_usd:2242.31, precioListaConMiniPC:Math.round((2242.31+430)*dolar),_usdConMini:2672.31, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_32",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sin_sw_32_vert",name:"Turnero sin SW — Vertical 32\"",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_32_vert",name:"Turnero sin SW — Vertical 32\"",categoria:"Turnero",
    precioLista:Math.round(2199.0*dolar),_usd:2199.0, precioListaConMiniPC:Math.round((2199.0+430)*dolar),_usdConMini:2629.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_32_vert_chapa",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sin_sw_22_ecube",name:"Turnero sin SW — E-Cube 22\"",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_22_ecube",name:"Turnero sin SW — E-Cube 22\"",categoria:"Turnero",
    precioLista:Math.round(1659.33*dolar),_usd:1659.33, precioListaConMiniPC:Math.round((1659.33+430)*dolar),_usdConMini:2089.33, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete E-Cube específico"},
-  {id:"turn_sin_sw_32_ecube",name:"Turnero sin SW — E-Cube 32\"",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_32_ecube",name:"Turnero sin SW — E-Cube 32\"",categoria:"Turnero",
    precioLista:Math.round(1816.92*dolar),_usd:1816.92, precioListaConMiniPC:Math.round((1816.92+430)*dolar),_usdConMini:2246.92, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_32",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete E-Cube específico"},
-  {id:"turn_sin_sw_22_vert_silver",name:"Turnero sin SW — Vertical Metalico Silver 22\"",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_22_vert_silver",name:"Turnero sin SW — Vertical Metalico Silver 22\"",categoria:"Turnero",
    precioLista:Math.round(2656.0*dolar),_usd:2656.0, precioListaConMiniPC:Math.round(2656.0*dolar),_usdConMini:2656.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete Silver específico. Mini PC incluida en precio lista."},
-  {id:"turn_sin_sw_22_vert_ia",name:"Turnero sin SW — Vertical 22\" IA",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_22_vert_ia",name:"Turnero sin SW — Vertical 22\" IA",categoria:"Turnero",
    precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_vert_ia",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista: gabinete Vertical 22\" IA específico."},
-  {id:"turn_sin_sw_pos_15",name:"Turnero sin SW — Módulo Terminal POS 15\"",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_pos_15",name:"Turnero sin SW — Módulo Terminal POS 15\"",categoria:"Turnero",
    precioLista:Math.round(1380.0*dolar),_usd:1380.0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1}],warning:"⚠️ Revisar insumos: módulo POS 15\""},
-  {id:"turn_sin_sw_22_incl_impr_a4",name:"Turnero sin SW — Inclinado 22\" para impresora A4",categoria:"Turnero sin software",
+  {id:"turn_sin_sw_22_incl_impr_a4",name:"Turnero sin SW — Inclinado 22\" para impresora A4",categoria:"Turnero",
    precioLista:0,_usd:0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[],warning:"⚠️ Falta cargar insumos y precio de lista — usa el Gabinete Inclinado para impresora A4 metal 22\""},
 
   // ══════════════════════════════════════════════════════════════
   // TURNEROS CON IMPRESORA — con software
   // ══════════════════════════════════════════════════════════════
-  {id:"turn_sw_lite_pared",name:"Turnero con SW — Lite Plus Pared",categoria:"Turnero con software",
+  {id:"turn_sw_lite_pared",name:"Turnero con SW — Lite Plus Pared",categoria:"Turnero",
    precioLista:Math.round(823.2584*dolar),_usd:823.2584, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1},{key:"gab_slim_pared",qty:1},{key:"tablet_lenovo",qty:1},{key:"cargador_tablet",qty:1}]},
-  {id:"turn_sw_lite_pie",name:"Turnero con SW — Lite Plus Pie",categoria:"Turnero con software",
+  {id:"turn_sw_lite_pie",name:"Turnero con SW — Lite Plus Pie",categoria:"Turnero",
    precioLista:Math.round(949.5055*dolar),_usd:949.5055, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1},{key:"gab_slim_pie",qty:1},{key:"tablet_lenovo",qty:1},{key:"cargador_tablet",qty:1}]},
-  {id:"turn_sw_pos_15",name:"Turnero con SW — Módulo Terminal POS 15\"",categoria:"Turnero con software",
+  {id:"turn_sw_pos_15",name:"Turnero con SW — Módulo Terminal POS 15\"",categoria:"Turnero",
    precioLista:Math.round(1380.0*dolar),_usd:1380.0, precioListaConMiniPC:null, keyMiniPC:null,
    insumos:[{key:"fuente",qty:1},{key:"zapatilla",qty:1},{key:"impresora",qty:1}],warning:"⚠️ Revisar insumos: módulo POS 15\""},
-  {id:"turn_sw_22_atril_imp",name:"Turnero con SW — Atril Importado 22\"",categoria:"Turnero con software",
+  {id:"turn_sw_22_atril_imp",name:"Turnero con SW — Atril Importado 22\"",categoria:"Turnero",
    precioLista:Math.round(2200.0*dolar),_usd:2200.0, precioListaConMiniPC:Math.round(2200.0*dolar),_usdConMini:2200.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: unidad importada, verificar gabinete"},
-  {id:"turn_sw_32_incl",name:"Turnero con SW — Inclinado 32\"",categoria:"Turnero con software",
+  {id:"turn_sw_32_incl",name:"Turnero con SW — Inclinado 32\"",categoria:"Turnero",
    precioLista:Math.round(2549.25*dolar),_usd:2549.25, precioListaConMiniPC:Math.round(2549.25*dolar),_usdConMini:2549.25, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_32",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sw_32_vert",name:"Turnero con SW — Vertical 32\"",categoria:"Turnero con software",
+  {id:"turn_sw_32_vert",name:"Turnero con SW — Vertical 32\"",categoria:"Turnero",
    precioLista:Math.round(2549.0*dolar),_usd:2549.0, precioListaConMiniPC:Math.round(2549.0*dolar),_usdConMini:2549.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_32_vert_chapa",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}]},
-  {id:"turn_sw_22_ecube",name:"Turnero con SW — E-Cube 22\"",categoria:"Turnero con software",
+  {id:"turn_sw_22_ecube",name:"Turnero con SW — E-Cube 22\"",categoria:"Turnero",
    precioLista:Math.round(1918.0*dolar),_usd:1918.0, precioListaConMiniPC:Math.round(1918.0*dolar),_usdConMini:1918.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete E-Cube específico"},
-  {id:"turn_sw_32_ecube",name:"Turnero con SW — E-Cube 32\"",categoria:"Turnero con software",
+  {id:"turn_sw_32_ecube",name:"Turnero con SW — E-Cube 32\"",categoria:"Turnero",
    precioLista:Math.round(2163.0*dolar),_usd:2163.0, precioListaConMiniPC:Math.round(2163.0*dolar),_usdConMini:2163.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_mdf_incl_32",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete E-Cube específico"},
-  {id:"turn_sw_32_ultraslim",name:"Turnero con SW — Ultra Slim Vertical 32\"",categoria:"Turnero con software",
+  {id:"turn_sw_32_ultraslim",name:"Turnero con SW — Ultra Slim Vertical 32\"",categoria:"Turnero",
    precioLista:Math.round(2252.0*dolar),_usd:2252.0, precioListaConMiniPC:Math.round(2252.0*dolar),_usdConMini:2252.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_32_vert_chapa",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_32",qty:1},{key:"vidrio_32_incl",qty:1},{key:"led_32",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete Ultra Slim específico"},
-  {id:"turn_sw_22_vert_silver",name:"Turnero con SW — Vertical Metalico Silver 22\"",categoria:"Turnero con software",
+  {id:"turn_sw_22_vert_silver",name:"Turnero con SW — Vertical Metalico Silver 22\"",categoria:"Turnero",
    precioLista:Math.round(2656.0*dolar),_usd:2656.0, precioListaConMiniPC:Math.round(2656.0*dolar),_usdConMini:2656.0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_atril",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar insumos: gabinete Silver. Mini PC incluida en precio lista."},
-  {id:"turn_sw_22_vert_ia",name:"Turnero con SW — Vertical 22\" IA",categoria:"Turnero con software",
+  {id:"turn_sw_22_vert_ia",name:"Turnero con SW — Vertical 22\" IA",categoria:"Turnero",
    precioLista:0,_usd:0, precioListaConMiniPC:0,_usdConMini:0, keyMiniPC:"minipc_beelink_n95",
    insumos:[{key:"cooler",qty:1},{key:"fuente",qty:1},{key:"gab_22_vert_ia",qty:1},{key:"impresora",qty:1},{key:"fuente_impresora",qty:1},{key:"marco_22",qty:1},{key:"vidrio_22",qty:1},{key:"monitor_22",qty:1},{key:"minipc_beelink_n95",qty:1},{key:"zapatilla",qty:1}],warning:"⚠️ Revisar precio lista: gabinete Vertical 22\" IA específico. Mini PC incluida en precio lista."},
 
@@ -4163,10 +4161,6 @@ function contactoGmail(emailId, nombreId, empresaId){
 
 // Configuración de licencias por categoría
 const LICENCIAS_CONFIG = {
-  'Turnero con software': {
-    desc: 'Hosting + Software Gestión Play + Mantenimiento técnico Turnero en línea',
-    monto: 65000, tipo: 'mensual', modulos: true
-  },
   'Totem Publicidad': {
     desc: 'Licencia Gestión de Contenidos Remoto para hasta 4 pantallas',
     monto: 55000, tipo: 'mensual', modulos: false
@@ -4239,7 +4233,7 @@ function filtrarProductosPorCategoria(){
     if(licTipo) licTipo.value = licConfig.tipo;
     if(licModulos) licModulos.style.display = licConfig.modulos ? 'block' : 'none';
   } else {
-    const sinLicencia = ['Turnero sin software','VideoWall','Terminal Autogestión','Accesorios','Turnero'];
+    const sinLicencia = ['VideoWall','Terminal Autogestión','Accesorios','Turnero'];
     if(sinLicencia.includes(cat)){
       if(licCheck){ licCheck.checked = false; }
       if(licPanel) licPanel.style.display = 'none';
@@ -4257,8 +4251,8 @@ function recalcLicenciaTotal(){
   if(licMonto) licMonto.value = total;
 }
 
-const CATS_CON_PLAYER = ['Turnero con software','Turnero sin software','Totem Publicidad','VideoWall','Atención Remota','Terminal Autogestión','Turnero'];
-const CATS_CON_PLOTEO = ['Turnero con software','Turnero sin software','Totem Publicidad','Terminal Autogestión','Vigilancia Remota','Atención Remota','Totem NubiPay','Encuesta Satisfacción','Turnero'];
+const CATS_CON_PLAYER = ['Totem Publicidad','VideoWall','Atención Remota','Terminal Autogestión','Turnero'];
+const CATS_CON_PLOTEO = ['Totem Publicidad','Terminal Autogestión','Vigilancia Remota','Atención Remota','Totem NubiPay','Encuesta Satisfacción','Turnero'];
 
 // Busca el precio neto del último ítem cotizado (guardado en cotizaciones_crm) que haya
 // usado este producto. `cotizaciones` ya viene ordenado por updated_at.desc (cotSupaLoad),
@@ -7822,8 +7816,6 @@ async function getCategoriaPorOrden(){
 
 const CATEGORIA_COLORES = {
   'Turnero': '#00c896',
-  'Turnero sin software': '#4d9fff',
-  'Turnero con software': '#00c896',
   'Totem Publicidad': '#f5a623',
   'Vigilancia Remota': '#ff5e5e',
   'Terminal Autogestión': '#a78bfa',
