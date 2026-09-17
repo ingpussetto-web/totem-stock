@@ -4266,6 +4266,16 @@ function autocompletarNombreComercial(){
   }
   // Mostrar adicionales según categoría
   actualizarAdicionalesVisibles();
+
+  // Sincronizar el check de "Player Mini PC" con el producto recién elegido — antes
+  // quedaba pegado del producto anterior (ej: elegís un Turnero que sí lleva Mini PC,
+  // después cambiás a uno que no, como Lite Plus Pie/Pared, y el check seguía tildado
+  // agregando una Mini PC de más). Se puede destildar/tildar a mano después si hace falta.
+  const minipcChk = document.getElementById('add-minipc');
+  if(minipcChk){
+    minipcChk.checked = !!p.keyMiniPC;
+    toggleAdicional('minipc');
+  }
 }
 
 function actualizarAdicionalesVisibles(){
