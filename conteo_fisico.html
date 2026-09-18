@@ -225,6 +225,40 @@ select.form-sel:focus{outline:none;border-color:var(--green);}
 <script>
 const READONLY = new URLSearchParams(window.location.search).get('mode') === 'readonly';
 
+// ─── Conteo a ciegas ────────────────────────────────────────────────────────
+// El "teórico" (el número que el sistema espera) no se muestra por defecto salvo
+// que seas gerencia — así quien hace el conteo físico no puede simplemente copiar
+// ese número, lo cual invalidaría el conteo como control real. Gerencia lo ve
+// siempre; cualquier otro rol necesita la clave para destrabarlo, y una vez
+// destrabado queda visible por el resto de esta sesión (no hay que reingresarla
+// en cada SKU).
+let ROL_GERENCIA = false;
+let TEORICO_DESBLOQUEADO = false;
+const CLAVE_VER_TEORICO = 'picone001';
+
+function puedeVerTeorico(){ return ROL_GERENCIA || TEORICO_DESBLOQUEADO; }
+
+function desbloquearTeorico(){
+  const clave = prompt('Ingresá la clave para ver el saldo teórico:');
+  if(clave === null) return; // canceló
+  if(clave === CLAVE_VER_TEORICO){
+    TEORICO_DESBLOQUEADO = true;
+    iniciarConteo();
+  } else {
+    alert('Clave incorrecta.');
+  }
+}
+
+// Devuelve el HTML de un valor teórico: el número real si puedeVerTeorico(),
+// o un botón para destrabarlo si no. `extraHtml` (opcional) es contenido que
+// solo debe verse junto con el número real (ej: el desglose stock+asignadas).
+function htmlTeorico(valorReal, extraHtml){
+  if(puedeVerTeorico()){
+    return (valorReal) + (extraHtml||'');
+  }
+  return '<button onclick="desbloquearTeorico()" style="background:rgba(255,179,64,0.12);border:1px solid rgba(255,179,64,0.4);color:var(--amber);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;">🔒 Ver teórico</button>';
+}
+
 async function api(path, method='GET', body=null){
   const opts = {
     method,
@@ -523,8 +557,7 @@ async function renderUID(skuId, nombre, content){
         ${baja>0?`<div class="metric red"><div class="metric-label">Baja</div><div class="metric-value">${baja}</div></div>`:''}
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">
-        <strong style="color:var(--text);">Teórico en depósito: ${teorico}</strong>
-        <span style="color:var(--text3);">(stock ${enStock} + asignadas ${asignadas})</span>
+        <strong style="color:var(--text);">Teórico en depósito: ${htmlTeorico(teorico, ` <span style="color:var(--text3);font-weight:400;">(stock ${enStock} + asignadas ${asignadas})</span>`)}</strong>
       </div>
 
       ${tieneVariantesUID ? `
@@ -846,9 +879,9 @@ async function renderCantidad(skuId, nombre, content){
             <div class="metric-label">Total salidas</div>
             <div class="metric-value">−${totalSalidas}</div>
           </div>
-          <div class="metric ${saldoTeorico<=0?'red':saldoTeorico<=3?'amber':'green'}">
+          <div class="metric ${puedeVerTeorico() ? (saldoTeorico<=0?'red':saldoTeorico<=3?'amber':'green') : ''}">
             <div class="metric-label">Saldo teórico</div>
-            <div class="metric-value">${saldoTeorico}</div>
+            <div class="metric-value">${htmlTeorico(saldoTeorico)}</div>
           </div>
         </div>
 
@@ -954,8 +987,8 @@ async function renderCantidad(skuId, nombre, content){
 function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockUID, asignadasUID, disponiblePorVariante, variantesUID){
   if(READONLY){
     return `
-      <div class="conteo-section" style="opacity:0.5;pointer-events:none;">
-        <div class="conteo-title">🔒 Solo consulta — saldo teórico en sistema: ${teorico}</div>
+      <div class="conteo-section" style="opacity:0.5;pointer-events:${puedeVerTeorico()?'none':'auto'};">
+        <div class="conteo-title">🔒 Solo consulta — saldo teórico en sistema: ${htmlTeorico(teorico)}</div>
       </div>
     `;
   }
@@ -1043,9 +1076,9 @@ function renderConteoInput(skuId, nombre, teorico, tracking, stockRows, enStockU
       <div class="conteo-title">🔢 Ingresá el conteo físico real</div>
       <div class="conteo-row">
         <span class="conteo-label">Saldo teórico en sistema:</span>
-        <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);">${enStockUID !== undefined ? enStockUID : teorico}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600;color:var(--text);">${htmlTeorico(enStockUID !== undefined ? enStockUID : teorico)}</span>
       </div>
-      ${enStockUID !== undefined ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-family:'DM Mono',monospace;">
+      ${(enStockUID !== undefined && puedeVerTeorico()) ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-family:'DM Mono',monospace;">
         Comparando contra <strong style="color:var(--green);">${enStockUID} en stock</strong> + <strong style="color:var(--amber);">${asignadasUID} asignadas a OPs</strong> = ${teorico} teórico
       </div>` : ''}
       <div class="conteo-row">
@@ -1583,6 +1616,7 @@ function cancelarAjuste(){
 (async function(){
   const usuario = await requireAuth();
   if(!usuario) return;
+  ROL_GERENCIA = usuario.rol === 'gerencia';
   mostrarUsuarioLogueado(usuario);
   filtrarNavPorRol(usuario);
 
