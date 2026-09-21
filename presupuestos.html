@@ -160,6 +160,48 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .pdf-cierre-contacto{margin-top:22px;font-size:11px;color:#4b5266}
 .pdf-cierre-contacto div{display:flex;gap:10px;padding:5px 0}
 .pdf-cierre-contacto span:first-child{color:#9aa0b4;min-width:80px}
+
+/* ── Editor visual (click-to-edit) ─────────────────────────────────────── */
+.side-panel{width:300px;flex:0 0 300px;border-left:1px solid var(--border);background:var(--panel);padding:16px;overflow-y:auto;max-height:calc(100vh - 62px);position:sticky;top:62px;align-self:flex-start}
+.panel-empty{font-size:12px;color:var(--text3);text-align:center;padding:40px 10px;line-height:1.6}
+.panel-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.panel-input{width:100%;background:var(--panel2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:9px 10px;font-size:13px;font-family:inherit;resize:vertical}
+.panel-input:focus{outline:none;border-color:var(--green)}
+.panel-hint{font-size:10.5px;color:var(--text3);margin-top:8px;line-height:1.5}
+
+.page-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 0 18px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.page-tab{padding:6px 8px 6px 12px;border-radius:999px;border:1px solid var(--border2);font-size:11px;cursor:pointer;color:var(--text2);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.page-tab:hover{border-color:var(--border3);color:var(--text)}
+.page-tab.activo{background:var(--green);border-color:var(--green);color:#000;font-weight:600}
+.page-tab-x{opacity:.55;font-size:11px;padding:1px 3px;border-radius:4px}
+.page-tab-x:hover{opacity:1;background:rgba(0,0,0,.15)}
+.page-tab-add{padding:6px 12px;border-radius:999px;border:1px dashed var(--border2);font-size:11px;cursor:pointer;color:var(--text2);position:relative}
+.page-tab-add:hover{border-color:var(--green);color:var(--green)}
+.page-tab-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;background:var(--panel3);border:1px solid var(--border2);border-radius:10px;padding:6px;z-index:50;min-width:190px}
+.page-tab-menu.open{display:block}
+.page-tab-menu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text2);padding:7px 9px;font-size:11.5px;border-radius:6px;cursor:pointer;font-family:inherit}
+.page-tab-menu button:hover{background:var(--panel2);color:var(--text)}
+
+.ed-canvas{display:flex;justify-content:center;padding:6px 6px 60px}
+.ed-page-frame{overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);border-radius:2px;flex:0 0 auto}
+.ed-page-frame .pdf-page{transform-origin:top left}
+
+.ed-field{cursor:text;border-radius:3px;outline:1px dashed transparent;transition:outline-color .12s,background .12s;padding:1px 2px;margin:-1px -2px}
+.ed-field:hover{outline-color:rgba(76,63,224,.45);background:rgba(76,63,224,.05)}
+.ed-field.activo{outline:2px solid #4c3fe0;outline-offset:2px;background:rgba(76,63,224,.06)}
+.ed-placeholder{color:#c7c9de;font-style:italic}
+
+.ed-item{position:relative}
+.ed-item:hover .ed-toolbar{opacity:1;pointer-events:auto}
+.ed-toolbar{position:absolute;top:-11px;right:6px;display:flex;gap:3px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:10}
+.ed-tbtn{width:20px;height:20px;border-radius:5px;background:#1a1a2e;color:#fff;border:1px solid rgba(255,255,255,.15);font-size:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+.ed-tbtn:hover{background:#4c3fe0}
+.ed-tbtn.del:hover{background:#e0453f}
+
+.ed-ghost{border:1.5px dashed #d5d7e8;border-radius:10px;color:#9aa0b4;font-size:10.5px;text-align:center;padding:12px;cursor:pointer;margin-top:8px}
+.ed-ghost:hover{border-color:#4c3fe0;color:#4c3fe0;background:#f8f7ff}
+
+.ed-terminos-box{background:#fff;color:#1a1a2e;border-radius:10px;padding:40px 44px;max-width:794px;width:100%;margin:0 auto;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 </style>
 </head>
 <body>
@@ -189,6 +231,7 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
   <div class="main" id="main">
     <div class="loader">Cargando…</div>
   </div>
+  <div class="side-panel" id="side-panel"></div>
 </div>
 
 <!-- Modal: nuevo presupuesto (elegir plantilla) -->
@@ -365,10 +408,20 @@ function setAtPath(obj, path, value){
   cur[/^\d+$/.test(last) ? parseInt(last) : last] = value;
 }
 
-// ─── RENDER EDITOR ───────────────────────────────────────────────────────
+// ─── RENDER EDITOR (visual, click-to-edit) ──────────────────────────────
+let paginaActiva = 0;   // índice del bloque/página que se ve en el canvas
+let campoActivo = null; // {path,label,tipo} del campo seleccionado en el panel
+
+function labelTipo(t){
+  return { portada:'Portada', alcance:'Alcance / líneas', categoria:'Categoría de producto', inversion:'Inversión (tabla)', terminos:'Términos y condiciones', cierre:'Cierre / contacto' }[t] || t;
+}
+
 function renderEditor(){
   const m = document.getElementById('main');
-  if(!doc){ m.innerHTML = '<div class="loader">Elegí algo de la izquierda.</div>'; return; }
+  const panel = document.getElementById('side-panel');
+  if(!doc){ m.innerHTML = '<div class="loader">Elegí algo de la izquierda.</div>'; panel.innerHTML=''; return; }
+  if(paginaActiva >= doc.contenido.length) paginaActiva = Math.max(0, doc.contenido.length-1);
+  campoActivo = null;
 
   let head = '';
   if(doc.esTemplate){
@@ -393,90 +446,123 @@ function renderEditor(){
     +'</div>';
   }
 
-  const bloques = doc.contenido.map(function(b, i){ return renderBlock(b, i); }).join('');
+  m.innerHTML = head + renderPageTabs() + '<div class="ed-canvas" id="ed-canvas"></div>';
+  renderCanvas();
+  renderPanel();
+}
 
-  const addBar = '<div class="add-block-bar">'
-    + '<span style="font-size:11px;color:var(--text3);width:100%;text-align:center;margin-bottom:4px;">+ Agregar sección</span>'
-    + ['alcance','categoria','inversion','terminos','cierre'].map(function(t){
-        return '<button class="btn sm" onclick="agregarBloque(\''+t+'\')">'+labelTipo(t)+'</button>';
-      }).join('')
+// ─── TABS DE PÁGINAS ─────────────────────────────────────────────────────
+function renderPageTabs(){
+  const tabs = doc.contenido.map(function(b,i){
+    const activo = i===paginaActiva;
+    let extra = '';
+    if(activo){
+      extra += '<span class="page-tab-x" onclick="event.stopPropagation();moverBloque('+i+',-1)" title="Mover antes">↑</span>';
+      extra += '<span class="page-tab-x" onclick="event.stopPropagation();moverBloque('+i+',1)" title="Mover después">↓</span>';
+    }
+    if(b.tipo!=='portada'){
+      extra += '<span class="page-tab-x" onclick="event.stopPropagation();quitarBloque('+i+')" title="Quitar">✕</span>';
+    }
+    return '<div class="page-tab'+(activo?' activo':'')+'" onclick="irAPagina('+i+')">'+esc(labelTipo(b.tipo))+extra+'</div>';
+  }).join('');
+  const addMenu = ['alcance','categoria','inversion','terminos','cierre'].map(function(t){
+    return '<button onclick="event.stopPropagation();agregarBloque(\''+t+'\')">+ '+labelTipo(t)+'</button>';
+  }).join('');
+  return '<div class="page-tabs">'+tabs
+    + '<div class="page-tab-add" onclick="togglePageMenu(event)">+ Agregar página'
+      + '<div class="page-tab-menu" id="page-tab-menu">'+addMenu+'</div>'
+    +'</div>'
   +'</div>';
-
-  m.innerHTML = head + bloques + addBar;
 }
+function togglePageMenu(ev){ ev.stopPropagation(); const el=document.getElementById('page-tab-menu'); if(el) el.classList.toggle('open'); }
+document.addEventListener('click', function(){ const el=document.getElementById('page-tab-menu'); if(el) el.classList.remove('open'); });
 
-function labelTipo(t){
-  return { portada:'Portada', alcance:'Alcance / líneas', categoria:'Categoría de producto', inversion:'Inversión (tabla)', terminos:'Términos y condiciones', cierre:'Cierre / contacto' }[t] || t;
-}
-
-function agregarBloque(tipo){
-  doc.contenido.push(defaultBlock(tipo));
-  renderEditor();
-}
+function irAPagina(i){ paginaActiva=i; campoActivo=null; renderCanvas(); renderPanel(); document.querySelectorAll('.page-tab').forEach(function(el,idx){ el.classList.toggle('activo', idx===paginaActiva); }); }
+function agregarBloque(tipo){ doc.contenido.push(defaultBlock(tipo)); paginaActiva = doc.contenido.length-1; renderEditor(); }
 function quitarBloque(i){
-  if(!confirm('¿Quitar esta sección del presupuesto?')) return;
+  if(!confirm('¿Quitar esta página del presupuesto?')) return;
   doc.contenido.splice(i,1);
+  if(paginaActiva>=doc.contenido.length) paginaActiva = Math.max(0, doc.contenido.length-1);
+  else if(paginaActiva>i) paginaActiva--;
   renderEditor();
 }
 function moverBloque(i, dir){
   const j = i+dir;
   if(j<0 || j>=doc.contenido.length) return;
   const tmp = doc.contenido[i]; doc.contenido[i]=doc.contenido[j]; doc.contenido[j]=tmp;
+  if(paginaActiva===i) paginaActiva=j; else if(paginaActiva===j) paginaActiva=i;
   renderEditor();
 }
 
-function renderBlock(b, i){
-  const head = '<div class="block-head">'
-    + '<span class="block-tipo">'+labelTipo(b.tipo)+'</span>'
-    + '<button class="btn sm" onclick="moverBloque('+i+',-1)" title="Subir">↑</button>'
-    + '<button class="btn sm" onclick="moverBloque('+i+',1)" title="Bajar">↓</button>'
-    + (b.tipo!=='portada' ? '<button class="btn sm red" onclick="quitarBloque('+i+')">✕ Quitar sección</button>' : '')
-  +'</div>';
-  let body = '';
-  if(b.tipo==='portada') body = renderPortada(b,i);
-  else if(b.tipo==='alcance') body = renderAlcance(b,i);
-  else if(b.tipo==='categoria') body = renderCategoria(b,i);
-  else if(b.tipo==='inversion') body = renderInversion(b,i);
-  else if(b.tipo==='terminos') body = renderTerminos(b,i);
-  else if(b.tipo==='cierre') body = renderCierre(b,i);
-  return '<div class="block">'+head+'<div class="block-body">'+body+'</div></div>';
-}
+// ─── CANVAS (vista tipo PDF, editable in-place) ─────────────────────────
+function renderCanvas(){
+  const cont = document.getElementById('ed-canvas');
+  if(!cont) return;
+  const b = doc.contenido[paginaActiva];
+  if(!b){ cont.innerHTML=''; return; }
+  let inner, esPagina = true;
+  if(b.tipo==='portada') inner = edPortada(b, paginaActiva);
+  else if(b.tipo==='alcance') inner = edAlcance(b, paginaActiva);
+  else if(b.tipo==='categoria') inner = edCategoria(b, paginaActiva);
+  else if(b.tipo==='inversion') inner = edInversion(b, paginaActiva);
+  else if(b.tipo==='terminos'){ inner = edTerminos(b, paginaActiva); esPagina = false; }
+  else if(b.tipo==='cierre') inner = edCierre(b, paginaActiva);
+  else inner = '';
 
-function renderPortada(b,i){
-  const d = b.datos;
-  return '<div class="field-row">'
-    + campo('Categoría / etiqueta', i+'.datos.categoria', d.categoria)
-    + campo('Fecha', i+'.datos.fecha', d.fecha, 'date')
-    + campoArea('Título grande', i+'.datos.titulo', d.titulo, true)
-    + campoArea('Bajada / descripción', i+'.datos.bajada', d.bajada, true)
-    + campo('Preparado para (cliente)', i+'.datos.preparadoPara', d.preparadoPara)
+  if(!esPagina){ cont.innerHTML = inner; return; }
+
+  const availW = Math.max(320, cont.clientWidth - 20);
+  const scale = Math.min(1, availW/794);
+  cont.innerHTML = '<div class="ed-page-frame" style="width:'+Math.round(794*scale)+'px;height:'+Math.round(1123*scale)+'px;">'
+    + '<div class="pdf-page" style="transform:scale('+scale+');">'+inner+pdfFooter()+'</div>'
   +'</div>';
 }
+window.addEventListener('resize', function(){ if(doc) renderCanvas(); });
 
-function renderAlcance(b,i){
-  const d = b.datos;
-  let lineasHtml = (d.lineas||[]).map(function(l, li){
-    return '<div class="modelo-card">'
-      + '<div class="modelo-card-head"><input style="flex:1;font-weight:600;" value="'+esc(l.titulo)+'" oninput="setAtPath(doc,\''+i+'.datos.lineas.'+li+'.titulo\',this.value)"><button class="mini-x" onclick="quitarLinea('+i+','+li+')">✕</button></div>'
-      + '<textarea rows="2" oninput="setAtPath(doc,\''+i+'.datos.lineas.'+li+'.texto\',this.value)">'+esc(l.texto)+'</textarea>'
-      + renderBullets(l.bullets||[], i+'.datos.lineas.'+li+'.bullets')
-      + '<input placeholder="Ventaja / nota final" style="margin-top:6px;" value="'+esc(l.ventaja||'')+'" oninput="setAtPath(doc,\''+i+'.datos.lineas.'+li+'.ventaja\',this.value)">'
-    +'</div>';
-  }).join('');
-  return campo('Título de sección', i+'.datos.titulo', d.titulo)
-    + campoArea('Texto introductorio', i+'.datos.texto', d.texto)
-    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin:14px 0 8px;">Líneas / plataformas</div>'
-    + lineasHtml
-    + '<button class="mini-add" onclick="agregarLinea('+i+')">+ Agregar línea</button>';
+// ─── CAMPO EDITABLE (click → panel lateral) ─────────────────────────────
+function campoEd(path, label, val, opts){
+  opts = opts||{};
+  const tipo = opts.tipo || 'text';
+  const activo = campoActivo && campoActivo.path===path;
+  const cls = 'ed-field'+(activo?' activo':'');
+  const vacio = (val===undefined||val===null||val==='') || (opts.money && !val);
+  let display;
+  if(vacio) display = '<span class="ed-placeholder">'+esc(opts.placeholder||label)+'</span>';
+  else if(opts.money) display = fmtMoney(val);
+  else display = esc(String(val)).replace(/\n/g,'<br>');
+  const lbl = String(label).replace(/'/g,"\\'");
+  return '<span class="'+cls+'" onclick="event.stopPropagation();seleccionarCampo(\''+path+'\',\''+lbl+'\',\''+tipo+'\')">'+display+'</span>';
 }
-function agregarLinea(bi){ doc.contenido[bi].datos.lineas.push({id:uid(),titulo:'Nueva línea',texto:'',bullets:[],ventaja:''}); renderEditor(); }
-function quitarLinea(bi,li){ doc.contenido[bi].datos.lineas.splice(li,1); renderEditor(); }
-
-function renderBullets(bullets, path){
-  const rows = bullets.map(function(bu, idx){
-    return '<div class="bullet-row"><input value="'+esc(bu)+'" oninput="setAtPath(doc,\''+path+'.'+idx+'\',this.value)"><button class="mini-x" onclick="quitarDeArray(\''+path+'\','+idx+')">✕</button></div>';
-  }).join('');
-  return '<div class="bullets-list">'+rows+'</div><button class="mini-add" onclick="agregarAArray(\''+path+'\',\'\')">+ Agregar ítem</button>';
+function valorEnPath(path){
+  const parts = path.split('.');
+  let cur = doc;
+  for(let i=0;i<parts.length;i++){ cur = cur[/^\d+$/.test(parts[i])?parseInt(parts[i]):parts[i]]; if(cur===undefined||cur===null) return ''; }
+  return cur;
+}
+function seleccionarCampo(path, label, tipo){
+  campoActivo = {path:path, label:label, tipo:tipo};
+  renderCanvas();
+  renderPanel();
+}
+function renderPanel(){
+  const panel = document.getElementById('side-panel');
+  if(!doc){ panel.innerHTML=''; return; }
+  if(!campoActivo){
+    panel.innerHTML = '<div class="panel-empty">👆 Tocá cualquier texto o precio de la vista previa para editarlo acá.</div>';
+    return;
+  }
+  const val = valorEnPath(campoActivo.path);
+  const inputHtml = campoActivo.tipo==='textarea'
+    ? '<textarea class="panel-input" rows="6" oninput="actualizarCampo(this.value)">'+esc(val)+'</textarea>'
+    : '<input class="panel-input" type="'+(campoActivo.tipo==='number'?'number':(campoActivo.tipo==='date'?'date':'text'))+'" value="'+esc(val)+'" oninput="actualizarCampo(this.value)">';
+  panel.innerHTML = '<div class="panel-label">'+esc(campoActivo.label)+'</div>'+inputHtml
+    + '<div class="panel-hint">Los cambios se guardan al tocar "💾 Guardar" arriba.</div>';
+}
+function actualizarCampo(value){
+  if(!campoActivo) return;
+  const v = campoActivo.tipo==='number' ? (parseFloat(value)||0) : value;
+  setAtPath(doc, campoActivo.path, v);
+  renderCanvas();
 }
 function quitarDeArray(path, idx){
   const parts = path.split('.');
@@ -489,52 +575,89 @@ function agregarAArray(path, valorDefault){
   const parts = path.split('.');
   let cur = doc;
   for(let k=0;k<parts.length;k++){ cur = cur[/^\d+$/.test(parts[k])?parseInt(parts[k]):parts[k]]; }
-  cur.push(valorDefault && typeof valorDefault==='object' ? valorDefault : '');
+  cur.push(valorDefault && typeof valorDefault==='object' ? valorDefault : (valorDefault||''));
   renderEditor();
 }
 
-function renderCategoria(b,i){
-  const d = b.datos;
-  const modelosHtml = (d.modelos||[]).map(function(mo, mi){
-    const specsHtml = (mo.specs||[]).map(function(sp, si){
-      return '<div class="spec-row">'
-        + '<input placeholder="Campo (ej: Pantalla)" value="'+esc(sp.label)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.specs.'+si+'.label\',this.value)">'
-        + '<input placeholder="Valor" value="'+esc(sp.valor)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.specs.'+si+'.valor\',this.value)">'
-        + '<button class="mini-x" onclick="quitarSpec('+i+','+mi+','+si+')">✕</button>'
-      +'</div>';
+// ─── PORTADA ──────────────────────────────────────────────────────────────
+function edPortada(b,i){
+  const d = b.datos, p = i+'.datos';
+  return '<div class="pdf-eyebrow">'+campoEd(p+'.categoria','Categoría / etiqueta',d.categoria)+'</div>'
+    + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título grande',d.titulo,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-bar"></div>'
+    + '<div class="pdf-p" style="max-width:440px;">'+campoEd(p+'.bajada','Bajada / descripción',d.bajada,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-cover-meta"><div>Preparado para<strong>'+campoEd(p+'.preparadoPara','Preparado para (cliente)',d.preparadoPara)+'</strong></div>'
+      + '<div>Fecha<strong>'+campoEd(p+'.fecha','Fecha',d.fecha,{tipo:'date'})+'</strong></div></div>';
+}
+
+// ─── ALCANCE ──────────────────────────────────────────────────────────────
+function edAlcance(b,i){
+  const d = b.datos, p = i+'.datos';
+  const lineas = (d.lineas||[]).map(function(l, li){
+    const lp = p+'.lineas.'+li;
+    const bullets = (l.bullets||[]).map(function(bu, bi2){
+      return '<li class="ed-item">'+campoEd(lp+'.bullets.'+bi2,'Ítem',bu,{placeholder:'Ítem'})
+        + '<span class="ed-toolbar" style="top:-9px;right:-6px;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+lp+'.bullets\','+bi2+')">✕</span></span>'
+      +'</li>';
     }).join('');
-    return '<div class="modelo-card">'
-      + '<div class="modelo-card-head">'
-        + '<input placeholder="Letra (A)" style="max-width:60px;" value="'+esc(mo.letra)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.letra\',this.value)">'
-        + '<input placeholder="Etiqueta (DE MOSTRADOR)" style="flex:1;" value="'+esc(mo.tag)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.tag\',this.value)">'
-        + '<button class="mini-x" onclick="quitarModelo('+i+','+mi+')">✕ quitar modelo</button>'
-      +'</div>'
-      + '<input placeholder="Nombre del modelo" style="font-weight:600;margin-bottom:6px;" value="'+esc(mo.nombre)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.nombre\',this.value)">'
-      + '<textarea rows="2" placeholder="Descripción" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.desc\',this.value)">'+esc(mo.desc)+'</textarea>'
-      + '<div class="specs-list">'+specsHtml+'</div>'
-      + '<button class="mini-add" onclick="agregarSpec('+i+','+mi+')">+ Agregar campo</button>'
-      + '<div class="field-row" style="margin-top:10px;">'
-        + '<div class="field"><label>Producto (id interno, opcional)</label><input value="'+esc(mo.productoV14||'')+'" placeholder="ej: turn_sin_sw_22_atril" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.productoV14\',this.value)"></div>'
-        + '<div class="field"><label>&nbsp;</label><button class="btn sm" onclick="traerPrecioReal('+i+','+mi+')">🔄 Traer precio real</button></div>'
-        + '<div class="field"><label>Precio ARS (neto)</label><input type="number" value="'+(mo.precioArs||0)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.precioArs\',parseFloat(this.value)||0)"></div>'
-        + '<div class="field"><label>Precio USD (ref.)</label><input type="number" value="'+(mo.precioUsd||0)+'" oninput="setAtPath(doc,\''+i+'.datos.modelos.'+mi+'.precioUsd\',parseFloat(this.value)||0)"></div>'
-      +'</div>'
+    return '<div class="pdf-linea-card ed-item">'
+      + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarLinea('+i+','+li+')" title="Quitar línea">✕</span></span>'
+      + '<div class="pdf-linea-tag">'+campoEd(lp+'.titulo','Título de la línea',l.titulo)+'</div>'
+      + '<div class="pdf-p" style="font-size:10.5px;">'+campoEd(lp+'.texto','Texto',l.texto,{tipo:'textarea'})+'</div>'
+      + '<ul class="pdf-linea-bullets">'+bullets+'</ul>'
+      + '<div class="ed-ghost" style="margin-top:2px;padding:5px;font-size:9.5px;" onclick="event.stopPropagation();agregarAArray(\''+lp+'.bullets\',\'Nuevo ítem\')">+ viñeta</div>'
+      + '<div class="pdf-linea-ventaja">'+campoEd(lp+'.ventaja','Ventaja / nota final',l.ventaja,{placeholder:'Ventaja / nota final (opcional)'})+'</div>'
     +'</div>';
   }).join('');
+  return '<div class="pdf-eyebrow">ALCANCE</div>'
+    + '<div class="pdf-h2">'+campoEd(p+'.titulo','Título de sección',d.titulo)+'</div>'
+    + '<div class="pdf-bar"></div>'
+    + '<div class="pdf-p">'+campoEd(p+'.texto','Texto introductorio',d.texto,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-linea-grid">'+lineas+'<div class="ed-ghost" onclick="event.stopPropagation();agregarLinea('+i+')">+ Agregar línea</div></div>';
+}
+function agregarLinea(bi){ doc.contenido[bi].datos.lineas.push({id:uid(),titulo:'Nueva línea',texto:'',bullets:[],ventaja:''}); renderEditor(); }
+function quitarLinea(bi,li){ doc.contenido[bi].datos.lineas.splice(li,1); renderEditor(); }
 
-  const comunHtml = renderBullets(d.comunBullets||[], i+'.datos.comunBullets');
-
-  return '<div class="field-row">'
-      + campo('Categoría (etiqueta)', i+'.datos.categoriaLabel', d.categoriaLabel)
-      + campo('Título de la página', i+'.datos.titulo', d.titulo)
-      + campoArea('Texto introductorio', i+'.datos.texto', d.texto, true)
-    +'</div>'
-    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin:14px 0 8px;">Modelos</div>'
-    + modelosHtml
-    + '<button class="mini-add" onclick="agregarModelo('+i+')">+ Agregar modelo / periférico</button>'
-    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin:16px 0 8px;">Común a la línea</div>'
-    + campo('Título de la caja', i+'.datos.comunTitulo', d.comunTitulo)
-    + comunHtml;
+// ─── CATEGORÍA ────────────────────────────────────────────────────────────
+function edCategoria(b,i){
+  const d = b.datos, p = i+'.datos';
+  const modelos = (d.modelos||[]).map(function(mo, mi){
+    const mp = p+'.modelos.'+mi;
+    const specs = (mo.specs||[]).map(function(sp, si){
+      return '<div class="pdf-spec-row ed-item">'
+        + campoEd(mp+'.specs.'+si+'.label','Campo',sp.label,{placeholder:'Campo'})
+        + campoEd(mp+'.specs.'+si+'.valor','Valor',sp.valor,{placeholder:'Valor'})
+        + '<span class="ed-toolbar" style="top:-7px;right:-4px;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarSpec('+i+','+mi+','+si+')">✕</span></span>'
+      +'</div>';
+    }).join('');
+    return '<div class="ed-item" style="padding-top:10px;">'
+      + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarModelo('+i+','+mi+')" title="Quitar modelo">✕</span></span>'
+      + '<div class="pdf-modelo-tag">'+campoEd(mp+'.letra','Letra',mo.letra,{placeholder:'Letra (A)'})+' '+campoEd(mp+'.tag','Etiqueta',mo.tag,{placeholder:'+ etiqueta (DE MOSTRADOR)'})+'</div>'
+      + '<div class="pdf-modelo-nombre">'+campoEd(mp+'.nombre','Nombre del modelo',mo.nombre)+'</div>'
+      + '<div class="pdf-modelo-desc">'+campoEd(mp+'.desc','Descripción',mo.desc,{tipo:'textarea',placeholder:'Descripción'})+'</div>'
+      + specs
+      + '<div class="ed-ghost" style="padding:4px;font-size:9.5px;" onclick="event.stopPropagation();agregarSpec('+i+','+mi+')">+ campo</div>'
+      + '<div class="pdf-modelo-precio">'+campoEd(mp+'.precioArs','Precio ARS (neto)',mo.precioArs,{tipo:'number',money:true})+'</div>'
+      + '<div class="pdf-modelo-usd">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',mo.precioUsd,{tipo:'number'})+' + IVA</div>'
+      + '<div style="margin-top:8px;font-size:9.5px;">'+campoEd(mp+'.productoV14','Producto (id interno, opcional)',mo.productoV14,{placeholder:'id interno, opcional (ej: turn_32_incl)'})+'</div>'
+      + '<button class="ed-tbtn" style="position:static;width:auto;padding:3px 8px;margin-top:5px;font-size:9.5px;" onclick="event.stopPropagation();traerPrecioReal('+i+','+mi+')">🔄 Traer precio real</button>'
+    +'</div>';
+  }).join('');
+  const comun = (d.comunBullets||[]).map(function(bu, bi2){
+    return '<div class="ed-item">· '+campoEd(p+'.comunBullets.'+bi2,'Ítem común',bu,{placeholder:'Ítem'})
+      + '<span class="ed-toolbar" style="top:-7px;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.comunBullets\','+bi2+')">✕</span></span>'
+    +'</div>';
+  }).join('');
+  return '<div class="pdf-eyebrow">'+campoEd(p+'.categoriaLabel','Categoría (etiqueta)',d.categoriaLabel)+'</div>'
+    + '<div class="pdf-h2">'+campoEd(p+'.titulo','Título de la página',d.titulo)+'</div>'
+    + '<div class="pdf-bar"></div>'
+    + '<div class="pdf-p">'+campoEd(p+'.texto','Texto introductorio',d.texto,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-modelos-grid">'+modelos+'</div>'
+    + '<div class="ed-ghost" onclick="event.stopPropagation();agregarModelo('+i+')">+ Agregar modelo / periférico</div>'
+    + '<div class="pdf-comun-box"><div class="pdf-comun-title">'+campoEd(p+'.comunTitulo','Título "Común a la línea"',d.comunTitulo)+'</div>'
+      + '<div class="pdf-comun-grid">'+comun+'</div>'
+      + '<div class="ed-ghost" style="padding:4px;font-size:9.5px;" onclick="event.stopPropagation();agregarAArray(\''+p+'.comunBullets\',\'Nuevo ítem\')">+ ítem</div>'
+    +'</div>';
 }
 function agregarModelo(bi){ doc.contenido[bi].datos.modelos.push(defaultModelo()); renderEditor(); }
 function quitarModelo(bi,mi){ doc.contenido[bi].datos.modelos.splice(mi,1); renderEditor(); }
@@ -558,24 +681,26 @@ async function traerPrecioReal(bi,mi){
   }catch(e){ toast('Error: '+e.message); }
 }
 
-function renderInversion(b,i){
-  const d = b.datos;
+// ─── INVERSIÓN ────────────────────────────────────────────────────────────
+function edInversion(b,i){
+  const d = b.datos, p = i+'.datos';
   const filas = filasInversion();
-  const especialesHtml = (d.especiales||[]).map(function(e, ei){
-    return '<div class="especial-row">'
-      + '<input placeholder="Nombre" value="'+esc(e.nombre)+'" oninput="setAtPath(doc,\''+i+'.datos.especiales.'+ei+'.nombre\',this.value)">'
-      + '<input placeholder="Descripción" value="'+esc(e.desc||'')+'" oninput="setAtPath(doc,\''+i+'.datos.especiales.'+ei+'.desc\',this.value)">'
-      + '<input type="number" placeholder="Precio" value="'+(e.precio||0)+'" style="max-width:110px;" oninput="setAtPath(doc,\''+i+'.datos.especiales.'+ei+'.precio\',parseFloat(this.value)||0)">'
-      + '<button class="mini-x" onclick="quitarDeArray(\''+i+'.datos.especiales\','+ei+')">✕</button>'
+  const rowsHtml = filas.length ? filas.map(function(f){ return '<tr><td>'+esc(f.nombre)+'</td><td>'+esc(f.spec||'')+'</td><td class="num">'+fmtMoney(f.precioArs)+'</td><td style="text-align:right;color:#9aa0b4;">USD '+Math.round(f.precioUsd||0)+'</td></tr>'; }).join('') : '<tr><td colspan="4" style="color:#9aa0b4;">Se completa sola con los modelos que cargues en las páginas de categoría.</td></tr>';
+  const especiales = (d.especiales||[]).map(function(e, ei){
+    const ep = p+'.especiales.'+ei;
+    return '<div class="pdf-especial-box ed-item">'
+      + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.especiales\','+ei+')">✕</span></span>'
+      + '<div><div class="pdf-especial-nombre">'+campoEd(ep+'.nombre','Nombre',e.nombre)+'</div>'
+        + '<div class="pdf-especial-desc">'+campoEd(ep+'.desc','Descripción',e.desc,{placeholder:'Descripción'})+'</div></div>'
+      + '<div class="pdf-especial-precio">'+campoEd(ep+'.precio','Precio (dejá 0 para "a cotizar")',e.precio,{tipo:'number',money:true,placeholder:'A cotizar'})+'</div>'
     +'</div>';
   }).join('');
-  return campo('Título', i+'.datos.titulo', d.titulo)
-    + '<div class="inv-preview"><table><thead><tr><th>Modelo</th><th>Spec</th><th style="text-align:right;">ARS neto</th><th style="text-align:right;">USD ref.</th></tr></thead><tbody>'
-      + (filas.length ? filas.map(function(f){ return '<tr><td>'+esc(f.nombre)+'</td><td>'+esc(f.spec||'')+'</td><td class="num">'+fmtMoney(f.precioArs)+'</td><td class="num">USD '+Math.round(f.precioUsd||0)+'</td></tr>'; }).join('') : '<tr><td colspan="4" style="color:var(--text3);">— Se completa sola con los modelos que cargues en las secciones de categoría —</td></tr>')
-    +'</tbody></table></div>'
-    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin:16px 0 8px;">Ítems especiales (ploteo, periféricos a cotizar, etc.)</div>'
-    + especialesHtml
-    + '<button class="mini-add" onclick="agregarEspecial('+i+')">+ Agregar ítem especial</button>';
+  return '<div class="pdf-eyebrow">INVERSIÓN</div>'
+    + '<div class="pdf-h2">'+campoEd(p+'.titulo','Título',d.titulo)+'</div>'
+    + '<div class="pdf-bar"></div>'
+    + '<table class="pdf-inv-table"><thead><tr><th>Modelo</th><th>Detalle</th><th style="text-align:right;">Precio</th><th></th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+    + especiales
+    + '<div class="ed-ghost" onclick="event.stopPropagation();agregarEspecial('+i+')">+ Agregar ítem especial</div>';
 }
 function agregarEspecial(bi){ doc.contenido[bi].datos.especiales.push({id:uid(),nombre:'',desc:'',precio:0}); renderEditor(); }
 function filasInversion(){
@@ -589,42 +714,42 @@ function filasInversion(){
   return filas;
 }
 
-function renderTerminos(b,i){
-  const d = b.datos;
+// ─── TÉRMINOS ─────────────────────────────────────────────────────────────
+function edTerminos(b,i){
+  const d = b.datos, p = i+'.datos';
   const items = (d.items||[]).map(function(t, ti){
-    return '<div class="termino-row">'
-      + '<input value="'+esc(t.titulo)+'" oninput="setAtPath(doc,\''+i+'.datos.items.'+ti+'.titulo\',this.value)">'
-      + '<input value="'+esc(t.texto)+'" oninput="setAtPath(doc,\''+i+'.datos.items.'+ti+'.texto\',this.value)">'
-      + '<button class="mini-x" onclick="quitarDeArray(\''+i+'.datos.items\','+ti+')">✕</button>'
+    const tp = p+'.items.'+ti;
+    return '<div class="ed-item" style="padding:10px 0;border-bottom:1px solid #eef0f6;">'
+      + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.items\','+ti+')">✕</span></span>'
+      + '<b>'+campoEd(tp+'.titulo','Título del término',t.titulo)+'</b> '
+      + campoEd(tp+'.texto','Texto',t.texto,{tipo:'textarea'})
     +'</div>';
   }).join('');
-  return items + '<button class="mini-add" onclick="agregarTermino('+i+')">+ Agregar término</button>';
+  return '<div class="ed-terminos-box"><div class="pdf-eyebrow">TÉRMINOS Y CONDICIONES</div><div class="pdf-bar"></div>'
+    + items
+    + '<div class="ed-ghost" onclick="event.stopPropagation();agregarTermino('+i+')">+ Agregar término</div>'
+  +'</div>';
 }
 function agregarTermino(bi){ doc.contenido[bi].datos.items.push({id:uid(),titulo:'',texto:''}); renderEditor(); }
 
-function renderCierre(b,i){
-  const d = b.datos;
+// ─── CIERRE ───────────────────────────────────────────────────────────────
+function edCierre(b,i){
+  const d = b.datos, p = i+'.datos';
   const contactos = (d.contacto||[]).map(function(c, ci){
-    return '<div class="contacto-row">'
-      + '<input value="'+esc(c.label)+'" oninput="setAtPath(doc,\''+i+'.datos.contacto.'+ci+'.label\',this.value)">'
-      + '<input value="'+esc(c.valor)+'" oninput="setAtPath(doc,\''+i+'.datos.contacto.'+ci+'.valor\',this.value)">'
-      + '<button class="mini-x" onclick="quitarDeArray(\''+i+'.datos.contacto\','+ci+')">✕</button>'
+    const cp = p+'.contacto.'+ci;
+    return '<div class="ed-item" style="display:flex;gap:10px;padding:5px 0;">'
+      + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.contacto\','+ci+')">✕</span></span>'
+      + '<span style="color:#9aa0b4;min-width:80px;">'+campoEd(cp+'.label','Etiqueta',c.label)+'</span>'
+      + campoEd(cp+'.valor','Valor',c.valor)
     +'</div>';
   }).join('');
-  return campo('Título', i+'.datos.titulo', d.titulo)
-    + campoArea('Texto', i+'.datos.texto', d.texto)
-    + '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin:14px 0 8px;">Contacto</div>'
-    + contactos
-    + '<button class="mini-add" onclick="agregarContacto('+i+')">+ Agregar dato de contacto</button>';
+  return '<div class="pdf-eyebrow">GRACIAS</div>'
+    + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título',d.titulo)+'</div>'
+    + '<div class="pdf-bar"></div>'
+    + '<div class="pdf-p" style="max-width:420px;">'+campoEd(p+'.texto','Texto',d.texto,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-cierre-contacto">'+contactos+'<div class="ed-ghost" style="max-width:200px;" onclick="event.stopPropagation();agregarContacto('+i+')">+ Dato de contacto</div></div>';
 }
 function agregarContacto(bi){ doc.contenido[bi].datos.contacto.push({id:uid(),label:'',valor:''}); renderEditor(); }
-
-function campo(label, path, val, tipo){
-  return '<div class="field"><label>'+esc(label)+'</label><input type="'+(tipo||'text')+'" value="'+esc(val||'')+'" oninput="setAtPath(doc,\''+path+'\','+(tipo==='date'?'this.value':'this.value')+')"></div>';
-}
-function campoArea(label, path, val, grow){
-  return '<div class="field'+(grow?' grow':'')+'"><label>'+esc(label)+'</label><textarea rows="3" oninput="setAtPath(doc,\''+path+'\',this.value)">'+esc(val||'')+'</textarea></div>';
-}
 
 // ─── GUARDAR / BORRAR ────────────────────────────────────────────────────
 async function guardarPresupuesto(){
