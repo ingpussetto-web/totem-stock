@@ -179,8 +179,8 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .panel-input:focus{outline:none;border-color:var(--green)}
 .panel-hint{font-size:10.5px;color:var(--text3);margin-top:8px;line-height:1.5}
 
-.page-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 0 18px;border-bottom:1px solid var(--border);margin-bottom:18px}
-.page-tab{padding:6px 8px 6px 12px;border-radius:999px;border:1px solid var(--border2);font-size:11px;cursor:pointer;color:var(--text2);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.page-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 26px 18px;margin:0 -26px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:8;background:var(--bg)}
+.page-tab{padding:6px 8px 6px 12px;border-radius:999px;border:1px solid var(--border2);font-size:11px;cursor:pointer;color:var(--text2);white-space:nowrap;display:flex;align-items:center;gap:5px;transition:background .25s,border-color .25s,color .25s}
 .page-tab:hover{border-color:var(--border3);color:var(--text)}
 .page-tab.activo{background:var(--green);border-color:var(--green);color:#000;font-weight:600}
 .page-tab-x{opacity:.55;font-size:11px;padding:1px 3px;border-radius:4px}
@@ -192,7 +192,8 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .page-tab-menu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text2);padding:7px 9px;font-size:11.5px;border-radius:6px;cursor:pointer;font-family:inherit}
 .page-tab-menu button:hover{background:var(--panel2);color:var(--text)}
 
-.ed-canvas{display:flex;justify-content:center;padding:6px 6px 60px}
+.ed-canvas{display:flex;flex-direction:column;align-items:center;gap:34px;padding:16px 6px 60px}
+.ed-page-wrap{width:100%;display:flex;justify-content:center;scroll-margin-top:76px}
 .ed-page-frame{overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);border-radius:2px;flex:0 0 auto}
 .ed-page-frame .pdf-page{transform-origin:top left}
 
@@ -588,8 +589,19 @@ function renderPageTabs(){
 function togglePageMenu(ev){ ev.stopPropagation(); const el=document.getElementById('page-tab-menu'); if(el) el.classList.toggle('open'); }
 document.addEventListener('click', function(){ const el=document.getElementById('page-tab-menu'); if(el) el.classList.remove('open'); });
 
-function irAPagina(i){ paginaActiva=i; campoActivo=null; renderCanvas(); renderPanel(); document.querySelectorAll('.page-tab').forEach(function(el,idx){ el.classList.toggle('activo', idx===paginaActiva); }); }
-function agregarBloque(tipo){ snap(); doc.contenido.push(defaultBlock(tipo)); paginaActiva = doc.contenido.length-1; renderEditor(); }
+function irAPagina(i){
+  paginaActiva=i;
+  document.querySelectorAll('.page-tab').forEach(function(el,idx){ el.classList.toggle('activo', idx===paginaActiva); });
+  const target = document.querySelector('.ed-page-wrap[data-idx="'+i+'"]');
+  if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function agregarBloque(tipo){
+  snap();
+  doc.contenido.push(defaultBlock(tipo));
+  paginaActiva = doc.contenido.length-1;
+  renderEditor();
+  setTimeout(function(){ irAPagina(paginaActiva); }, 0);
+}
 function quitarBloque(i){
   snap();
   doc.contenido.splice(i,1);
@@ -606,30 +618,59 @@ function moverBloque(i, dir){
   renderEditor();
 }
 
-// ─── CANVAS (vista tipo PDF, editable in-place) ─────────────────────────
+// ─── CANVAS (vista tipo PDF, editable in-place, scroll continuo) ────────
 function renderCanvas(){
   const cont = document.getElementById('ed-canvas');
   if(!cont) return;
-  const b = doc.contenido[paginaActiva];
-  if(!b){ cont.innerHTML=''; return; }
-  let inner, esPagina = true;
-  if(b.tipo==='portada') inner = edPortada(b, paginaActiva);
-  else if(b.tipo==='alcance') inner = edAlcance(b, paginaActiva);
-  else if(b.tipo==='categoria') inner = edCategoria(b, paginaActiva);
-  else if(b.tipo==='inversion') inner = edInversion(b, paginaActiva);
-  else if(b.tipo==='terminos'){ inner = edTerminos(b, paginaActiva); esPagina = false; }
-  else if(b.tipo==='cierre') inner = edCierre(b, paginaActiva);
-  else inner = '';
-
-  if(!esPagina){ cont.innerHTML = inner; return; }
-
+  if(!doc.contenido.length){ cont.innerHTML=''; return; }
   const availW = Math.max(320, cont.clientWidth - 20);
   const scale = Math.min(1, availW/794);
-  cont.innerHTML = '<div class="ed-page-frame" style="width:'+Math.round(794*scale)+'px;height:'+Math.round(1123*scale)+'px;">'
-    + '<div class="pdf-page" style="transform:scale('+scale+');">'+inner+pdfFooter()+'</div>'
-  +'</div>';
+  let html = '';
+  doc.contenido.forEach(function(b, i){
+    let inner, esPagina = true;
+    if(b.tipo==='portada') inner = edPortada(b, i);
+    else if(b.tipo==='alcance') inner = edAlcance(b, i);
+    else if(b.tipo==='categoria') inner = edCategoria(b, i);
+    else if(b.tipo==='inversion') inner = edInversion(b, i);
+    else if(b.tipo==='terminos'){ inner = edTerminos(b, i); esPagina = false; }
+    else if(b.tipo==='cierre') inner = edCierre(b, i);
+    else inner = '';
+
+    if(esPagina){
+      html += '<div class="ed-page-wrap" data-idx="'+i+'"><div class="ed-page-frame" style="width:'+Math.round(794*scale)+'px;height:'+Math.round(1123*scale)+'px;">'
+        + '<div class="pdf-page" style="transform:scale('+scale+');">'+inner+pdfFooter()+'</div>'
+      +'</div></div>';
+    } else {
+      html += '<div class="ed-page-wrap" data-idx="'+i+'">'+inner+'</div>';
+    }
+  });
+  cont.innerHTML = html;
+  setupScrollSpy();
 }
 window.addEventListener('resize', function(){ if(doc) renderCanvas(); });
+
+// ─── SCROLLSPY: resalta en los tabs la sección visible al scrollear ─────
+let scrollSpyObserver = null;
+function setupScrollSpy(){
+  if(scrollSpyObserver){ scrollSpyObserver.disconnect(); scrollSpyObserver = null; }
+  const root = document.getElementById('main');
+  const wraps = document.querySelectorAll('.ed-page-wrap');
+  if(!root || !wraps.length) return;
+  scrollSpyObserver = new IntersectionObserver(function(entries){
+    let mejor = null;
+    entries.forEach(function(entry){
+      if(entry.isIntersecting && (!mejor || entry.intersectionRatio > mejor.intersectionRatio)) mejor = entry;
+    });
+    if(!mejor) return;
+    const idx = parseInt(mejor.target.dataset.idx);
+    if(idx === paginaActiva) return;
+    paginaActiva = idx;
+    document.querySelectorAll('.page-tab').forEach(function(el,i){ el.classList.toggle('activo', i===paginaActiva); });
+    const tabActivo = document.querySelectorAll('.page-tab')[paginaActiva];
+    if(tabActivo) tabActivo.scrollIntoView({behavior:'smooth', block:'nearest', inline:'nearest'});
+  }, { root: root, rootMargin: '-42% 0px -42% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+  wraps.forEach(function(w){ scrollSpyObserver.observe(w); });
+}
 
 // ─── CAMPO EDITABLE (click → panel lateral) ─────────────────────────────
 function relPathDe(path){ return path.replace(/^contenido\.\d+\.datos\./,''); }
