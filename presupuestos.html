@@ -202,6 +202,13 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .ed-ghost:hover{border-color:#4c3fe0;color:#4c3fe0;background:#f8f7ff}
 
 .ed-terminos-box{background:#fff;color:#1a1a2e;border-radius:10px;padding:40px 44px;max-width:794px;width:100%;margin:0 auto;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+
+.ed-img-slot{width:100%;height:108px;border-radius:8px;overflow:hidden;background:#f3f3f8;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-bottom:8px;border:1px solid #eef0f6}
+.ed-img-slot:hover{outline:2px solid #4c3fe0;outline-offset:1px}
+.ed-img-slot img{width:100%;height:100%;object-fit:cover;display:block}
+.ed-img-empty{font-size:10px;color:#9aa0b4}
+.pdf-modelo-img{width:100%;height:108px;border-radius:8px;overflow:hidden;margin-bottom:8px}
+.pdf-modelo-img img{width:100%;height:100%;object-fit:cover;display:block}
 </style>
 </head>
 <body>
@@ -261,8 +268,31 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
   </div>
 </div>
 
+<!-- Modal: prompt IA para depurar foto -->
+<div class="overlay" id="modal-img-prompt">
+  <div class="modal-box" style="width:500px;">
+    <div class="modal-head"><div class="modal-title">Cambiar imagen</div><button class="mini-x" onclick="cerrarModal('modal-img-prompt')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;">
+        <b style="color:var(--text)">Cómo usarlo:</b><br>
+        1. Copiá el prompt de abajo<br>
+        2. Subí la foto original a una IA de imágenes (ChatGPT, Gemini, etc.) y pegale el prompt<br>
+        3. Descargá la imagen que te entrega<br>
+        4. Subila acá con "Subir imagen depurada"
+      </div>
+      <textarea id="img-prompt-text" readonly style="width:100%;height:150px;font-size:11px;padding:10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--panel2);color:var(--text);resize:none;font-family:inherit;line-height:1.5;"></textarea>
+      <button class="btn" style="align-self:flex-start" onclick="copiarPromptImagen()">📋 Copiar prompt</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal('modal-img-prompt')">Cancelar</button>
+      <button class="btn solid" onclick="abrirSelectorImagen()">Subir imagen depurada →</button>
+    </div>
+  </div>
+</div>
+
 <div id="pdf-render"></div>
 <div class="toast" id="toast"></div>
+<input type="file" id="img-file-input" accept="image/*" style="display:none" onchange="onImagenSeleccionada(this)">
 
 <script>
 let usuario = null;
@@ -397,7 +427,7 @@ function defaultBlock(tipo){
   ] } };
   return { id:uid(), tipo, datos:{} };
 }
-function defaultModelo(){ return { id:uid(), letra:'', tag:'', nombre:'Nuevo modelo', desc:'', specs:[{label:'Pantalla',valor:''}], productoV14:'', precioArs:0, precioUsd:0 }; }
+function defaultModelo(){ return { id:uid(), letra:'', tag:'', nombre:'Nuevo modelo', desc:'', specs:[{label:'Pantalla',valor:''}], productoV14:'', precioArs:0, precioUsd:0, imagen:'' }; }
 
 // ─── PATH GET/SET ────────────────────────────────────────────────────────
 function setAtPath(obj, path, value){
@@ -581,7 +611,7 @@ function agregarAArray(path, valorDefault){
 
 // ─── PORTADA ──────────────────────────────────────────────────────────────
 function edPortada(b,i){
-  const d = b.datos, p = i+'.datos';
+  const d = b.datos, p = 'contenido.'+i+'.datos';
   return '<div class="pdf-eyebrow">'+campoEd(p+'.categoria','Categoría / etiqueta',d.categoria)+'</div>'
     + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título grande',d.titulo,{tipo:'textarea'})+'</div>'
     + '<div class="pdf-bar"></div>'
@@ -592,7 +622,7 @@ function edPortada(b,i){
 
 // ─── ALCANCE ──────────────────────────────────────────────────────────────
 function edAlcance(b,i){
-  const d = b.datos, p = i+'.datos';
+  const d = b.datos, p = 'contenido.'+i+'.datos';
   const lineas = (d.lineas||[]).map(function(l, li){
     const lp = p+'.lineas.'+li;
     const bullets = (l.bullets||[]).map(function(bu, bi2){
@@ -620,7 +650,7 @@ function quitarLinea(bi,li){ doc.contenido[bi].datos.lineas.splice(li,1); render
 
 // ─── CATEGORÍA ────────────────────────────────────────────────────────────
 function edCategoria(b,i){
-  const d = b.datos, p = i+'.datos';
+  const d = b.datos, p = 'contenido.'+i+'.datos';
   const modelos = (d.modelos||[]).map(function(mo, mi){
     const mp = p+'.modelos.'+mi;
     const specs = (mo.specs||[]).map(function(sp, si){
@@ -630,8 +660,12 @@ function edCategoria(b,i){
         + '<span class="ed-toolbar" style="top:-7px;right:-4px;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarSpec('+i+','+mi+','+si+')">✕</span></span>'
       +'</div>';
     }).join('');
+    const imgSlot = '<div class="ed-img-slot" onclick="event.stopPropagation();elegirImagen(\''+mp+'.imagen\',\'producto\')">'
+      + (mo.imagen ? '<img src="'+mo.imagen+'" alt="">' : '<span class="ed-img-empty">+ Imagen</span>')
+    +'</div>';
     return '<div class="ed-item" style="padding-top:10px;">'
       + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarModelo('+i+','+mi+')" title="Quitar modelo">✕</span></span>'
+      + imgSlot
       + '<div class="pdf-modelo-tag">'+campoEd(mp+'.letra','Letra',mo.letra,{placeholder:'Letra (A)'})+' '+campoEd(mp+'.tag','Etiqueta',mo.tag,{placeholder:'+ etiqueta (DE MOSTRADOR)'})+'</div>'
       + '<div class="pdf-modelo-nombre">'+campoEd(mp+'.nombre','Nombre del modelo',mo.nombre)+'</div>'
       + '<div class="pdf-modelo-desc">'+campoEd(mp+'.desc','Descripción',mo.desc,{tipo:'textarea',placeholder:'Descripción'})+'</div>'
@@ -659,6 +693,58 @@ function edCategoria(b,i){
       + '<div class="ed-ghost" style="padding:4px;font-size:9.5px;" onclick="event.stopPropagation();agregarAArray(\''+p+'.comunBullets\',\'Nuevo ítem\')">+ ítem</div>'
     +'</div>';
 }
+let imagenTargetPath = null;
+const PROMPTS_IMAGEN = {
+  producto: 'Editá esta foto de producto para catálogo: el tótem debe quedar perfectamente enfocado y nítido, colocado sobre fondo blanco liso (reemplazá el fondo actual por blanco puro #FFFFFF si no lo es), con iluminación uniforme sin sombras duras ni reflejos molestos. Centrá el equipo en el encuadre, formato vertical o cuadrado, dejando un margen parejo alrededor. Corregí el balance de blancos y el contraste para que los colores del gabinete se vean fieles. No agregues texto, logos ni marcas de agua. El resultado tiene que verse como foto de catálogo/producto profesional.',
+  portada: 'Editá esta foto para que quede lista como imagen de portada de un presupuesto comercial. Mantené el tótem/kiosco y el entorno real de la instalación, pero: corregí la exposición y el balance de blancos, enderezá la perspectiva si está torcida, mejorá la nitidez y el enfoque del equipo (que quede el punto más nítido de la imagen), aumentá levemente el contraste y la saturación sin que se vea artificial, y recortá el encuadre en formato horizontal (relación 16:9) centrando el tótem como protagonista. No agregues texto ni elementos gráficos. El resultado debe verse profesional y natural, como foto de portada de una presentación corporativa.'
+};
+PROMPTS_IMAGEN.cierre = PROMPTS_IMAGEN.portada;
+function elegirImagen(path, tipo){
+  imagenTargetPath = path;
+  document.getElementById('img-prompt-text').value = PROMPTS_IMAGEN[tipo] || PROMPTS_IMAGEN.producto;
+  abrirModal('modal-img-prompt');
+}
+function copiarPromptImagen(){
+  const ta = document.getElementById('img-prompt-text');
+  ta.select();
+  ta.setSelectionRange(0, 999999);
+  const hacerToast = function(){ toast('✓ Prompt copiado'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value).then(hacerToast).catch(function(){
+      document.execCommand('copy'); hacerToast();
+    });
+  } else {
+    document.execCommand('copy'); hacerToast();
+  }
+}
+function abrirSelectorImagen(){
+  cerrarModal('modal-img-prompt');
+  document.getElementById('img-file-input').click();
+}
+function onImagenSeleccionada(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file || !imagenTargetPath) return;
+  const targetPath = imagenTargetPath;
+  imagenTargetPath = null;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      const maxW = 700;
+      const scale = Math.min(1, maxW/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width*scale);
+      canvas.height = Math.round(img.height*scale);
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      setAtPath(doc, targetPath, canvas.toDataURL('image/jpeg', 0.82));
+      renderEditor();
+      toast('✓ Imagen actualizada');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 function agregarModelo(bi){ doc.contenido[bi].datos.modelos.push(defaultModelo()); renderEditor(); }
 function quitarModelo(bi,mi){ doc.contenido[bi].datos.modelos.splice(mi,1); renderEditor(); }
 function agregarSpec(bi,mi){ doc.contenido[bi].datos.modelos[mi].specs.push({label:'',valor:''}); renderEditor(); }
@@ -683,7 +769,7 @@ async function traerPrecioReal(bi,mi){
 
 // ─── INVERSIÓN ────────────────────────────────────────────────────────────
 function edInversion(b,i){
-  const d = b.datos, p = i+'.datos';
+  const d = b.datos, p = 'contenido.'+i+'.datos';
   const filas = filasInversion();
   const rowsHtml = filas.length ? filas.map(function(f){ return '<tr><td>'+esc(f.nombre)+'</td><td>'+esc(f.spec||'')+'</td><td class="num">'+fmtMoney(f.precioArs)+'</td><td style="text-align:right;color:#9aa0b4;">USD '+Math.round(f.precioUsd||0)+'</td></tr>'; }).join('') : '<tr><td colspan="4" style="color:#9aa0b4;">Se completa sola con los modelos que cargues en las páginas de categoría.</td></tr>';
   const especiales = (d.especiales||[]).map(function(e, ei){
@@ -716,7 +802,7 @@ function filasInversion(){
 
 // ─── TÉRMINOS ─────────────────────────────────────────────────────────────
 function edTerminos(b,i){
-  const d = b.datos, p = i+'.datos';
+  const d = b.datos, p = 'contenido.'+i+'.datos';
   const items = (d.items||[]).map(function(t, ti){
     const tp = p+'.items.'+ti;
     return '<div class="ed-item" style="padding:10px 0;border-bottom:1px solid #eef0f6;">'
@@ -734,7 +820,7 @@ function agregarTermino(bi){ doc.contenido[bi].datos.items.push({id:uid(),titulo
 
 // ─── CIERRE ───────────────────────────────────────────────────────────────
 function edCierre(b,i){
-  const d = b.datos, p = i+'.datos';
+  const d = b.datos, p = 'contenido.'+i+'.datos';
   const contactos = (d.contacto||[]).map(function(c, ci){
     const cp = p+'.contacto.'+ci;
     return '<div class="ed-item" style="display:flex;gap:10px;padding:5px 0;">'
@@ -921,6 +1007,7 @@ function pdfCategoria(b){
   const modelos = (d.modelos||[]).map(function(m){
     const specs = (m.specs||[]).map(function(sp){ return '<div class="pdf-spec-row"><span>'+esc(sp.label)+'</span><span>'+esc(sp.valor)+'</span></div>'; }).join('');
     return '<div>'
+      + (m.imagen ? '<div class="pdf-modelo-img"><img src="'+m.imagen+'" alt=""></div>' : '')
       + (m.letra||m.tag ? '<div class="pdf-modelo-tag">'+esc(m.letra||'')+(m.letra&&m.tag?' · ':'')+esc(m.tag||'')+'</div>' : '')
       + '<div class="pdf-modelo-nombre">'+esc(m.nombre)+'</div>'
       + '<div class="pdf-modelo-desc">'+esc(m.desc||'')+'</div>'
