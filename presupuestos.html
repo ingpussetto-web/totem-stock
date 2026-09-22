@@ -1046,14 +1046,14 @@ function onImagenSeleccionada(input){
   reader.onload = function(ev){
     const img = new Image();
     img.onload = function(){
-      const maxW = 700;
+      const maxW = 1100;
       const scale = Math.min(1, maxW/img.width);
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width*scale);
       canvas.height = Math.round(img.height*scale);
       canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
       snap();
-      setAtPath(doc, targetPath, canvas.toDataURL('image/jpeg', 0.82));
+      setAtPath(doc, targetPath, canvas.toDataURL('image/jpeg', 0.9));
       renderEditor();
       toast('✓ Imagen actualizada');
     };
