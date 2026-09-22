@@ -433,7 +433,7 @@ async function init(){
   try{
     [templates, presupuestos] = await Promise.all([
       api('presupuesto_templates?select=id,nombre,updated_at&order=updated_at.desc'),
-      api('presupuestos?select=id,cliente,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc'),
+      api('presupuestos?select=id,cliente,contacto,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc'),
     ]);
   }catch(e){
     document.getElementById('main').innerHTML = '<div class="loader" style="color:var(--red)">Error cargando: '+esc(e.message)+'</div>';
@@ -469,11 +469,12 @@ function renderSidebar(){
     elP.innerHTML = orden.map(function(cliente){
       const items = grupos[cliente].slice().sort(function(a,b){ return new Date(b.updated_at) - new Date(a.updated_at); });
       const itemsHtml = items.map(function(p){
-        const estadoTxt = p.estado==='enviado'
-          ? '✓ Enviado' + (p.enviado_at ? ' · '+new Date(p.enviado_at).toLocaleDateString('es-AR') : '')
-          : '○ Borrador';
+        const fechaMostrada = p.estado==='enviado' && p.enviado_at ? p.enviado_at : p.updated_at;
+        const estadoTxt = (p.estado==='enviado' ? '✓ Enviado' : '○ Borrador')
+          + ' · ' + new Date(fechaMostrada).toLocaleDateString('es-AR');
+        const titulo = p.numero || p.contacto || 'Presupuesto';
         return '<div class="sb-item sb-subitem'+(doc && !doc.esTemplate && doc.id===p.id ? ' activo':'')+'" onclick="abrirPresupuesto('+p.id+')">'
-          + '<div class="sb-item-cliente">'+(p.numero?esc(p.numero):'Presupuesto')+'</div>'
+          + '<div class="sb-item-cliente">'+esc(titulo)+'</div>'
           + '<div class="sb-item-meta">'+estadoTxt+'</div>'
         +'</div>';
       }).join('');
@@ -1282,7 +1283,7 @@ async function guardarPresupuesto(){
       const res = await api('presupuestos', 'POST', [body]);
       doc.id = res[0].id;
     }
-    presupuestos = await api('presupuestos?select=id,cliente,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc');
+    presupuestos = await api('presupuestos?select=id,cliente,contacto,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc');
     renderSidebar();
     toast('✓ Guardado');
   }catch(e){ toast('Error: '+e.message); }
@@ -1305,7 +1306,7 @@ async function borrarPresupuesto(){
   if(!confirm('¿Eliminar este presupuesto?')) return;
   await api('presupuestos?id=eq.'+doc.id, 'DELETE').catch(function(){});
   doc = null;
-  presupuestos = await api('presupuestos?select=id,cliente,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc');
+  presupuestos = await api('presupuestos?select=id,cliente,contacto,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc');
   renderSidebar();
   renderEditor();
 }
