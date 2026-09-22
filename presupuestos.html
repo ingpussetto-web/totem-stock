@@ -493,7 +493,7 @@ function defaultBlock(tipo){
       {id:uid(),titulo:'Validez de la oferta.',texto:'2 días.'},
       {id:uid(),titulo:'Garantía.',texto:'6 meses por cualquier componente.'},
   ] } };
-  if(tipo==='cierre') return { id:uid(), tipo:'cierre', datos:{ titulo:'Quedamos a disposición para avanzar', texto:'Sin otro particular, aprovecho para saludarlos muy atentamente.', contacto:[
+  if(tipo==='cierre') return { id:uid(), tipo:'cierre', datos:{ titulo:'Quedamos a disposición para avanzar', texto:'Sin otro particular, aprovecho para saludarlos muy atentamente.', imagen:'', contacto:[
       {id:uid(),label:'Ing. Mariano Pussetto',valor:'351 757 9831'},
       {id:uid(),label:'Consultas',valor:'consultas@totems.com.ar'},
       {id:uid(),label:'Sitio',valor:'totemnube.com.ar'},
@@ -864,8 +864,8 @@ function edCategoria(b,i){
       + '<div class="pdf-modelo-desc">'+campoEd(mp+'.desc','Descripción',mo.desc,{tipo:'textarea',placeholder:'Descripción'})+'</div>'
       + specs
       + '<div class="ed-ghost" style="padding:4px;font-size:9.5px;" onclick="event.stopPropagation();agregarSpec('+i+','+mi+')">+ campo</div>'
-      + '<div class="pdf-modelo-precio">'+campoEd(mp+'.precioArs','Precio ARS (neto)',mo.precioArs,{tipo:'number',money:true})+'</div>'
-      + '<div class="pdf-modelo-usd">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',mo.precioUsd,{tipo:'number'})+' + IVA</div>'
+      + '<div class="pdf-modelo-precio">'+campoEd(mp+'.precioArs','Precio ARS (neto)',mo.precioArs,{tipo:'number',money:true})+(('precioArsAlt' in mo) ? ' / '+campoEd(mp+'.precioArsAlt','Precio ARS talla mayor (neto)',mo.precioArsAlt,{tipo:'number',money:true}) : '')+'</div>'
+      + '<div class="pdf-modelo-usd">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',mo.precioUsd,{tipo:'number'})+(('precioUsdAlt' in mo) ? ' / '+campoEd(mp+'.precioUsdAlt','Precio USD talla mayor (ref.)',mo.precioUsdAlt,{tipo:'number'}) : '')+' + IVA</div>'
       + '<div style="margin-top:8px;font-size:9.5px;">'+campoEd(mp+'.productoV14','Producto (id interno, opcional)',mo.productoV14,{placeholder:'id interno, opcional (ej: turn_32_incl)'})+'</div>'
       + '<button class="ed-tbtn" style="position:static;width:auto;padding:3px 8px;margin-top:5px;font-size:9.5px;" onclick="event.stopPropagation();traerPrecioReal('+i+','+mi+')">🔄 Traer precio real</button>'
     +'</div>';
@@ -970,8 +970,8 @@ function edInversion(b,i){
   const rowsHtml = filas.length ? filas.map(function(f){
     const mp = 'contenido.'+f.bi+'.datos.modelos.'+f.mi;
     return '<tr><td>'+esc(f.nombre)+'</td><td>'+esc(f.spec||'')+'</td>'
-      + '<td class="num">'+campoEd(mp+'.precioArs','Precio ARS (neto)',f.precioArs,{tipo:'number',money:true})+'</td>'
-      + '<td style="text-align:right;color:#9aa0b4;">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',f.precioUsd,{tipo:'number'})+'</td></tr>';
+      + '<td class="num">'+campoEd(mp+'.'+f.campo,'Precio ARS (neto)',f.precioArs,{tipo:'number',money:true})+'</td>'
+      + '<td style="text-align:right;color:#9aa0b4;">USD '+campoEd(mp+'.'+f.campoUsd,'Precio USD (ref.)',f.precioUsd,{tipo:'number'})+'</td></tr>';
   }).join('') : '<tr><td colspan="4" style="color:#9aa0b4;">Se completa sola con los modelos que cargues en las páginas de categoría.</td></tr>';
   const especiales = (d.especiales||[]).map(function(e, ei){
     const ep = p+'.especiales.'+ei;
@@ -1002,7 +1002,11 @@ function filasInversion(){
   doc.contenido.forEach(function(b, bi){
     if(b.tipo!=='categoria') return;
     (b.datos.modelos||[]).forEach(function(m, mi){
-      filas.push({ bi:bi, mi:mi, nombre:m.nombre, spec:(m.specs&&m.specs[0])?m.specs[0].valor:'', precioArs:m.precioArs||0, precioUsd:m.precioUsd||0 });
+      const spec = (m.specs&&m.specs[0])?m.specs[0].valor:'';
+      filas.push({ bi:bi, mi:mi, nombre:m.nombre, spec:spec, precioArs:m.precioArs||0, precioUsd:m.precioUsd||0, campo:'precioArs', campoUsd:'precioUsd' });
+      if('precioArsAlt' in m){
+        filas.push({ bi:bi, mi:mi, nombre:m.nombre+' (talla mayor)', spec:spec, precioArs:m.precioArsAlt||0, precioUsd:m.precioUsdAlt||0, campo:'precioArsAlt', campoUsd:'precioUsdAlt' });
+      }
     });
   });
   return filas;
@@ -1029,6 +1033,7 @@ function actualizarTodosPrecios(bi){
     if(b.tipo!=='categoria') return;
     (b.datos.modelos||[]).forEach(function(m){
       if(m.precioUsd){ m.precioArs = Math.round(m.precioUsd*dolar); actualizados++; }
+      if(m.precioUsdAlt){ m.precioArsAlt = Math.round(m.precioUsdAlt*dolar); actualizados++; }
     });
   });
   if(!doc.contenido[bi].datos.dolarFecha) doc.contenido[bi].datos.dolarFecha = new Date().toISOString().slice(0,10);
@@ -1065,11 +1070,19 @@ function edCierre(b,i){
       + campoEd(cp+'.valor','Valor',c.valor)
     +'</div>';
   }).join('');
-  return '<div class="pdf-eyebrow">GRACIAS</div>'
-    + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título',d.titulo)+'</div>'
-    + '<div class="pdf-bar"></div>'
-    + '<div class="pdf-p" style="max-width:420px;">'+campoEd(p+'.texto','Texto',d.texto,{tipo:'textarea'})+'</div>'
-    + '<div class="pdf-cierre-contacto">'+contactos+'<div class="ed-ghost" style="max-width:200px;" onclick="event.stopPropagation();agregarContacto('+i+')">+ Dato de contacto</div></div>';
+  const imgSlot = '<div class="pdf-portada-right" onclick="event.stopPropagation();elegirImagen(\''+p+'.imagen\',\'cierre\')">'
+    + (d.imagen ? '<img src="'+d.imagen+'" alt="">' : '<span class="ed-img-empty">+ Imagen de cierre</span>')
+  +'</div>';
+  return '<div class="pdf-portada-layout">'
+    + '<div class="pdf-portada-left">'
+      + '<div class="pdf-eyebrow">GRACIAS</div>'
+      + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título',d.titulo)+'</div>'
+      + '<div class="pdf-bar"></div>'
+      + '<div class="pdf-p" style="max-width:420px;">'+campoEd(p+'.texto','Texto',d.texto,{tipo:'textarea'})+'</div>'
+      + '<div class="pdf-cierre-contacto">'+contactos+'<div class="ed-ghost" style="max-width:200px;" onclick="event.stopPropagation();agregarContacto('+i+')">+ Dato de contacto</div></div>'
+    +'</div>'
+    + imgSlot
+  +'</div>';
 }
 function agregarContacto(bi){ snap(); doc.contenido[bi].datos.contacto.push({id:uid(),label:'',valor:''}); renderEditor(); }
 
@@ -1262,8 +1275,8 @@ function pdfCategoria(b, bi){
       + '<div class="pdf-modelo-nombre">'+pe(bi,mp+'.nombre', esc(m.nombre))+'</div>'
       + '<div class="pdf-modelo-desc">'+pe(bi,mp+'.desc', esc(m.desc||''))+'</div>'
       + specs
-      + '<div class="pdf-modelo-precio">'+fmtMoney(m.precioArs)+'</div>'
-      + (m.precioUsd ? '<div class="pdf-modelo-usd">USD '+Math.round(m.precioUsd)+' + IVA</div>' : '')
+      + '<div class="pdf-modelo-precio">'+fmtMoney(m.precioArs)+(('precioArsAlt' in m) ? ' / '+fmtMoney(m.precioArsAlt) : '')+'</div>'
+      + (m.precioUsd ? '<div class="pdf-modelo-usd">USD '+Math.round(m.precioUsd)+(('precioUsdAlt' in m) ? ' / '+Math.round(m.precioUsdAlt) : '')+' + IVA</div>' : '')
     +'</div>';
   }).join('');
   const comun = (d.comunBullets||[]).length ? '<div class="pdf-comun-box"><div class="pdf-comun-title">'+pe(bi,'comunTitulo', esc(d.comunTitulo||'Común a la línea'))+'</div><div class="pdf-comun-grid">'+(d.comunBullets||[]).map(function(bu,bi2){ return '<div>· '+pe(bi,'comunBullets.'+bi2, esc(bu))+'</div>'; }).join('')+'</div></div>' : '';
@@ -1290,6 +1303,9 @@ function pdfInversion(b, bi){
     rowsHtml += '<tr><td class="pdf-inv-cat" colspan="4">'+esc(cat)+'</td></tr>';
     porCategoria[cat].forEach(function(m){
       rowsHtml += '<tr><td>'+esc(m.nombre)+'</td><td>'+esc((m.specs&&m.specs[0])?m.specs[0].valor:'')+'</td><td class="num">'+fmtMoney(m.precioArs)+'</td><td style="text-align:right;color:#9aa0b4;">USD '+Math.round(m.precioUsd||0)+'</td></tr>';
+      if('precioArsAlt' in m){
+        rowsHtml += '<tr><td>'+esc(m.nombre+' (talla mayor)')+'</td><td>'+esc((m.specs&&m.specs[0])?m.specs[0].valor:'')+'</td><td class="num">'+fmtMoney(m.precioArsAlt)+'</td><td style="text-align:right;color:#9aa0b4;">USD '+Math.round(m.precioUsdAlt||0)+'</td></tr>';
+      }
     });
   });
   const especiales = (d.especiales||[]).map(function(e,ei){
@@ -1315,12 +1331,18 @@ function pdfInversion(b, bi){
 function pdfCierre(b, bi){
   const d = b.datos;
   const contactos = (d.contacto||[]).map(function(c,ci){ const cp='contacto.'+ci; return '<div><span>'+pe(bi,cp+'.label', esc(c.label))+'</span><span>'+pe(bi,cp+'.valor', esc(c.valor))+'</span></div>'; }).join('');
+  const imgSlot = '<div class="pdf-portada-right">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '')+'</div>';
   return '<div class="pdf-page">'
-    + '<div class="pdf-eyebrow">GRACIAS</div>'
-    + '<div class="pdf-h1">'+pe(bi,'titulo', esc(d.titulo))+'</div>'
-    + '<div class="pdf-bar"></div>'
-    + '<div class="pdf-p" style="max-width:420px;">'+pe(bi,'texto', esc(d.texto))+'</div>'
-    + '<div class="pdf-cierre-contacto">'+contactos+'</div>'
+    + '<div class="pdf-portada-layout">'
+      + '<div class="pdf-portada-left">'
+        + '<div class="pdf-eyebrow">GRACIAS</div>'
+        + '<div class="pdf-h1">'+pe(bi,'titulo', esc(d.titulo))+'</div>'
+        + '<div class="pdf-bar"></div>'
+        + '<div class="pdf-p" style="max-width:420px;">'+pe(bi,'texto', esc(d.texto))+'</div>'
+        + '<div class="pdf-cierre-contacto">'+contactos+'</div>'
+      +'</div>'
+      + imgSlot
+    +'</div>'
     + pdfFooter()
   +'</div>';
 }
