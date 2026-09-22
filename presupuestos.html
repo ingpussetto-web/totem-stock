@@ -1568,11 +1568,12 @@ function edCostos(b,i){
   const filas = (d.items||[]).map(function(it, ii){
     const ip = p+'.items.'+ii;
     return '<tr class="ed-item"><td style="width:30%;">'
-        + campoEd(ip+'.nombre','Producto / Servicio',it.nombre)
-        + campoEd(ip+'.sublabel','Detalle corto (opcional)',it.sublabel,{placeholder:'Detalle corto (opcional)'})
-      +'</td><td style="width:38%;">'+campoEd(ip+'.desc','Descripción',it.desc,{tipo:'textarea'})+'</td>'
-      +'<td class="price">'+campoEd(ip+'.precio','Precio',it.precio,{placeholder:'Precio'})
-        + campoEd(ip+'.precioSub','Aclaración de precio (opcional)',it.precioSub,{placeholder:'Aclaración (opcional)'})
+        + '<div class="pdf-costos-nombre">'+campoEd(ip+'.nombre','Producto / Servicio',it.nombre)+'</div>'
+        + '<div class="pdf-costos-sublabel">'+campoEd(ip+'.sublabel','Detalle corto (opcional)',it.sublabel,{placeholder:'Detalle corto (opcional)'})+'</div>'
+      +'</td><td style="width:38%;" class="pdf-costos-desc">'+campoEd(ip+'.desc','Descripción',it.desc,{tipo:'textarea'})+'</td>'
+      +'<td class="pdf-costos-precio">'
+        + '<div class="amt">'+campoEd(ip+'.precio','Precio',it.precio,{placeholder:'Precio'})+'</div>'
+        + '<div class="sub">'+campoEd(ip+'.precioSub','Aclaración de precio (opcional)',it.precioSub,{placeholder:'Aclaración (opcional)'})+'</div>'
       +'</td>'
       +'<td><span class="ed-toolbar" style="position:static;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.items\','+ii+')">✕</span></span></td></tr>';
   }).join('');
@@ -1582,9 +1583,9 @@ function edCostos(b,i){
       + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.modulos\','+mi+')">✕</span></span>'
       + '<div class="pdf-costos-tag">Módulo opcional</div>'
       + '<table class="pdf-costos-table"><tbody><tr>'
-        + '<td style="width:30%;">'+campoEd(mp+'.nombre','Nombre del módulo',m.nombre)+'</td>'
-        + '<td style="width:38%;">'+campoEd(mp+'.desc','Descripción',m.desc,{tipo:'textarea'})+'</td>'
-        + '<td class="price">'+campoEd(mp+'.precio','Precio',m.precio,{placeholder:'Precio'})+'</td>'
+        + '<td style="width:30%;"><div class="pdf-costos-nombre">'+campoEd(mp+'.nombre','Nombre del módulo',m.nombre)+'</div></td>'
+        + '<td style="width:38%;" class="pdf-costos-desc">'+campoEd(mp+'.desc','Descripción',m.desc,{tipo:'textarea'})+'</td>'
+        + '<td class="pdf-costos-precio"><div class="amt">'+campoEd(mp+'.precio','Precio',m.precio,{placeholder:'Precio'})+'</div></td>'
       +'</tr></tbody></table>'
     +'</div>';
   }).join('');
