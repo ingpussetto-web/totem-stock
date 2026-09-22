@@ -140,6 +140,8 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .pdf-page-oscura .pdf-eyebrow{color:var(--pdf-accent)}
 .pdf-page-oscura .pdf-h1{color:#ffffff}
 .pdf-page-oscura .pdf-p{color:#c3c7d1}
+.pdf-page-oscura .pdf-cover-meta div{color:#7d8494}
+.pdf-page-oscura .pdf-cover-meta strong{color:#e8eaed}
 .pdf-portada-oscura-logo{width:150px;display:block;margin-bottom:56px}
 .pdf-portada-oscura-img{width:100%;border-radius:10px;overflow:hidden;margin-top:26px}
 .pdf-portada-oscura-img img,.pdf-portada-oscura-img .img-bg{width:100%;display:block;background-size:contain;background-position:top center;background-repeat:no-repeat}
@@ -573,7 +575,7 @@ function defaultBlock(tipo){
       {id:uid(),label:'Consultas',valor:'consultas@totems.com.ar'},
       {id:uid(),label:'Sitio',valor:'totemnube.com.ar'},
   ] } };
-  if(tipo==='portada-oscura') return { id:uid(), tipo:'portada-oscura', datos:{ categoria:'PRESENTACIÓN COMERCIAL', titulo:'Nombre del sistema.', bajada:'Descripción breve de la propuesta.', imagen:'', imagenCaption:'' } };
+  if(tipo==='portada-oscura') return { id:uid(), tipo:'portada-oscura', datos:{ categoria:'PRESENTACIÓN COMERCIAL', titulo:'Nombre del sistema.', bajada:'Descripción breve de la propuesta.', preparadoPara:'', fecha:new Date().toISOString().slice(0,10), imagen:'', imagenCaption:'' } };
   if(tipo==='seccion-imagen') return { id:uid(), tipo:'seccion-imagen', datos:{ categoria:'SECCIÓN', titulo:'Título de la sección', texto:'', imagen:'', imagenAncho:100 } };
   if(tipo==='costos') return { id:uid(), tipo:'costos', datos:{ categoria:'INVERSIÓN', titulo:'Costos de implementación', texto:'', items:[], modulos:[], notas:[] } };
   return { id:uid(), tipo, datos:{} };
@@ -1578,6 +1580,8 @@ function edPortadaOscura(b,i){
     + '<div class="pdf-eyebrow">'+campoEd(p+'.categoria','Categoría / etiqueta',d.categoria)+'</div>'
     + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título grande',d.titulo,{tipo:'textarea'})+'</div>'
     + '<div class="pdf-p" style="max-width:560px;">'+campoEd(p+'.bajada','Bajada / descripción',d.bajada,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-cover-meta"><div>Preparado para<strong>'+campoEd(p+'.preparadoPara','Preparado para (cliente)',d.preparadoPara)+'</strong></div>'
+      + '<div>Fecha<strong>'+campoEd(p+'.fecha','Fecha',d.fecha,{tipo:'date'})+'</strong></div></div>'
     + '<div class="pdf-portada-oscura-img">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '<span class="ed-img-empty" style="color:#8890a0;">(imagen de referencia — fija)</span>')+'</div>'
     + '<div class="pdf-portada-oscura-cap">'+campoEd(p+'.imagenCaption','Pie de imagen (opcional)',d.imagenCaption,{placeholder:'Pie de imagen (opcional)'})+'</div>';
 }
@@ -1588,6 +1592,7 @@ function pdfPortadaOscura(b, bi){
     + '<div class="pdf-eyebrow">'+esc(d.categoria||'')+'</div>'
     + '<div class="pdf-h1">'+pe(bi,'titulo', esc(d.titulo||'').replace(/\n/g,'<br>'))+'</div>'
     + '<div class="pdf-p" style="max-width:560px;">'+pe(bi,'bajada', esc(d.bajada||''))+'</div>'
+    + '<div class="pdf-cover-meta"><div>Preparado para<strong>'+pe(bi,'preparadoPara', esc(d.preparadoPara||'—'))+'</strong></div><div>Fecha<strong>'+esc(d.fecha||'')+'</strong></div></div>'
     + '<div class="pdf-portada-oscura-img">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '')+'</div>'
     + (d.imagenCaption ? '<div class="pdf-portada-oscura-cap">'+pe(bi,'imagenCaption', esc(d.imagenCaption))+'</div>' : '')
     + pdfFooter(true)
