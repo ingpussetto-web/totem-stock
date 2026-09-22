@@ -129,7 +129,7 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .pdf-portada-layout{display:flex;position:absolute;inset:0;}
 .pdf-portada-left{flex:0 0 56%;max-width:56%;padding:56px 32px 56px 54px;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:2;}
 .pdf-portada-right{flex:0 0 44%;position:relative;overflow:hidden;background:linear-gradient(150deg,#eef1fb 0%,#f8f7ff 55%,#eef4fb 100%);}
-.pdf-portada-right img{width:100%;height:100%;object-fit:cover;display:block}
+.pdf-portada-right .img-bg{width:100%;height:100%;background-position:center;background-repeat:no-repeat}
 .pdf-portada-right::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,#f8f7ff 0%,rgba(248,247,255,.75) 10%,rgba(248,247,255,.32) 22%,rgba(248,247,255,0) 42%);}
 .pdf-portada-right .ed-img-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;cursor:pointer;z-index:2}
 .ed-canvas .pdf-portada-right{cursor:pointer}
@@ -218,6 +218,7 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .ed-img-slot{width:100%;height:192px;border-radius:8px;overflow:hidden;background:#fafafa;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-bottom:10px;border:1px solid #eef0f6}
 .ed-img-slot:hover{outline:2px solid #4c3fe0;outline-offset:1px}
 .ed-img-slot img{width:100%;height:100%;object-fit:contain;display:block}
+.pdf-modelo-img .img-bg{width:100%;height:100%;background-position:center;background-repeat:no-repeat}
 .ed-img-empty{font-size:10px;color:#9aa0b4}
 .pdf-modelo-img{width:100%;height:192px;border-radius:8px;overflow:hidden;margin-bottom:10px;background:#fafafa;display:flex;align-items:center;justify-content:center}
 .pdf-modelo-img img{width:100%;height:100%;object-fit:contain;display:block}
@@ -329,6 +330,11 @@ async function api(path, method='GET', body=null){
   return r.status===204 ? null : r.json();
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// html2canvas no respeta object-fit en <img>: usamos un div con background-image (cover/contain) que sí renderiza bien.
+function imgBgDiv(url, size){
+  const safe = String(url||'').replace(/"/g,'%22').replace(/'/g,'%27');
+  return '<div class="img-bg" style="background-image:url(&quot;'+safe+'&quot;);background-size:'+(size||'cover')+'"></div>';
+}
 function fmtMoney(n){ return '$'+Math.round(n||0).toLocaleString('es-AR'); }
 function uid(){ return 'b'+Math.random().toString(36).slice(2,9); }
 function toast(msg, dur=2600){
@@ -798,7 +804,7 @@ function agregarAArray(path, valorDefault){
 function edPortada(b,i){
   const d = b.datos, p = 'contenido.'+i+'.datos';
   const imgSlot = '<div class="pdf-portada-right" onclick="event.stopPropagation();elegirImagen(\''+p+'.imagen\',\'portada\')">'
-    + (d.imagen ? '<img src="'+d.imagen+'" alt="">' : '<span class="ed-img-empty">+ Imagen de portada</span>')
+    + (d.imagen ? imgBgDiv(d.imagen,'cover') : '<span class="ed-img-empty">+ Imagen de portada</span>')
   +'</div>';
   return '<div class="pdf-portada-layout">'
     + '<div class="pdf-portada-left">'
@@ -1072,7 +1078,7 @@ function edCierre(b,i){
     +'</div>';
   }).join('');
   const imgSlot = '<div class="pdf-portada-right" onclick="event.stopPropagation();elegirImagen(\''+p+'.imagen\',\'cierre\')">'
-    + (d.imagen ? '<img src="'+d.imagen+'" alt="">' : '<span class="ed-img-empty">+ Imagen de cierre</span>')
+    + (d.imagen ? imgBgDiv(d.imagen,'cover') : '<span class="ed-img-empty">+ Imagen de cierre</span>')
   +'</div>';
   return '<div class="pdf-portada-layout">'
     + '<div class="pdf-portada-left">'
@@ -1229,7 +1235,7 @@ function pe(bi, rel, innerHtml){
 
 function pdfPortada(b, bi){
   const d = b.datos;
-  const imgSlot = '<div class="pdf-portada-right">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '')+'</div>';
+  const imgSlot = '<div class="pdf-portada-right">'+(d.imagen ? imgBgDiv(d.imagen,'cover') : '')+'</div>';
   return '<div class="pdf-page">'
     + '<div class="pdf-portada-layout">'
       + '<div class="pdf-portada-left">'
@@ -1271,7 +1277,7 @@ function pdfCategoria(b, bi){
     const mp = 'modelos.'+mi;
     const specs = (m.specs||[]).map(function(sp,si){ return '<div class="pdf-spec-row"><span>'+pe(bi,mp+'.specs.'+si+'.label', esc(sp.label))+'</span><span>'+pe(bi,mp+'.specs.'+si+'.valor', esc(sp.valor))+'</span></div>'; }).join('');
     return '<div>'
-      + (m.imagen ? '<div class="pdf-modelo-img"><img src="'+m.imagen+'" alt=""></div>' : '')
+      + (m.imagen ? '<div class="pdf-modelo-img">'+imgBgDiv(m.imagen,'contain')+'</div>' : '')
       + (m.letra||m.tag ? '<div class="pdf-modelo-tag">'+pe(bi,mp+'.letra', esc(m.letra||''))+(m.letra&&m.tag?' · ':'')+pe(bi,mp+'.tag', esc(m.tag||''))+'</div>' : '')
       + '<div class="pdf-modelo-nombre">'+pe(bi,mp+'.nombre', esc(m.nombre))+'</div>'
       + '<div class="pdf-modelo-desc">'+pe(bi,mp+'.desc', esc(m.desc||''))+'</div>'
@@ -1332,7 +1338,7 @@ function pdfInversion(b, bi){
 function pdfCierre(b, bi){
   const d = b.datos;
   const contactos = (d.contacto||[]).map(function(c,ci){ const cp='contacto.'+ci; return '<div><span>'+pe(bi,cp+'.label', esc(c.label))+'</span><span>'+pe(bi,cp+'.valor', esc(c.valor))+'</span></div>'; }).join('');
-  const imgSlot = '<div class="pdf-portada-right">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '')+'</div>';
+  const imgSlot = '<div class="pdf-portada-right">'+(d.imagen ? imgBgDiv(d.imagen,'cover') : '')+'</div>';
   return '<div class="pdf-page">'
     + '<div class="pdf-portada-layout">'
       + '<div class="pdf-portada-left">'
