@@ -600,6 +600,19 @@ function labelTipo(t){
   return { portada:'Portada', alcance:'Alcance / líneas', categoria:'Categoría de producto', inversion:'Inversión (tabla)', terminos:'Términos y condiciones', cierre:'Cierre / contacto',
     'portada-oscura':'Portada (oscura)', 'seccion-imagen':'Sección con imagen', 'costos':'Costos (tabla editable)' }[t] || t;
 }
+// Etiqueta de la pestaña de página: usa el título propio del bloque cuando existe
+// (para distinguir varias páginas del mismo tipo, ej. varias "Categoría de producto")
+function labelPagina(b){
+  let especifico = '';
+  if(b.tipo==='categoria') especifico = b.datos.titulo;
+  else if(b.tipo==='seccion-imagen') especifico = b.datos.categoria || b.datos.titulo;
+  else if(b.tipo==='costos') especifico = b.datos.titulo;
+  especifico = (especifico||'').trim();
+  if(especifico){
+    return especifico.length>26 ? especifico.slice(0,24)+'…' : especifico;
+  }
+  return labelTipo(b.tipo);
+}
 
 function renderEditor(){
   const m = document.getElementById('main');
@@ -664,7 +677,7 @@ function renderPageTabs(){
     if(b.tipo!=='portada'){
       extra += '<span class="page-tab-x" onclick="event.stopPropagation();quitarBloque('+i+')" title="Quitar">✕</span>';
     }
-    return '<div class="page-tab'+(activo?' activo':'')+'" onclick="irAPagina('+i+')">'+esc(labelTipo(b.tipo))+extra+'</div>';
+    return '<div class="page-tab'+(activo?' activo':'')+'" onclick="irAPagina('+i+')" title="'+esc(labelTipo(b.tipo))+'">'+esc(labelPagina(b))+extra+'</div>';
   }).join('');
   const addMenu = ['alcance','categoria','inversion','terminos','cierre','seccion-imagen','costos'].map(function(t){
     return '<button onclick="event.stopPropagation();agregarBloque(\''+t+'\')">+ '+labelTipo(t)+'</button>';
