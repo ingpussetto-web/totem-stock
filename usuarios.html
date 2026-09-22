@@ -188,6 +188,7 @@ function renderTabla(){
       <td>
         <select class="rol-select" onchange="cambiarRolUsuario('${u.id}', this.value)" ${esYo?'disabled title="No podés cambiar tu propio rol desde acá"':''}>
           <option value="operador" ${u.rol==='operador'?'selected':''}>Operador</option>
+          <option value="comercial" ${u.rol==='comercial'?'selected':''}>Comercial</option>
           <option value="gerencia" ${u.rol==='gerencia'?'selected':''}>Gerencia</option>
         </select>
       </td>
@@ -203,12 +204,17 @@ function renderTabla(){
   }).join('');
 }
 
+// Set por defecto según el rol (operador -> producción, comercial -> ventas).
+function modulosDefaultParaRol(rol){
+  return (ROLES_RESTRINGIDOS[rol] || {}).defaults || MODULOS_PRODUCCION_DEFAULT;
+}
+
 // Cuántos módulos tiene habilitados este usuario (si nunca se configuró a mano,
-// cuenta el set por defecto de producción, que es el que aplica hoy en la práctica).
+// cuenta el set por defecto de su rol, que es el que aplica hoy en la práctica).
 function moduloCount(u){
   const lista = (Array.isArray(u.modulos_habilitados) && u.modulos_habilitados.length)
     ? u.modulos_habilitados
-    : MODULOS_PRODUCCION_DEFAULT;
+    : modulosDefaultParaRol(u.rol);
   return lista.length;
 }
 
@@ -237,7 +243,7 @@ function abrirModalModulos(id){
   document.getElementById('modal-modulos-nombre').textContent = 'Módulos de ' + (u.nombre || u.email);
   const actuales = (Array.isArray(u.modulos_habilitados) && u.modulos_habilitados.length)
     ? u.modulos_habilitados
-    : MODULOS_PRODUCCION_DEFAULT;
+    : modulosDefaultParaRol(u.rol);
   const lista = document.getElementById('modal-modulos-lista');
   lista.innerHTML = MODULOS_CATALOGO.map(m => `
     <div class="mod-check-row">

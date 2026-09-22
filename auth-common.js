@@ -58,9 +58,22 @@ const MODULOS_CATALOGO = [
 // existente pierde acceso de golpe el día que se activa esta función.
 const MODULOS_PRODUCCION_DEFAULT = ['produccion.html', 'recepcion.html', 'stock_fase1.html', 'conteo_fisico.html', 'conteo_dinamico.html'];
 
+// Mismo concepto para el rol "comercial" (Carolina y futuros vendedores):
+// acceso de entrada a la columna comercial del hub, editable después a mano
+// desde usuarios.html igual que con los operadores.
+const MODULOS_COMERCIAL_DEFAULT = ['tablero_comercial.html', 'presupuestos.html', 'mensajeria_comercial.html'];
+
+// Roles que tienen su acceso restringido a una lista de módulos (a diferencia
+// de "gerencia", que ve todo). Cada uno con su set por defecto y el hub al
+// que se lo manda si pide una página fuera de su lista.
+const ROLES_RESTRINGIDOS = {
+  operador:  { defaults: MODULOS_PRODUCCION_DEFAULT, hub: 'index_produccion.html' },
+  comercial: { defaults: MODULOS_COMERCIAL_DEFAULT,   hub: 'index_comercial.html' },
+};
+
 // Páginas que cualquier usuario logueado puede abrir sin importar sus permisos
 // (no son "módulos de trabajo" en sí, son puntos de entrada/navegación).
-const PAGINAS_SIEMPRE_PERMITIDAS = ['index_produccion.html'];
+const PAGINAS_SIEMPRE_PERMITIDAS = ['index_produccion.html', 'index_comercial.html'];
 
 async function requireAuth(){
   try{
@@ -87,14 +100,15 @@ async function requireAuth(){
       irALogin('inactivo');
       return null;
     }
-    if(perfil.rol === 'operador'){
+    const restriccion = ROLES_RESTRINGIDOS[perfil.rol];
+    if(restriccion){
       const permitidos = (Array.isArray(perfil.modulos_habilitados) && perfil.modulos_habilitados.length)
         ? perfil.modulos_habilitados
-        : MODULOS_PRODUCCION_DEFAULT;
+        : restriccion.defaults;
       window._modulosPermitidos = permitidos;
       const pagina = location.pathname.split('/').pop();
       if(!PAGINAS_SIEMPRE_PERMITIDAS.includes(pagina) && !permitidos.includes(pagina)){
-        location.href = 'index_produccion.html';
+        location.href = restriccion.hub;
         return null;
       }
     } else {
@@ -140,13 +154,15 @@ async function requireAuthServicio(email, password){
 // su hub de producción en vez del hub general. Llamar después de
 // requireAuth(), pasándole el usuario que devuelve. Gerencia no se filtra.
 function filtrarNavPorRol(usuario){
-  if(!usuario || usuario.rol !== 'operador') return;
-  const permitidos = window._modulosPermitidos || MODULOS_PRODUCCION_DEFAULT;
-  document.querySelectorAll('.gernav-btn, .prodnav-btn, a.logo').forEach(a => {
+  if(!usuario) return;
+  const restriccion = ROLES_RESTRINGIDOS[usuario.rol];
+  if(!restriccion) return;
+  const permitidos = window._modulosPermitidos || restriccion.defaults;
+  document.querySelectorAll('.gernav-btn, .prodnav-btn, a.logo, .back-btn').forEach(a => {
     const href = a.getAttribute('href') || '';
     const pagina = href.split('/').pop().split('?')[0];
     if(pagina === 'index.html'){
-      a.setAttribute('href', 'index_produccion.html');
+      a.setAttribute('href', restriccion.hub);
       return;
     }
     if(!pagina || pagina === '#') return;
