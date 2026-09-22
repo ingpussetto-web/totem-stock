@@ -699,8 +699,9 @@ function renderCanvas(){
 
     if(esPagina){
       const pageClass = b.tipo==='portada-oscura' ? 'pdf-page pdf-page-oscura' : 'pdf-page';
+      const footerHtml = (b.tipo==='seccion-imagen' && b.datos.footerExtendido) ? pdfFooterExtendido() : pdfFooter(b.tipo==='portada-oscura');
       html += '<div class="ed-page-wrap" data-idx="'+i+'"><div class="ed-page-frame" style="width:'+Math.round(794*scale)+'px;height:'+Math.round(1123*scale)+'px;">'
-        + '<div class="'+pageClass+'" style="transform:scale('+scale+');">'+inner+pdfFooter(b.tipo==='portada-oscura')+'</div>'
+        + '<div class="'+pageClass+'" style="transform:scale('+scale+');">'+inner+footerHtml+'</div>'
       +'</div></div>';
     } else {
       html += '<div class="ed-page-wrap" data-idx="'+i+'">'+inner+'</div>';
