@@ -1415,7 +1415,7 @@ async function descargarPDF(){
     const jsPDFCtor = window.jspdf.jsPDF;
     const pdf = new jsPDFCtor({ unit:'px', format:[794,1123] });
     for(let i=0;i<paginas.length;i++){
-      const canvas = await html2canvas(paginas[i], { scale:1.6, useCORS:true, backgroundColor:'#ffffff' });
+      const canvas = await html2canvas(paginas[i], { scale:2.3, useCORS:true, backgroundColor:'#ffffff' });
       const img = canvas.toDataURL('image/jpeg', 0.93);
       if(i>0) pdf.addPage([794,1123]);
       pdf.addImage(img, 'JPEG', 0, 0, 794, 1123);
