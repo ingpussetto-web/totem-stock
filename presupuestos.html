@@ -191,6 +191,7 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .pdf-spec-row span:last-child{color:#1a1a2e;text-align:right}
 .pdf-modelo-precio{font-size:17px;font-weight:700;color:var(--pdf-accent);margin-top:8px}
 .pdf-modelo-usd{font-size:9.5px;color:#9aa0b4}
+.pdf-modelo-iva{font-size:10px;font-weight:400;color:#9aa0b4;margin-left:6px;}
 .pdf-comun-box{border:1px solid #e6e8f0;border-radius:10px;padding:14px 16px;margin-top:16px}
 .pdf-comun-title{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--pdf-accent);font-weight:600;margin-bottom:8px}
 .pdf-comun-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 16px;font-size:10.5px;color:#4b5266}
@@ -983,8 +984,8 @@ function edCategoria(b,i){
       + '<div class="pdf-modelo-desc">'+campoEd(mp+'.desc','Descripción',mo.desc,{tipo:'textarea',placeholder:'Descripción'})+'</div>'
       + specs
       + '<div class="ed-ghost" style="padding:4px;font-size:9.5px;" onclick="event.stopPropagation();agregarSpec('+i+','+mi+')">+ campo</div>'
-      + '<div class="pdf-modelo-precio">'+campoEd(mp+'.precioArs','Precio ARS (neto)',mo.precioArs,{tipo:'number',money:true})+(('precioArsAlt' in mo) ? ' / '+campoEd(mp+'.precioArsAlt','Precio ARS talla mayor (neto)',mo.precioArsAlt,{tipo:'number',money:true}) : '')+'</div>'
-      + '<div class="pdf-modelo-usd">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',mo.precioUsd,{tipo:'number'})+(('precioUsdAlt' in mo) ? ' / '+campoEd(mp+'.precioUsdAlt','Precio USD talla mayor (ref.)',mo.precioUsdAlt,{tipo:'number'}) : '')+' + IVA</div>'
+      + '<div class="pdf-modelo-precio">'+campoEd(mp+'.precioArs','Precio ARS (neto)',mo.precioArs,{tipo:'number',money:true})+(('precioArsAlt' in mo) ? ' / '+campoEd(mp+'.precioArsAlt','Precio ARS talla mayor (neto)',mo.precioArsAlt,{tipo:'number',money:true}) : '')+' <span class="pdf-modelo-iva">+ IVA (10,5%)</span></div>'
+      + '<div class="pdf-modelo-usd">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',mo.precioUsd,{tipo:'number'})+(('precioUsdAlt' in mo) ? ' / '+campoEd(mp+'.precioUsdAlt','Precio USD talla mayor (ref.)',mo.precioUsdAlt,{tipo:'number'}) : '')+' + IVA (10,5%)</div>'
       + '<div style="margin-top:8px;font-size:9.5px;">'+campoEd(mp+'.productoV14','Producto (id interno, opcional)',mo.productoV14,{placeholder:'id interno, opcional (ej: turn_32_incl)'})+'</div>'
       + (('precioArsAlt' in mo) ? '<div style="margin-top:4px;font-size:9.5px;">'+campoEd(mp+'.productoV14Alt','Producto talla mayor (id interno, opcional)',mo.productoV14Alt,{placeholder:'id interno talla mayor, opcional'})+'</div>' : '')
       + '<button class="ed-tbtn" style="position:static;width:auto;padding:3px 8px;margin-top:5px;font-size:9.5px;" onclick="event.stopPropagation();traerPrecioReal('+i+','+mi+')">🔄 Traer precio real</button>'
@@ -1164,7 +1165,7 @@ function edInversion(b,i){
       + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.especiales\','+ei+')">✕</span></span>'
       + '<div><div class="pdf-especial-nombre">'+campoEd(ep+'.nombre','Nombre',e.nombre)+'</div>'
         + '<div class="pdf-especial-desc">'+campoEd(ep+'.desc','Descripción',e.desc,{placeholder:'Descripción'})+'</div></div>'
-      + '<div class="pdf-especial-precio">'+campoEd(ep+'.precio','Precio (dejá 0 para "a cotizar")',e.precio,{tipo:'number',money:true,placeholder:'A cotizar'})+'</div>'
+      + '<div class="pdf-especial-precio">'+campoEd(ep+'.precio','Precio (dejá 0 para "a cotizar")',e.precio,{tipo:'number',money:true,placeholder:'A cotizar'})+' <span class="pdf-modelo-iva">+ IVA (10,5%)</span></div>'
     +'</div>';
   }).join('');
   const dolarRow = '<div class="pdf-dolar-row ed-item">'
@@ -1179,7 +1180,7 @@ function edInversion(b,i){
     + '<div class="ed-ghost" style="margin:6px 0 10px;padding:6px;font-size:9.5px;" onclick="event.stopPropagation();actualizarTodosPrecios('+i+')">🔄 Actualizar todos los precios del presupuesto con esta cotización</div>'
     + '<div class="ed-ghost" style="margin:6px 0 4px;padding:6px;font-size:9.5px;background:#eef1fb;border-color:#c9cdf5;" onclick="event.stopPropagation();actualizarPreciosDesdeLista()">💰 Actualizar precios conforme lista de precios</div>'
     + (d.preciosSyncFecha ? '<div style="font-size:9.5px;color:#9aa0b4;margin:0 0 10px;">Última actualización conforme lista de precios: '+esc(d.preciosSyncFecha)+'</div>' : '<div style="margin-bottom:10px;"></div>')
-    + '<table class="pdf-inv-table"><thead><tr><th>Modelo</th><th>Detalle</th><th style="text-align:right;">Precio</th><th></th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+    + '<table class="pdf-inv-table"><thead><tr><th>Modelo</th><th>Detalle</th><th style="text-align:right;">Precio + IVA (10,5%)</th><th></th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
     + especiales
     + '<div class="ed-ghost" onclick="event.stopPropagation();agregarEspecial('+i+')">+ Agregar ítem especial</div>';
 }
@@ -1515,8 +1516,8 @@ function pdfCategoria(b, bi){
       + '<div class="pdf-modelo-nombre">'+pe(bi,mp+'.nombre', esc(m.nombre))+'</div>'
       + '<div class="pdf-modelo-desc">'+pe(bi,mp+'.desc', esc(m.desc||''))+'</div>'
       + specs
-      + '<div class="pdf-modelo-precio">'+fmtMoney(m.precioArs)+(('precioArsAlt' in m) ? ' / '+fmtMoney(m.precioArsAlt) : '')+'</div>'
-      + (m.precioUsd ? '<div class="pdf-modelo-usd">USD '+Math.round(m.precioUsd)+(('precioUsdAlt' in m) ? ' / '+Math.round(m.precioUsdAlt) : '')+' + IVA</div>' : '')
+      + '<div class="pdf-modelo-precio">'+fmtMoney(m.precioArs)+(('precioArsAlt' in m) ? ' / '+fmtMoney(m.precioArsAlt) : '')+' <span class="pdf-modelo-iva">+ IVA (10,5%)</span></div>'
+      + (m.precioUsd ? '<div class="pdf-modelo-usd">USD '+Math.round(m.precioUsd)+(('precioUsdAlt' in m) ? ' / '+Math.round(m.precioUsdAlt) : '')+' + IVA (10,5%)</div>' : '')
     +'</div>';
   }).join('');
   const comun = (d.comunBullets||[]).length ? '<div class="pdf-comun-box"><div class="pdf-comun-title">'+pe(bi,'comunTitulo', esc(d.comunTitulo||'Común a la línea'))+'</div><div class="pdf-comun-grid">'+(d.comunBullets||[]).map(function(bu,bi2){ return '<div>· '+pe(bi,'comunBullets.'+bi2, esc(bu))+'</div>'; }).join('')+'</div></div>' : '';
@@ -1550,7 +1551,7 @@ function pdfInversion(b, bi){
   });
   const especiales = (d.especiales||[]).map(function(e,ei){
     const ep = 'especiales.'+ei;
-    return '<div class="pdf-especial-box"><div><div class="pdf-especial-nombre">'+pe(bi,ep+'.nombre', esc(e.nombre))+'</div><div class="pdf-especial-desc">'+pe(bi,ep+'.desc', esc(e.desc||''))+'</div></div><div class="pdf-especial-precio">'+(e.precio ? fmtMoney(e.precio) : 'A cotizar')+'</div></div>';
+    return '<div class="pdf-especial-box"><div><div class="pdf-especial-nombre">'+pe(bi,ep+'.nombre', esc(e.nombre))+'</div><div class="pdf-especial-desc">'+pe(bi,ep+'.desc', esc(e.desc||''))+'</div></div><div class="pdf-especial-precio">'+(e.precio ? fmtMoney(e.precio)+' <span class="pdf-modelo-iva">+ IVA (10,5%)</span>' : 'A cotizar')+'</div></div>';
   }).join('');
   // Términos (si existe un bloque de términos, se listan acá abajo)
   const terminosIdx = doc.contenido.findIndex(function(x){ return x.tipo==='terminos'; });
@@ -1562,7 +1563,7 @@ function pdfInversion(b, bi){
     + '<div class="pdf-h2">'+pe(bi,'titulo', esc(d.titulo))+'</div>'
     + '<div class="pdf-bar"></div>'
     + dolarRow
-    + '<table class="pdf-inv-table"><thead><tr><th>Modelo</th><th>Detalle</th><th style="text-align:right;">Precio</th><th></th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+    + '<table class="pdf-inv-table"><thead><tr><th>Modelo</th><th>Detalle</th><th style="text-align:right;">Precio + IVA (10,5%)</th><th></th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
     + especiales
     + terminosHtml
     + pdfFooter()
