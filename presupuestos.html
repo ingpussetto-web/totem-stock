@@ -126,11 +126,12 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .pdf-footer{position:absolute;left:54px;right:54px;bottom:28px;display:flex;justify-content:space-between;font-size:9.5px;color:#9aa0b4;border-top:1px solid #e6e8f0;padding-top:8px;font-family:'DM Mono',monospace}
 .pdf-cover-meta{display:flex;gap:40px;margin-top:22px}
 .pdf-portada-logo{width:104px;margin-bottom:26px;display:block}
-.pdf-portada-layout{display:flex;height:100%;margin:-56px -54px;}
-.pdf-portada-left{flex:0 0 56%;max-width:56%;padding:56px 32px 56px 54px;display:flex;flex-direction:column;justify-content:center;position:relative;}
+.pdf-portada-layout{display:flex;position:absolute;inset:0;}
+.pdf-portada-left{flex:0 0 56%;max-width:56%;padding:56px 32px 56px 54px;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:2;}
 .pdf-portada-right{flex:0 0 44%;position:relative;overflow:hidden;background:linear-gradient(150deg,#eef1fb 0%,#f8f7ff 55%,#eef4fb 100%);}
 .pdf-portada-right img{width:100%;height:100%;object-fit:cover;display:block}
-.pdf-portada-right .ed-img-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;cursor:pointer}
+.pdf-portada-right::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,#f8f7ff 0%,rgba(248,247,255,.75) 10%,rgba(248,247,255,.32) 22%,rgba(248,247,255,0) 42%);}
+.pdf-portada-right .ed-img-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;cursor:pointer;z-index:2}
 .ed-canvas .pdf-portada-right{cursor:pointer}
 .ed-canvas .pdf-portada-right:hover{outline:2px solid #4c3fe0;outline-offset:-2px}
 .pdf-cover-meta div{font-size:10px;color:#9aa0b4;text-transform:uppercase;letter-spacing:.06em}
