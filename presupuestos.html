@@ -116,14 +116,46 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .loader{padding:40px;text-align:center;color:var(--text3)}
 
 /* ── Render para PDF (fuera de pantalla, hoja clara) ───────────────────── */
+/* --pdf-accent: color de marca del documento. Por defecto violeta (Totem Nube);
+   se puede pisar por plantilla/documento vía doc.tema (ver aplicarTema()). */
+#ed-canvas, #pdf-render{ --pdf-accent:#4c3fe0; --pdf-accent-bg:#f6f5ff; --pdf-accent-border:#e2e0fb; }
 #pdf-render{position:fixed;left:-99999px;top:0;width:0;height:0;overflow:visible}
 .pdf-page{width:794px;height:1123px;background:#ffffff;color:#1a1a2e;font-family:'DM Sans',sans-serif;position:relative;padding:56px 54px;overflow:hidden}
-.pdf-eyebrow{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#4c3fe0;font-weight:600;margin-bottom:8px}
+.pdf-eyebrow{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--pdf-accent);font-weight:600;margin-bottom:8px}
 .pdf-h1{font-size:30px;font-weight:700;color:#151527;line-height:1.15;margin-bottom:14px}
 .pdf-h2{font-size:22px;font-weight:700;color:#151527;margin-bottom:6px}
-.pdf-bar{width:46px;height:3px;background:#4c3fe0;margin-bottom:14px}
+.pdf-bar{width:46px;height:3px;background:var(--pdf-accent);margin-bottom:14px}
 .pdf-p{font-size:12.5px;line-height:1.6;color:#4b5266;margin-bottom:10px}
 .pdf-footer{position:absolute;left:54px;right:54px;bottom:28px;display:flex;justify-content:space-between;font-size:9.5px;color:#9aa0b4;border-top:1px solid #e6e8f0;padding-top:8px;font-family:'DM Mono',monospace}
+.pdf-page-oscura{background:#13171a;color:#e8eaed}
+.pdf-footer-oscuro{color:#8890a0;border-top-color:rgba(255,255,255,.14)}
+.pdf-footer-ext{position:absolute;left:54px;right:54px;bottom:22px;display:flex;justify-content:space-between;gap:20px;font-size:8px;line-height:1.55;color:#9aa0b4;border-top:1px solid #e6e8f0;padding-top:8px;font-family:'DM Mono',monospace}
+.pdf-footer-ext > div{display:flex;flex-direction:column}
+.pdf-footer-ext > div:last-child{text-align:right}
+.pdf-page-oscura .pdf-eyebrow{color:var(--pdf-accent)}
+.pdf-page-oscura .pdf-h1{color:#ffffff}
+.pdf-page-oscura .pdf-p{color:#c3c7d1}
+.pdf-portada-oscura-logo{width:150px;display:block;margin-bottom:56px}
+.pdf-portada-oscura-img{width:100%;border-radius:10px;overflow:hidden;margin-top:26px}
+.pdf-portada-oscura-img img,.pdf-portada-oscura-img .img-bg{width:100%;display:block;background-size:contain;background-position:top center;background-repeat:no-repeat}
+.pdf-portada-oscura-cap{font-size:10px;color:#8890a0;margin-top:10px}
+/* ── Sección con imagen (turnero/llamador/etc.) ─────────────────────────── */
+.pdf-seccion-img{width:100%;margin-top:16px;border-radius:6px;overflow:hidden;}
+.pdf-seccion-img img,.pdf-seccion-img .img-bg{width:100%;display:block;background-size:contain;background-position:top center;background-repeat:no-repeat}
+/* ── Costos (tabla editable, estilo Piedra Blanca) ──────────────────────── */
+.pdf-costos-tablecap{font-size:13px;font-weight:700;color:#151527;margin:14px 0 8px}
+.pdf-costos-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}
+.pdf-costos-table th{text-align:left;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9aa0b4;padding:0 10px 7px 0;border-bottom:1px solid #d8dbd6}
+.pdf-costos-table th.price{text-align:right}
+.pdf-costos-table td{padding:11px 10px 11px 0;border-bottom:1px solid #eceeec;vertical-align:top}
+.pdf-costos-nombre{font-weight:700;font-size:11.5px;color:#151527}
+.pdf-costos-sublabel{font-size:9.5px;color:#9aa0b4;margin-top:2px;line-height:1.35}
+.pdf-costos-desc{font-size:10px;line-height:1.5;color:#4b5266}
+.pdf-costos-precio{text-align:right;width:150px}
+.pdf-costos-precio .amt{font-weight:700;color:var(--pdf-accent);font-size:12px}
+.pdf-costos-precio .sub{font-size:9px;color:#9aa0b4;margin-top:3px;line-height:1.4}
+.pdf-costos-tag{display:inline-block;font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pdf-accent);background:var(--pdf-accent-bg);padding:3px 7px;border-radius:3px;margin:10px 0 8px}
+.pdf-costos-notas{font-size:9.5px;color:#9aa0b4;line-height:1.6;margin-top:8px}
 .pdf-cover-meta{display:flex;gap:40px;margin-top:22px}
 .pdf-portada-logo{width:104px;margin-bottom:26px;display:block}
 .pdf-portada-layout{display:flex;position:absolute;inset:0;}
@@ -138,35 +170,35 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .pdf-cover-meta strong{display:block;font-size:12.5px;color:#1a1a2e;font-weight:500;text-transform:none;letter-spacing:0;margin-top:3px}
 .pdf-linea-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
 .pdf-linea-card{border:1px solid #e6e8f0;border-radius:10px;padding:14px}
-.pdf-linea-tag{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#4c3fe0;font-weight:600;margin-bottom:8px}
+.pdf-linea-tag{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--pdf-accent);font-weight:600;margin-bottom:8px}
 .pdf-linea-bullets{font-size:10.5px;color:#4b5266;line-height:1.55;list-style:none;margin-bottom:8px}
 .pdf-linea-bullets li{padding-left:10px;position:relative;margin-bottom:3px}
 .pdf-linea-bullets li::before{content:'·';position:absolute;left:0}
 .pdf-linea-ventaja{font-size:10px;color:#6b7280;border-top:1px solid #e6e8f0;padding-top:8px}
 .pdf-modelos-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
-.pdf-modelo-tag{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#4c3fe0;font-weight:600;margin-bottom:3px}
+.pdf-modelo-tag{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--pdf-accent);font-weight:600;margin-bottom:3px}
 .pdf-modelo-nombre{font-size:14.5px;font-weight:700;color:#151527;margin-bottom:5px}
 .pdf-modelo-desc{font-size:9.5px;color:#6b7280;line-height:1.45;margin-bottom:8px}
 .pdf-spec-row{display:flex;justify-content:space-between;font-size:9.5px;padding:4px 0;border-top:1px solid #eef0f6}
 .pdf-spec-row span:first-child{color:#9aa0b4}
 .pdf-spec-row span:last-child{color:#1a1a2e;text-align:right}
-.pdf-modelo-precio{font-size:17px;font-weight:700;color:#4c3fe0;margin-top:8px}
+.pdf-modelo-precio{font-size:17px;font-weight:700;color:var(--pdf-accent);margin-top:8px}
 .pdf-modelo-usd{font-size:9.5px;color:#9aa0b4}
 .pdf-comun-box{border:1px solid #e6e8f0;border-radius:10px;padding:14px 16px;margin-top:16px}
-.pdf-comun-title{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#4c3fe0;font-weight:600;margin-bottom:8px}
+.pdf-comun-title{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--pdf-accent);font-weight:600;margin-bottom:8px}
 .pdf-comun-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 16px;font-size:10.5px;color:#4b5266}
 .pdf-inv-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:11px}
-.pdf-inv-table th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#9aa0b4;padding:6px 0;border-bottom:2px solid #4c3fe0}
+.pdf-inv-table th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#9aa0b4;padding:6px 0;border-bottom:2px solid var(--pdf-accent)}
 .pdf-inv-table td{padding:8px 0;border-bottom:1px solid #eef0f6;vertical-align:top}
-.pdf-inv-table td.num{text-align:right;font-weight:600;color:#4c3fe0}
-.pdf-inv-cat{font-size:9px;color:#4c3fe0;text-transform:uppercase;letter-spacing:.08em;font-weight:600;padding-top:14px !important;border-bottom:1px solid #4c3fe0 !important}
-.pdf-especial-box{background:#f6f5ff;border:1px solid #e2e0fb;border-radius:10px;padding:12px 16px;margin-top:10px;display:flex;justify-content:space-between;gap:14px}
+.pdf-inv-table td.num{text-align:right;font-weight:600;color:var(--pdf-accent)}
+.pdf-inv-cat{font-size:9px;color:var(--pdf-accent);text-transform:uppercase;letter-spacing:.08em;font-weight:600;padding-top:14px !important;border-bottom:1px solid var(--pdf-accent) !important}
+.pdf-especial-box{background:var(--pdf-accent-bg);border:1px solid var(--pdf-accent-border);border-radius:10px;padding:12px 16px;margin-top:10px;display:flex;justify-content:space-between;gap:14px}
 .pdf-especial-nombre{font-size:12px;font-weight:600;color:#151527}
 .pdf-especial-desc{font-size:10px;color:#6b7280;margin-top:2px}
-.pdf-especial-precio{font-size:14px;font-weight:700;color:#4c3fe0;white-space:nowrap}
+.pdf-especial-precio{font-size:14px;font-weight:700;color:var(--pdf-accent);white-space:nowrap}
 .pdf-terminos{margin-top:18px;font-size:9.5px;color:#6b7280;line-height:1.6}
 .pdf-dolar-row{font-size:10.5px;color:#6b7280;margin:6px 0 4px;}
-.pdf-dolar-row strong{color:#4c3fe0}
+.pdf-dolar-row strong{color:var(--pdf-accent)}
 .pdf-terminos b{color:#1a1a2e}
 .pdf-cierre-contacto{margin-top:22px;font-size:11px;color:#4b5266}
 .pdf-cierre-contacto div{display:flex;gap:10px;padding:5px 0}
@@ -429,7 +461,7 @@ function renderSidebar(){
 async function abrirPresupuesto(id){
   const row = (await api('presupuestos?id=eq.'+id+'&select=*'))[0];
   if(!row) return;
-  doc = { id:row.id, template_id:row.template_id, cliente:row.cliente||'', contacto:row.contacto||'', numero:row.numero||'', estado:row.estado||'borrador', contenido: row.contenido||[], esTemplate:false };
+  doc = { id:row.id, template_id:row.template_id, cliente:row.cliente||'', contacto:row.contacto||'', numero:row.numero||'', estado:row.estado||'borrador', contenido: row.contenido||[], tema:row.tema||'violeta', esTemplate:false };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -437,7 +469,7 @@ async function abrirPresupuesto(id){
 async function abrirTemplate(id){
   const row = (await api('presupuesto_templates?id=eq.'+id+'&select=*'))[0];
   if(!row) return;
-  doc = { id:row.id, nombre:row.nombre||'', contenido: row.contenido||[], esTemplate:true };
+  doc = { id:row.id, nombre:row.nombre||'', contenido: row.contenido||[], tema:row.tema||'violeta', esTemplate:true };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -452,15 +484,17 @@ function abrirPickerNuevo(){
 async function crearDesdeTemplate(templateId){
   cerrarModal('modal-picker');
   let contenido = [];
+  let tema = 'violeta';
   if(templateId){
-    const row = (await api('presupuesto_templates?id=eq.'+templateId+'&select=contenido'))[0];
+    const row = (await api('presupuesto_templates?id=eq.'+templateId+'&select=contenido,tema'))[0];
     contenido = row ? JSON.parse(JSON.stringify(row.contenido||[])) : [];
+    tema = (row && row.tema) || 'violeta';
     // Regenerar ids para que no choquen con la plantilla original
     regenerarIds(contenido);
   } else {
     contenido = [ defaultBlock('portada') ];
   }
-  doc = { id:null, template_id:templateId||null, cliente:'', contacto:'', numero:'', estado:'borrador', contenido, esTemplate:false };
+  doc = { id:null, template_id:templateId||null, cliente:'', contacto:'', numero:'', estado:'borrador', contenido, tema, esTemplate:false };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -471,7 +505,8 @@ function generarPresupuestoDesdeTemplate(){
   const contenido = JSON.parse(JSON.stringify(doc.contenido));
   regenerarIds(contenido);
   const templateId = doc.id;
-  doc = { id:null, template_id:templateId, cliente:'', contacto:'', numero:'', estado:'borrador', contenido, esTemplate:false };
+  const tema = doc.tema || 'violeta';
+  doc = { id:null, template_id:templateId, cliente:'', contacto:'', numero:'', estado:'borrador', contenido, tema, esTemplate:false };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -505,8 +540,12 @@ function defaultBlock(tipo){
       {id:uid(),label:'Consultas',valor:'consultas@totems.com.ar'},
       {id:uid(),label:'Sitio',valor:'totemnube.com.ar'},
   ] } };
+  if(tipo==='portada-oscura') return { id:uid(), tipo:'portada-oscura', datos:{ categoria:'PRESENTACIÓN COMERCIAL', titulo:'Nombre del sistema.', bajada:'Descripción breve de la propuesta.', imagen:'', imagenCaption:'' } };
+  if(tipo==='seccion-imagen') return { id:uid(), tipo:'seccion-imagen', datos:{ categoria:'SECCIÓN', titulo:'Título de la sección', texto:'', imagen:'', imagenAncho:100 } };
+  if(tipo==='costos') return { id:uid(), tipo:'costos', datos:{ categoria:'INVERSIÓN', titulo:'Costos de implementación', texto:'', items:[], modulos:[], notas:[] } };
   return { id:uid(), tipo, datos:{} };
 }
+function defaultItemCosto(){ return { id:uid(), nombre:'Nuevo ítem', sublabel:'', desc:'', precio:'', precioSub:'' }; }
 function defaultModelo(){ return { id:uid(), letra:'', tag:'', nombre:'Nuevo modelo', desc:'', specs:[{label:'Pantalla',valor:''}], productoV14:'', precioArs:0, precioUsd:0, imagen:'' }; }
 
 // ─── PATH GET/SET ────────────────────────────────────────────────────────
@@ -523,7 +562,8 @@ let paginaActiva = 0;   // índice del bloque/página que se ve en el canvas
 let campoActivo = null; // {path,label,tipo} del campo seleccionado en el panel
 
 function labelTipo(t){
-  return { portada:'Portada', alcance:'Alcance / líneas', categoria:'Categoría de producto', inversion:'Inversión (tabla)', terminos:'Términos y condiciones', cierre:'Cierre / contacto' }[t] || t;
+  return { portada:'Portada', alcance:'Alcance / líneas', categoria:'Categoría de producto', inversion:'Inversión (tabla)', terminos:'Términos y condiciones', cierre:'Cierre / contacto',
+    'portada-oscura':'Portada (oscura)', 'seccion-imagen':'Sección con imagen', 'costos':'Costos (tabla editable)' }[t] || t;
 }
 
 function renderEditor(){
@@ -584,7 +624,7 @@ function renderPageTabs(){
     }
     return '<div class="page-tab'+(activo?' activo':'')+'" onclick="irAPagina('+i+')">'+esc(labelTipo(b.tipo))+extra+'</div>';
   }).join('');
-  const addMenu = ['alcance','categoria','inversion','terminos','cierre'].map(function(t){
+  const addMenu = ['alcance','categoria','inversion','terminos','cierre','seccion-imagen','costos'].map(function(t){
     return '<button onclick="event.stopPropagation();agregarBloque(\''+t+'\')">+ '+labelTipo(t)+'</button>';
   }).join('');
   return '<div class="page-tabs">'+tabs
@@ -626,9 +666,20 @@ function moverBloque(i, dir){
 }
 
 // ─── CANVAS (vista tipo PDF, editable in-place, scroll continuo) ────────
+const TEMAS = {
+  violeta: { accent:'#4c3fe0', accentBg:'#f6f5ff', accentBorder:'#e2e0fb' },
+  azul:    { accent:'#2436b8', accentBg:'#eef0fb', accentBorder:'#d7dbf5' }
+};
+function aplicarTema(el){
+  const t = TEMAS[doc && doc.tema] || TEMAS.violeta;
+  el.style.setProperty('--pdf-accent', t.accent);
+  el.style.setProperty('--pdf-accent-bg', t.accentBg);
+  el.style.setProperty('--pdf-accent-border', t.accentBorder);
+}
 function renderCanvas(){
   const cont = document.getElementById('ed-canvas');
   if(!cont) return;
+  aplicarTema(cont);
   if(!doc.contenido.length){ cont.innerHTML=''; return; }
   const availW = Math.max(320, cont.clientWidth - 20);
   const scale = Math.min(1, availW/794);
@@ -641,11 +692,15 @@ function renderCanvas(){
     else if(b.tipo==='inversion') inner = edInversion(b, i);
     else if(b.tipo==='terminos'){ inner = edTerminos(b, i); esPagina = false; }
     else if(b.tipo==='cierre') inner = edCierre(b, i);
+    else if(b.tipo==='portada-oscura') inner = edPortadaOscura(b, i);
+    else if(b.tipo==='seccion-imagen') inner = edSeccionImagen(b, i);
+    else if(b.tipo==='costos') inner = edCostos(b, i);
     else inner = '';
 
     if(esPagina){
+      const pageClass = b.tipo==='portada-oscura' ? 'pdf-page pdf-page-oscura' : 'pdf-page';
       html += '<div class="ed-page-wrap" data-idx="'+i+'"><div class="ed-page-frame" style="width:'+Math.round(794*scale)+'px;height:'+Math.round(1123*scale)+'px;">'
-        + '<div class="pdf-page" style="transform:scale('+scale+');">'+inner+pdfFooter()+'</div>'
+        + '<div class="'+pageClass+'" style="transform:scale('+scale+');">'+inner+pdfFooter(b.tipo==='portada-oscura')+'</div>'
       +'</div></div>';
     } else {
       html += '<div class="ed-page-wrap" data-idx="'+i+'">'+inner+'</div>';
@@ -874,6 +929,7 @@ function edCategoria(b,i){
       + '<div class="pdf-modelo-precio">'+campoEd(mp+'.precioArs','Precio ARS (neto)',mo.precioArs,{tipo:'number',money:true})+(('precioArsAlt' in mo) ? ' / '+campoEd(mp+'.precioArsAlt','Precio ARS talla mayor (neto)',mo.precioArsAlt,{tipo:'number',money:true}) : '')+'</div>'
       + '<div class="pdf-modelo-usd">USD '+campoEd(mp+'.precioUsd','Precio USD (ref.)',mo.precioUsd,{tipo:'number'})+(('precioUsdAlt' in mo) ? ' / '+campoEd(mp+'.precioUsdAlt','Precio USD talla mayor (ref.)',mo.precioUsdAlt,{tipo:'number'}) : '')+' + IVA</div>'
       + '<div style="margin-top:8px;font-size:9.5px;">'+campoEd(mp+'.productoV14','Producto (id interno, opcional)',mo.productoV14,{placeholder:'id interno, opcional (ej: turn_32_incl)'})+'</div>'
+      + (('precioArsAlt' in mo) ? '<div style="margin-top:4px;font-size:9.5px;">'+campoEd(mp+'.productoV14Alt','Producto talla mayor (id interno, opcional)',mo.productoV14Alt,{placeholder:'id interno talla mayor, opcional'})+'</div>' : '')
       + '<button class="ed-tbtn" style="position:static;width:auto;padding:3px 8px;margin-top:5px;font-size:9.5px;" onclick="event.stopPropagation();traerPrecioReal('+i+','+mi+')">🔄 Traer precio real</button>'
     +'</div>';
   }).join('');
@@ -952,21 +1008,86 @@ function quitarModelo(bi,mi){ snap(); doc.contenido[bi].datos.modelos.splice(mi,
 function agregarSpec(bi,mi){ snap(); doc.contenido[bi].datos.modelos[mi].specs.push({label:'',valor:''}); renderEditor(); }
 function quitarSpec(bi,mi,si){ snap(); doc.contenido[bi].datos.modelos[mi].specs.splice(si,1); renderEditor(); }
 
+async function buscarPrecioReal(prodId){
+  if(!prodId) return null;
+  let fila = (await api('precio_venta_aplicado?producto_v14=eq.'+encodeURIComponent(prodId)+'&select=precio_usd_neto,updated_at'))[0];
+  if(!fila) fila = (await api('precios_lista_real?producto_v14=eq.'+encodeURIComponent(prodId)+'&select=precio_usd_neto,updated_at'))[0];
+  return fila || null;
+}
 async function traerPrecioReal(bi,mi){
   const mo = doc.contenido[bi].datos.modelos[mi];
   const prodId = (mo.productoV14||'').trim();
+  const prodIdAlt = (mo.productoV14Alt||'').trim();
   if(!prodId){ toast('Escribí primero el id de producto'); return; }
   try{
-    let fila = (await api('precio_venta_aplicado?producto_v14=eq.'+encodeURIComponent(prodId)+'&select=precio_usd_neto'))[0];
-    if(!fila) fila = (await api('precios_lista_real?producto_v14=eq.'+encodeURIComponent(prodId)+'&select=precio_usd_neto'))[0];
+    const fila = await buscarPrecioReal(prodId);
     if(!fila){ toast('No hay precio real cargado para ese id todavía'); return; }
+    const filaAlt = prodIdAlt ? await buscarPrecioReal(prodIdAlt) : null;
     const cfg = (await api('config_cotizador?key=eq.dolar&select=value'))[0];
     const dolar = cfg ? parseFloat(cfg.value)||1420 : 1420;
     snap();
     mo.precioUsd = fila.precio_usd_neto;
     mo.precioArs = Math.round(fila.precio_usd_neto * dolar);
+    if(filaAlt){
+      mo.precioUsdAlt = filaAlt.precio_usd_neto;
+      mo.precioArsAlt = Math.round(filaAlt.precio_usd_neto * dolar);
+    }
     renderEditor();
-    toast('Precio actualizado desde la lista real');
+    toast(filaAlt || !prodIdAlt ? 'Precio actualizado desde la lista real' : 'Precio base actualizado — no había precio real para la talla mayor');
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+// ─── Actualización masiva conforme lista de precios ───────────────────────
+async function actualizarPreciosDesdeLista(){
+  if(!doc) return;
+  const items = []; // {bi,mi,campoBase:'precioArs', ...}
+  doc.contenido.forEach(function(b,bi){
+    if(b.tipo!=='categoria') return;
+    (b.datos.modelos||[]).forEach(function(mo,mi){
+      const idBase = (mo.productoV14||'').trim();
+      const idAlt = (mo.productoV14Alt||'').trim();
+      if(idBase) items.push({bi:bi,mi:mi,id:idBase,alt:false});
+      if(idAlt) items.push({bi:bi,mi:mi,id:idAlt,alt:true});
+    });
+  });
+  if(!items.length){ toast('Ningún modelo tiene cargado un id de producto (id interno) todavía'); return; }
+  if(!confirm('Esto va a pisar los precios de '+items.length+' campo(s) con lo último cargado en la lista de precios (Comparar precios de lista). Los que edites a mano después no se tocan hasta que vuelvas a tocar este botón. ¿Continuar?')) return;
+
+  try{
+    const ids = [...new Set(items.map(function(it){ return it.id; }))];
+    const inList = ids.map(encodeURIComponent).join(',');
+    const [aplicados, reales, cfg] = await Promise.all([
+      api('precio_venta_aplicado?producto_v14=in.('+inList+')&select=producto_v14,precio_usd_neto,updated_at'),
+      api('precios_lista_real?producto_v14=in.('+inList+')&select=producto_v14,precio_usd_neto,updated_at'),
+      api('config_cotizador?key=eq.dolar&select=value')
+    ]);
+    const dolar = (cfg&&cfg[0]) ? parseFloat(cfg[0].value)||1420 : 1420;
+    const porId = {};
+    reales.forEach(function(r){ porId[r.producto_v14] = r; });
+    aplicados.forEach(function(r){ porId[r.producto_v14] = r; }); // aplicado pisa a staging si hay ambos
+
+    snap();
+    let ok=0, sinDato=0;
+    let fechaMax = null;
+    items.forEach(function(it){
+      const fila = porId[it.id];
+      if(!fila){ sinDato++; return; }
+      const mo = doc.contenido[it.bi].datos.modelos[it.mi];
+      const usd = fila.precio_usd_neto;
+      if(it.alt){ mo.precioUsdAlt = usd; mo.precioArsAlt = Math.round(usd*dolar); }
+      else { mo.precioUsd = usd; mo.precioArs = Math.round(usd*dolar); }
+      ok++;
+      const f = fila.updated_at ? new Date(fila.updated_at) : null;
+      if(f && (!fechaMax || f>fechaMax)) fechaMax = f;
+    });
+    // Nota de sincronización, se muestra en la página de Inversión
+    const inversionBlock = doc.contenido.find(function(b){ return b.tipo==='inversion'; });
+    if(inversionBlock){
+      const fechaTxt = (fechaMax||new Date()).toLocaleDateString('es-AR');
+      inversionBlock.datos.preciosSyncFecha = fechaTxt;
+    }
+    renderEditor();
+    toast('Precios actualizados: '+ok+' de '+items.length+(sinDato ? ' ('+sinDato+' sin precio real cargado todavía)' : ''), 5000);
   }catch(e){ toast('Error: '+e.message); }
 }
 
@@ -999,6 +1120,8 @@ function edInversion(b,i){
     + '<div class="pdf-bar"></div>'
     + dolarRow
     + '<div class="ed-ghost" style="margin:6px 0 10px;padding:6px;font-size:9.5px;" onclick="event.stopPropagation();actualizarTodosPrecios('+i+')">🔄 Actualizar todos los precios del presupuesto con esta cotización</div>'
+    + '<div class="ed-ghost" style="margin:6px 0 4px;padding:6px;font-size:9.5px;background:#eef1fb;border-color:#c9cdf5;" onclick="event.stopPropagation();actualizarPreciosDesdeLista()">💰 Actualizar precios conforme lista de precios</div>'
+    + (d.preciosSyncFecha ? '<div style="font-size:9.5px;color:#9aa0b4;margin:0 0 10px;">Última actualización conforme lista de precios: '+esc(d.preciosSyncFecha)+'</div>' : '<div style="margin-bottom:10px;"></div>')
     + '<table class="pdf-inv-table"><thead><tr><th>Modelo</th><th>Detalle</th><th style="text-align:right;">Precio</th><th></th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'
     + especiales
     + '<div class="ed-ghost" onclick="event.stopPropagation();agregarEspecial('+i+')">+ Agregar ítem especial</div>';
@@ -1096,7 +1219,7 @@ function agregarContacto(bi){ snap(); doc.contenido[bi].datos.contacto.push({id:
 // ─── GUARDAR / BORRAR ────────────────────────────────────────────────────
 async function guardarPresupuesto(){
   try{
-    const body = { cliente:doc.cliente, contacto:doc.contacto, numero:doc.numero, estado:doc.estado, contenido:doc.contenido, template_id:doc.template_id||null, creado_por:usuario.nombre||usuario.email };
+    const body = { cliente:doc.cliente, contacto:doc.contacto, numero:doc.numero, estado:doc.estado, contenido:doc.contenido, template_id:doc.template_id||null, tema:doc.tema||'violeta', creado_por:usuario.nombre||usuario.email };
     if(doc.id){
       await api('presupuestos?id=eq.'+doc.id, 'PATCH', Object.assign({}, body, {updated_at:new Date().toISOString()}));
     } else {
@@ -1121,7 +1244,7 @@ async function guardarComoTemplate(){
   if(!nombre) return;
   try{
     const contenido = JSON.parse(JSON.stringify(doc.contenido));
-    const res = await api('presupuesto_templates', 'POST', [{ nombre, contenido, creado_por:usuario.nombre||usuario.email }]);
+    const res = await api('presupuesto_templates', 'POST', [{ nombre, contenido, tema:doc.tema||'violeta', creado_por:usuario.nombre||usuario.email }]);
     templates = await api('presupuesto_templates?select=id,nombre,updated_at&order=updated_at.desc');
     renderSidebar();
     toast('✓ Plantilla guardada');
@@ -1129,7 +1252,7 @@ async function guardarComoTemplate(){
 }
 async function guardarTemplate(){
   try{
-    await api('presupuesto_templates?id=eq.'+doc.id, 'PATCH', { nombre:doc.nombre, contenido:doc.contenido, updated_at:new Date().toISOString() });
+    await api('presupuesto_templates?id=eq.'+doc.id, 'PATCH', { nombre:doc.nombre, contenido:doc.contenido, tema:doc.tema||'violeta', updated_at:new Date().toISOString() });
     templates = await api('presupuesto_templates?select=id,nombre,updated_at&order=updated_at.desc');
     renderSidebar();
     toast('✓ Plantilla guardada');
@@ -1193,8 +1316,27 @@ function confirmarEnvioCotizador(){
 // ─── EXPORTAR A PDF ──────────────────────────────────────────────────────
 async function descargarPDF(){
   if(!doc.contenido.length){ toast('No hay nada para exportar'); return; }
+  const filename = (doc.cliente||'presupuesto').replace(/[^a-z0-9]+/gi,'_')+'.pdf';
+
+  // Si el navegador lo permite (Chrome/Edge de escritorio), pedimos la carpeta de destino
+  // ANTES de generar el PDF, mientras todavía vale el click del usuario. Así se puede elegir
+  // una carpeta de Drive sincronizada en vez de que caiga siempre en Descargas.
+  let fileHandle = null;
+  if(window.showSaveFilePicker){
+    try{
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description:'PDF', accept:{'application/pdf':['.pdf']} }]
+      });
+    }catch(e){
+      if(e.name==='AbortError') return; // el usuario cerró el diálogo sin elegir carpeta
+      fileHandle = null; // algo raro pasó: seguimos con la descarga clásica de respaldo
+    }
+  }
+
   toast('Generando PDF… puede tardar unos segundos');
   const cont = document.getElementById('pdf-render');
+  aplicarTema(cont);
   cont.innerHTML = doc.contenido.map(renderBlockPDF).join('');
   const paginas = cont.querySelectorAll('.pdf-page');
   try{
@@ -1206,8 +1348,15 @@ async function descargarPDF(){
       if(i>0) pdf.addPage([794,1123]);
       pdf.addImage(img, 'JPEG', 0, 0, 794, 1123);
     }
-    pdf.save((doc.cliente||'presupuesto').replace(/[^a-z0-9]+/gi,'_')+'.pdf');
-    toast('✓ PDF descargado');
+    if(fileHandle){
+      const writable = await fileHandle.createWritable();
+      await writable.write(pdf.output('blob'));
+      await writable.close();
+      toast('✓ PDF guardado');
+    } else {
+      pdf.save(filename);
+      toast('✓ PDF descargado');
+    }
   }catch(e){
     toast('Error generando PDF: '+e.message);
   }finally{
@@ -1215,8 +1364,18 @@ async function descargarPDF(){
   }
 }
 
-function pdfFooter(){
+function pdfFooter(oscura){
+  if(doc && doc.tema==='azul'){
+    return '<div class="pdf-footer'+(oscura?' pdf-footer-oscuro':'')+'"><span>Piedra Blanca Firmware &amp; Software</span><span>Comercializa Totem Nube SAS · Córdoba, Argentina</span></div>';
+  }
   return '<div class="pdf-footer"><span>TOTEM NUBE · PRESUPUESTO'+(doc.numero?' '+esc(doc.numero):'')+'</span><span>totemnube.com.ar</span></div>';
+}
+// Pie de página legal extendido (solo última página "En resumen" del tema Piedra Blanca)
+function pdfFooterExtendido(){
+  return '<div class="pdf-footer-ext">'
+    + '<div><span>Piedra Blanca Firmware &amp; Software</span><span>Marca y software de Edgardo O. Buttarelli</span><span>Piedra Blanca, Córdoba — Argentina</span></div>'
+    + '<div><span>Comercializa y factura Totem Nube SAS</span><span>CUIT 30-71693010-2 · Francisco Laprida 480, Córdoba</span></div>'
+  +'</div>';
 }
 
 function renderBlockPDF(b, bi){
@@ -1225,6 +1384,9 @@ function renderBlockPDF(b, bi){
   if(b.tipo==='categoria') return pdfCategoria(b, bi);
   if(b.tipo==='inversion') return pdfInversion(b, bi);
   if(b.tipo==='cierre') return pdfCierre(b, bi);
+  if(b.tipo==='portada-oscura') return pdfPortadaOscura(b, bi);
+  if(b.tipo==='seccion-imagen') return pdfSeccionImagen(b, bi);
+  if(b.tipo==='costos') return pdfCostos(b, bi);
   return ''; // terminos se renderiza dentro de inversion
 }
 // Envuelve el HTML de un campo con el override de tamaño/negrita cargado desde el editor (si existe)
@@ -1350,6 +1512,124 @@ function pdfCierre(b, bi){
       +'</div>'
       + imgSlot
     +'</div>'
+    + pdfFooter()
+  +'</div>';
+}
+
+// ─── PORTADA OSCURA (tema Piedra Blanca) ───────────────────────────────────
+function edPortadaOscura(b,i){
+  const d = b.datos, p = 'contenido.'+i+'.datos';
+  return '<img class="pdf-portada-oscura-logo" src="assets/presupuestos/pb-logo.png" alt="Logo">'
+    + '<div class="pdf-eyebrow">'+campoEd(p+'.categoria','Categoría / etiqueta',d.categoria)+'</div>'
+    + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título grande',d.titulo,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-p" style="max-width:560px;">'+campoEd(p+'.bajada','Bajada / descripción',d.bajada,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-portada-oscura-img">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '<span class="ed-img-empty" style="color:#8890a0;">(imagen de referencia — fija)</span>')+'</div>'
+    + '<div class="pdf-portada-oscura-cap">'+campoEd(p+'.imagenCaption','Pie de imagen (opcional)',d.imagenCaption,{placeholder:'Pie de imagen (opcional)'})+'</div>';
+}
+function pdfPortadaOscura(b, bi){
+  const d = b.datos;
+  return '<div class="pdf-page pdf-page-oscura">'
+    + '<img class="pdf-portada-oscura-logo" src="assets/presupuestos/pb-logo.png" alt="Logo">'
+    + '<div class="pdf-eyebrow">'+esc(d.categoria||'')+'</div>'
+    + '<div class="pdf-h1">'+pe(bi,'titulo', esc(d.titulo||'').replace(/\n/g,'<br>'))+'</div>'
+    + '<div class="pdf-p" style="max-width:560px;">'+pe(bi,'bajada', esc(d.bajada||''))+'</div>'
+    + '<div class="pdf-portada-oscura-img">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '')+'</div>'
+    + (d.imagenCaption ? '<div class="pdf-portada-oscura-cap">'+pe(bi,'imagenCaption', esc(d.imagenCaption))+'</div>' : '')
+    + pdfFooter(true)
+  +'</div>';
+}
+
+// ─── SECCIÓN CON IMAGEN (Turnero, Llamador, Pantalla de sala, La voz…) ─────
+function edSeccionImagen(b,i){
+  const d = b.datos, p = 'contenido.'+i+'.datos';
+  return '<div class="pdf-eyebrow">'+campoEd(p+'.categoria','Categoría / etiqueta',d.categoria)+'</div>'
+    + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título',d.titulo)+'</div>'
+    + '<div class="pdf-p">'+campoEd(p+'.texto','Texto introductorio (opcional)',d.texto,{tipo:'textarea',placeholder:'Texto introductorio (opcional)'})+'</div>'
+    + '<div class="pdf-seccion-img">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '<span class="ed-img-empty">(imagen de referencia — fija)</span>')+'</div>';
+}
+function pdfSeccionImagen(b, bi){
+  const d = b.datos;
+  return '<div class="pdf-page">'
+    + '<div class="pdf-eyebrow">'+esc(d.categoria||'')+'</div>'
+    + '<div class="pdf-h1">'+pe(bi,'titulo', esc(d.titulo||''))+'</div>'
+    + (d.texto ? '<div class="pdf-p">'+pe(bi,'texto', esc(d.texto).replace(/\n/g,'<br>'))+'</div>' : '')
+    + '<div class="pdf-seccion-img">'+(d.imagen ? '<img src="'+d.imagen+'" alt="">' : '')+'</div>'
+    + (d.footerExtendido ? pdfFooterExtendido() : pdfFooter())
+  +'</div>';
+}
+
+// ─── COSTOS (tabla editable — precios finales) ─────────────────────────────
+function agregarItemCosto(bi){ snap(); doc.contenido[bi].datos.items.push(defaultItemCosto()); renderEditor(); }
+function agregarModuloCosto(bi){ snap(); doc.contenido[bi].datos.modulos.push({id:uid(),nombre:'Módulo opcional',desc:'',precio:''}); renderEditor(); }
+function agregarNotaCosto(bi){ snap(); doc.contenido[bi].datos.notas.push('Nota'); renderEditor(); }
+function edCostos(b,i){
+  const d = b.datos, p = 'contenido.'+i+'.datos';
+  const filas = (d.items||[]).map(function(it, ii){
+    const ip = p+'.items.'+ii;
+    return '<tr class="ed-item"><td style="width:30%;">'
+        + campoEd(ip+'.nombre','Producto / Servicio',it.nombre)
+        + campoEd(ip+'.sublabel','Detalle corto (opcional)',it.sublabel,{placeholder:'Detalle corto (opcional)'})
+      +'</td><td style="width:38%;">'+campoEd(ip+'.desc','Descripción',it.desc,{tipo:'textarea'})+'</td>'
+      +'<td class="price">'+campoEd(ip+'.precio','Precio',it.precio,{placeholder:'Precio'})
+        + campoEd(ip+'.precioSub','Aclaración de precio (opcional)',it.precioSub,{placeholder:'Aclaración (opcional)'})
+      +'</td>'
+      +'<td><span class="ed-toolbar" style="position:static;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.items\','+ii+')">✕</span></span></td></tr>';
+  }).join('');
+  const modulos = (d.modulos||[]).map(function(m, mi){
+    const mp = p+'.modulos.'+mi;
+    return '<div class="ed-item" style="margin-top:14px;">'
+      + '<span class="ed-toolbar"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.modulos\','+mi+')">✕</span></span>'
+      + '<div class="pdf-costos-tag">Módulo opcional</div>'
+      + '<table class="pdf-costos-table"><tbody><tr>'
+        + '<td style="width:30%;">'+campoEd(mp+'.nombre','Nombre del módulo',m.nombre)+'</td>'
+        + '<td style="width:38%;">'+campoEd(mp+'.desc','Descripción',m.desc,{tipo:'textarea'})+'</td>'
+        + '<td class="price">'+campoEd(mp+'.precio','Precio',m.precio,{placeholder:'Precio'})+'</td>'
+      +'</tr></tbody></table>'
+    +'</div>';
+  }).join('');
+  const notas = (d.notas||[]).map(function(n, ni){
+    return '<div class="ed-item" style="display:flex;gap:6px;align-items:center;">* '+campoEd(p+'.notas.'+ni,'Nota',n)
+      + '<span class="ed-toolbar" style="position:static;"><span class="ed-tbtn del" onclick="event.stopPropagation();quitarDeArray(\''+p+'.notas\','+ni+')">✕</span></span></div>';
+  }).join('');
+  return '<div class="pdf-eyebrow">'+campoEd(p+'.categoria','Categoría / etiqueta',d.categoria)+'</div>'
+    + '<div class="pdf-h1">'+campoEd(p+'.titulo','Título',d.titulo)+'</div>'
+    + '<div class="pdf-p">'+campoEd(p+'.texto','Texto introductorio',d.texto,{tipo:'textarea'})+'</div>'
+    + '<div class="pdf-costos-tablecap">Detalle de costos</div>'
+    + '<table class="pdf-costos-table"><thead><tr><th style="width:30%;">Producto / Servicio</th><th style="width:38%;">Detalle</th><th class="price">Precio</th><th></th></tr></thead><tbody>'+filas+'</tbody></table>'
+    + '<div class="ed-ghost" style="font-size:9.5px;padding:6px;" onclick="event.stopPropagation();agregarItemCosto('+i+')">+ Agregar ítem</div>'
+    + modulos
+    + '<div class="ed-ghost" style="font-size:9.5px;padding:6px;margin-top:6px;" onclick="event.stopPropagation();agregarModuloCosto('+i+')">+ Agregar módulo opcional</div>'
+    + '<div class="pdf-costos-notas">'+notas+'</div>'
+    + '<div class="ed-ghost" style="font-size:9.5px;padding:6px;" onclick="event.stopPropagation();agregarNotaCosto('+i+')">+ Agregar nota al pie</div>';
+}
+function pdfCostos(b, bi){
+  const d = b.datos;
+  const filas = (d.items||[]).map(function(it,ii){
+    const ip='items.'+ii;
+    return '<tr>'
+      + '<td><div class="pdf-costos-nombre">'+pe(bi,ip+'.nombre',esc(it.nombre))+'</div>'+(it.sublabel?'<div class="pdf-costos-sublabel">'+pe(bi,ip+'.sublabel',esc(it.sublabel))+'</div>':'')+'</td>'
+      + '<td class="pdf-costos-desc">'+pe(bi,ip+'.desc',esc(it.desc||'').replace(/\n/g,'<br>'))+'</td>'
+      + '<td class="pdf-costos-precio"><div class="amt">'+pe(bi,ip+'.precio',esc(it.precio||''))+'</div>'+(it.precioSub?'<div class="sub">'+pe(bi,ip+'.precioSub',esc(it.precioSub))+'</div>':'')+'</td>'
+    +'</tr>';
+  }).join('');
+  const modulos = (d.modulos||[]).map(function(m,mi){
+    const mp='modulos.'+mi;
+    return '<div class="pdf-costos-tag">Módulo opcional</div>'
+      + '<table class="pdf-costos-table"><tbody><tr>'
+        + '<td style="width:30%;"><div class="pdf-costos-nombre">'+pe(bi,mp+'.nombre',esc(m.nombre))+'</div></td>'
+        + '<td style="width:38%;" class="pdf-costos-desc">'+pe(bi,mp+'.desc',esc(m.desc||''))+'</td>'
+        + '<td class="pdf-costos-precio"><div class="amt">'+pe(bi,mp+'.precio',esc(m.precio||''))+'</div></td>'
+      +'</tr></tbody></table>';
+  }).join('');
+  const notas = (d.notas||[]).length ? '<div class="pdf-costos-notas">'+(d.notas||[]).map(function(n,ni){ return '* '+pe(bi,'notas.'+ni,esc(n)); }).join('<br>')+'</div>' : '';
+  return '<div class="pdf-page">'
+    + '<div class="pdf-eyebrow">'+esc(d.categoria||'')+'</div>'
+    + '<div class="pdf-h1">'+pe(bi,'titulo',esc(d.titulo||''))+'</div>'
+    + (d.texto?'<div class="pdf-p">'+pe(bi,'texto',esc(d.texto))+'</div>':'')
+    + '<div class="pdf-costos-tablecap">Detalle de costos</div>'
+    + '<table class="pdf-costos-table"><thead><tr><th style="width:30%;">Producto / Servicio</th><th style="width:38%;">Detalle</th><th class="price">Precio</th></tr></thead><tbody>'+filas+'</tbody></table>'
+    + modulos
+    + notas
     + pdfFooter()
   +'</div>';
 }
