@@ -42,6 +42,11 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'D
 .sb-item-cliente{font-weight:600;color:var(--text)}
 .sb-item-meta{font-size:10px;color:var(--text3);margin-top:2px}
 .sb-empty{font-size:11px;color:var(--text3);padding:6px 2px}
+.sb-cliente-group{margin-bottom:12px}
+.sb-cliente-header{font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--text2);padding:2px 2px 5px;text-transform:uppercase}
+.sb-cliente-count{font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0}
+.sb-subitem{margin-left:8px;padding:7px 9px;font-size:11.5px}
+.sb-subitem .sb-item-cliente{font-weight:500;font-size:11.5px}
 
 .main{flex:1;padding:20px 26px 90px;overflow-y:auto;max-height:calc(100vh - 62px)}
 .doc-head{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
@@ -426,7 +431,7 @@ async function init(){
   try{
     [templates, presupuestos] = await Promise.all([
       api('presupuesto_templates?select=id,nombre,updated_at&order=updated_at.desc'),
-      api('presupuestos?select=id,cliente,estado,template_id,updated_at&order=updated_at.desc'),
+      api('presupuestos?select=id,cliente,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc'),
     ]);
   }catch(e){
     document.getElementById('main').innerHTML = '<div class="loader" style="color:var(--red)">Error cargando: '+esc(e.message)+'</div>';
@@ -442,12 +447,40 @@ async function init(){
 
 function renderSidebar(){
   const elP = document.getElementById('sb-presupuestos');
-  elP.innerHTML = presupuestos.length ? presupuestos.map(p=>{
-    return '<div class="sb-item'+(doc && !doc.esTemplate && doc.id===p.id ? ' activo':'')+'" onclick="abrirPresupuesto('+p.id+')">'
-      +'<div class="sb-item-cliente">'+esc(p.cliente||'Sin cliente')+'</div>'
-      +'<div class="sb-item-meta">'+(p.estado==='enviado'?'✓ Enviado':'○ Borrador')+' · '+new Date(p.updated_at).toLocaleDateString('es-AR')+'</div>'
-    +'</div>';
-  }).join('') : '<div class="sb-empty">— Ninguno todavía</div>';
+  if(!presupuestos.length){
+    elP.innerHTML = '<div class="sb-empty">— Ninguno todavía</div>';
+  } else {
+    // Agrupar por cliente (nombre trimeado; vacío -> "Sin cliente")
+    const grupos = {};
+    const orden = [];
+    presupuestos.forEach(function(p){
+      const key = (p.cliente||'').trim() || 'Sin cliente';
+      if(!grupos[key]){ grupos[key] = []; orden.push(key); }
+      grupos[key].push(p);
+    });
+    // Ordenar clientes por actividad más reciente dentro del grupo
+    orden.sort(function(a,b){
+      const maxA = Math.max.apply(null, grupos[a].map(function(p){ return new Date(p.updated_at).getTime(); }));
+      const maxB = Math.max.apply(null, grupos[b].map(function(p){ return new Date(p.updated_at).getTime(); }));
+      return maxB - maxA;
+    });
+    elP.innerHTML = orden.map(function(cliente){
+      const items = grupos[cliente].slice().sort(function(a,b){ return new Date(b.updated_at) - new Date(a.updated_at); });
+      const itemsHtml = items.map(function(p){
+        const estadoTxt = p.estado==='enviado'
+          ? '✓ Enviado' + (p.enviado_at ? ' · '+new Date(p.enviado_at).toLocaleDateString('es-AR') : '')
+          : '○ Borrador';
+        return '<div class="sb-item sb-subitem'+(doc && !doc.esTemplate && doc.id===p.id ? ' activo':'')+'" onclick="abrirPresupuesto('+p.id+')">'
+          + '<div class="sb-item-cliente">'+(p.numero?esc(p.numero):'Presupuesto')+'</div>'
+          + '<div class="sb-item-meta">'+estadoTxt+'</div>'
+        +'</div>';
+      }).join('');
+      return '<div class="sb-cliente-group">'
+        + '<div class="sb-cliente-header">'+esc(cliente)+' <span class="sb-cliente-count">('+items.length+')</span></div>'
+        + itemsHtml
+      +'</div>';
+    }).join('');
+  }
 
   const elT = document.getElementById('sb-templates');
   elT.innerHTML = templates.length ? templates.map(t=>{
@@ -461,7 +494,7 @@ function renderSidebar(){
 async function abrirPresupuesto(id){
   const row = (await api('presupuestos?id=eq.'+id+'&select=*'))[0];
   if(!row) return;
-  doc = { id:row.id, template_id:row.template_id, cliente:row.cliente||'', contacto:row.contacto||'', numero:row.numero||'', estado:row.estado||'borrador', contenido: row.contenido||[], tema:row.tema||'violeta', esTemplate:false };
+  doc = { id:row.id, template_id:row.template_id, cliente:row.cliente||'', contacto:row.contacto||'', numero:row.numero||'', estado:row.estado||'borrador', enviado_at:row.enviado_at||null, contenido: row.contenido||[], tema:row.tema||'violeta', esTemplate:false };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -494,7 +527,7 @@ async function crearDesdeTemplate(templateId){
   } else {
     contenido = [ defaultBlock('portada') ];
   }
-  doc = { id:null, template_id:templateId||null, cliente:'', contacto:'', numero:'', estado:'borrador', contenido, tema, esTemplate:false };
+  doc = { id:null, template_id:templateId||null, cliente:'', contacto:'', numero:'', estado:'borrador', enviado_at:null, contenido, tema, esTemplate:false };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -506,7 +539,7 @@ function generarPresupuestoDesdeTemplate(){
   regenerarIds(contenido);
   const templateId = doc.id;
   const tema = doc.tema || 'violeta';
-  doc = { id:null, template_id:templateId, cliente:'', contacto:'', numero:'', estado:'borrador', contenido, tema, esTemplate:false };
+  doc = { id:null, template_id:templateId, cliente:'', contacto:'', numero:'', estado:'borrador', enviado_at:null, contenido, tema, esTemplate:false };
   historial = []; historialFuturo = [];
   renderSidebar();
   renderEditor();
@@ -593,12 +626,19 @@ function renderEditor(){
       + '<div class="doc-field"><label>Cliente</label><input value="'+esc(doc.cliente)+'" oninput="doc.cliente=this.value"></div>'
       + '<div class="doc-field"><label>Contacto</label><input value="'+esc(doc.contacto)+'" oninput="doc.contacto=this.value"></div>'
       + '<div class="doc-field"><label>N° / referencia</label><input value="'+esc(doc.numero)+'" oninput="doc.numero=this.value"></div>'
-      + '<div class="doc-field"><label>Estado</label><select onchange="doc.estado=this.value"><option value="borrador"'+(doc.estado==='borrador'?' selected':'')+'>Borrador</option><option value="enviado"'+(doc.estado==='enviado'?' selected':'')+'>Enviado</option></select></div>'
+      + '<div class="doc-field"><label>Estado</label><div style="font-size:12.5px;padding-top:3px;">'
+          + (doc.estado==='enviado'
+            ? '<span style="color:var(--green);font-weight:600;">✓ Enviado</span>'+(doc.enviado_at ? ' · '+new Date(doc.enviado_at).toLocaleDateString('es-AR')+' '+new Date(doc.enviado_at).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '')
+            : '<span style="color:var(--text2);">○ Borrador</span>')
+        +'</div></div>'
       + '<div class="doc-actions">'
         + undoRedoHtml
         + '<button class="btn" onclick="guardarComoTemplate()">📐 Guardar como plantilla</button>'
         + '<button class="btn blue" onclick="descargarPDF()">⬇ Descargar PDF</button>'
         + '<button class="btn blue" onclick="abrirChecklistCotizador()">→ Enviar a Cotizador</button>'
+        + (doc.estado==='enviado'
+            ? '<button class="btn" onclick="volverABorrador()">↺ Volver a borrador</button>'
+            : '<button class="btn" onclick="marcarEnviado()">✉️ Marcar como enviado</button>')
         + '<button class="btn solid" onclick="guardarPresupuesto()">💾 Guardar</button>'
         + (doc.id ? '<button class="btn red" onclick="borrarPresupuesto()">Eliminar</button>' : '')
       +'</div>'
@@ -1220,23 +1260,37 @@ function agregarContacto(bi){ snap(); doc.contenido[bi].datos.contacto.push({id:
 // ─── GUARDAR / BORRAR ────────────────────────────────────────────────────
 async function guardarPresupuesto(){
   try{
-    const body = { cliente:doc.cliente, contacto:doc.contacto, numero:doc.numero, estado:doc.estado, contenido:doc.contenido, template_id:doc.template_id||null, tema:doc.tema||'violeta', creado_por:usuario.nombre||usuario.email };
+    const body = { cliente:doc.cliente, contacto:doc.contacto, numero:doc.numero, estado:doc.estado, enviado_at:doc.enviado_at||null, contenido:doc.contenido, template_id:doc.template_id||null, tema:doc.tema||'violeta', creado_por:usuario.nombre||usuario.email };
     if(doc.id){
       await api('presupuestos?id=eq.'+doc.id, 'PATCH', Object.assign({}, body, {updated_at:new Date().toISOString()}));
     } else {
       const res = await api('presupuestos', 'POST', [body]);
       doc.id = res[0].id;
     }
-    presupuestos = await api('presupuestos?select=id,cliente,estado,template_id,updated_at&order=updated_at.desc');
+    presupuestos = await api('presupuestos?select=id,cliente,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc');
     renderSidebar();
     toast('✓ Guardado');
   }catch(e){ toast('Error: '+e.message); }
+}
+async function marcarEnviado(){
+  if(!doc || doc.esTemplate || !doc.id){ toast('Guardá el presupuesto primero'); return; }
+  doc.estado = 'enviado';
+  doc.enviado_at = new Date().toISOString();
+  await guardarPresupuesto();
+  renderEditor();
+}
+async function volverABorrador(){
+  if(!doc || doc.esTemplate) return;
+  doc.estado = 'borrador';
+  doc.enviado_at = null;
+  await guardarPresupuesto();
+  renderEditor();
 }
 async function borrarPresupuesto(){
   if(!confirm('¿Eliminar este presupuesto?')) return;
   await api('presupuestos?id=eq.'+doc.id, 'DELETE').catch(function(){});
   doc = null;
-  presupuestos = await api('presupuestos?select=id,cliente,estado,template_id,updated_at&order=updated_at.desc');
+  presupuestos = await api('presupuestos?select=id,cliente,numero,estado,enviado_at,template_id,updated_at&order=updated_at.desc');
   renderSidebar();
   renderEditor();
 }
