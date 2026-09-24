@@ -797,10 +797,14 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gr
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-ploteo-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" />
         </label>
-        <!-- Mini PC -->
-        <label id="add-minipc-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;">
+        <!-- Mini PC / Player -->
+        <label id="add-minipc-wrap" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;cursor:pointer;flex-wrap:wrap;">
           <input type="checkbox" id="add-minipc" onchange="toggleAdicional('minipc')" style="width:14px;height:14px;" />
-          Player Mini PC Beelink N95 8GB
+          Player
+          <select id="add-minipc-modelo" onchange="seleccionarPlayerAdicional()" style="width:220px;height:24px;font-size:11px;display:none;">
+            <option value="minipc_beelink_n95" data-nombre="Player Mini PC Beelink N95 8GB" data-precio="610600">Mini PC Beelink N95 8GB</option>
+            <option value="sku_156" data-nombre="Player Box Android P5 Max" data-precio="0">Box Android P5 Max</option>
+          </select>
           <input type="number" id="add-minipc-precio" value="610600" style="width:90px;height:24px;font-size:11px;display:none;" title="Precio editable" />
           <span style="font-size:10px;color:var(--text3);">+ IVA · cant:</span>
           <input type="number" id="add-minipc-cant" value="1" min="1" style="width:45px;height:24px;font-size:11px;display:none;" onchange="syncAdicional('minipc')" />
@@ -4279,7 +4283,14 @@ function autocompletarNombreComercial(){
 }
 
 function actualizarAdicionalesVisibles(){
-  const cat = document.getElementById('cot-categoria')?.value || '';
+  // Importante: la categoría que define qué adicionales se ofrecen es la del
+  // PRODUCTO elegido (select "cot-item-producto"), no la del filtro "Categoría
+  // de producto" de arriba — si el filtro queda en "Todas las categorías" (o en
+  // otra distinta a la del producto elegido) este checkbox quedaba oculto aunque
+  // el producto sí admitiera Player, y el usuario no podía ni verlo ni destildarlo.
+  const selProd = document.getElementById('cot-item-producto');
+  const prodSel = PRODUCTOS.find(function(p){ return p.id === selProd?.value; });
+  const cat = prodSel ? (prodSel.categoria || '') : (document.getElementById('cot-categoria')?.value || '');
   const divAd = document.getElementById('cot-adicionales');
   const wrapPloteo = document.getElementById('add-ploteo-wrap');
   const wrapMinipc = document.getElementById('add-minipc-wrap');
@@ -4310,8 +4321,10 @@ function toggleAdicional(tipo){
   }
   if(tipo === 'minipc'){
     const checked = document.getElementById('add-minipc')?.checked;
+    const modeloEl = document.getElementById('add-minipc-modelo');
     const cantEl = document.getElementById('add-minipc-cant');
     const precioEl = document.getElementById('add-minipc-precio');
+    if(modeloEl) modeloEl.style.display = checked ? 'inline-block' : 'none';
     if(cantEl) cantEl.style.display = checked ? 'inline-block' : 'none';
     if(precioEl) precioEl.style.display = checked ? 'inline-block' : 'none';
     // HDMI ya no depende de Mini PC — son opciones independientes
@@ -4327,6 +4340,22 @@ function toggleAdicional(tipo){
 }
 
 function syncAdicional(tipo){ /* cantidad cambiada — se aplica al guardar */ refrescarChecklistDescuentoSiActivo(); }
+
+// Al elegir un modelo en el desplegable "Player" (Adicionales), autocompletamos
+// el precio con el costo de lista de ese insumo (INSUMOS_BASE, sincronizado desde
+// Gestión de Insumos). Sigue siendo editable a mano después, igual que siempre.
+function seleccionarPlayerAdicional(){
+  const sel = document.getElementById('add-minipc-modelo');
+  if(!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const precioEl = document.getElementById('add-minipc-precio');
+  if(precioEl){
+    const insumo = INSUMOS_BASE[opt.value];
+    const base = insumo && insumo.costoBase ? insumo.costoBase : parseFloat(opt.dataset.precio||0);
+    precioEl.value = base || 0;
+  }
+  refrescarChecklistDescuentoSiActivo();
+}
 
 function renderOtrosItemsAdicional(){
   const cont = document.getElementById('add-otros-lista');
@@ -4382,7 +4411,7 @@ function toggleAdicionalExtra(tipo){
 function sincronizarAdicionales(){
   // Limpiar adicionales previos
   cotItemsTemp = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom','ploteo_grande',
+    return !['ploteo','seteo_sw','minipc_beelink_n95','sku_156','hdmi_transmisor','otros_custom','ploteo_grande',
              'extra_minipc','extra_impresora','extra_camara','extra_lectorqr'].includes(i.prodId);
   });
   // Agregar los activos leyendo directo del DOM
@@ -4390,23 +4419,27 @@ function sincronizarAdicionales(){
     const cant = parseInt(document.getElementById('add-ploteo-cant')?.value)||1;
     const _ploteoRaw = parseFloat(document.getElementById('add-ploteo-precio')?.value);
     const precio = isNaN(_ploteoRaw) ? 55000 : _ploteoRaw;
-    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cant, precio:precio, cat:'servicio'});
+    cotItemsTemp.push({prodId:'ploteo', nombre:'Ploteo personalizado', cant:cant, precio:precio, cat:'servicio', _srcChk:'add-ploteo'});
   }
   if(document.getElementById('add-minipc')?.checked){
     const cant = parseInt(document.getElementById('add-minipc-cant')?.value)||1;
-    const precio = parseFloat(document.getElementById('add-minipc-precio')?.value)||610600;
-    cotItemsTemp.push({prodId:'minipc_beelink_n95', nombre:'Player Mini PC Beelink N95 8GB', cant:cant, precio:precio, cat:'periferico'});
+    const precio = parseFloat(document.getElementById('add-minipc-precio')?.value)||0;
+    const modeloSel = document.getElementById('add-minipc-modelo');
+    const modeloOpt = modeloSel && modeloSel.options[modeloSel.selectedIndex];
+    const prodId = (modeloOpt && modeloOpt.value) || 'minipc_beelink_n95';
+    const nombre = (modeloOpt && modeloOpt.dataset.nombre) || 'Player Mini PC Beelink N95 8GB';
+    cotItemsTemp.push({prodId:prodId, nombre:nombre, cant:cant, precio:precio, cat:'periferico', _srcChk:'add-minipc'});
   }
   if(document.getElementById('add-hdmi')?.checked){
     const cant = parseInt(document.getElementById('add-hdmi-cant')?.value)||1;
     const precio = parseFloat(document.getElementById('add-hdmi-precio')?.value)||170400;
-    cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:precio, cat:'periferico'});
+    cotItemsTemp.push({prodId:'hdmi_transmisor', nombre:'Transmisor HDMI inalámbrico', cant:cant, precio:precio, cat:'periferico', _srcChk:'add-hdmi'});
   }
-  cotOtrosItems.forEach(function(o){
+  cotOtrosItems.forEach(function(o, oi){
     const cant = o.cant||1;
     const precio = o.precio||0;
     const descTrim = (o.desc||'').trim();
-    if(precio > 0 || descTrim) cotItemsTemp.push({prodId:'otros_custom', nombre:descTrim || 'Otro ítem', cant:cant, precio:precio, cat:'periferico'});
+    if(precio > 0 || descTrim) cotItemsTemp.push({prodId:'otros_custom', nombre:descTrim || 'Otro ítem', cant:cant, precio:precio, cat:'periferico', _srcOtrosIdx:oi});
   });
   // Otros periféricos
   const extrasConfig = [
@@ -4419,7 +4452,7 @@ function sincronizarAdicionales(){
     if(document.getElementById('add-extra-'+ex.id)?.checked){
       const cant  = parseInt(document.getElementById('add-extra-'+ex.id+'-cant')?.value)||1;
       const precio = parseFloat(document.getElementById('add-extra-'+ex.id+'-precio')?.value)||ex.defPrecio;
-      cotItemsTemp.push({prodId:ex.prodId, nombre:ex.nombre, cant:cant, precio:precio, cat:'periferico'});
+      cotItemsTemp.push({prodId:ex.prodId, nombre:ex.nombre, cant:cant, precio:precio, cat:'periferico', _srcChk:'add-extra-'+ex.id, _srcExtraId:ex.id});
     }
   });
 }
@@ -4518,7 +4551,7 @@ function abrirNuevaCotizacion(editId){
     if(ivaHwEl) ivaHwEl.value = String(cotIvaHardwarePct);
     // Cargar items excluyendo adicionales que se restauran desde checkboxes
     cotItemsTemp = c.items ? c.items.filter(function(i){
-      return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom'].includes(i.prodId);
+      return !['ploteo','seteo_sw','minipc_beelink_n95','sku_156','hdmi_transmisor','otros_custom'].includes(i.prodId);
     }) : [];
 
     // Detectar y restaurar categoría desde el primer ítem de equipo
@@ -4534,13 +4567,10 @@ function abrirNuevaCotizacion(editId){
 
     // Restaurar checkboxes de adicionales según ítems guardados
     const tienePloteoItem = cotItemsTemp.some(function(i){ return i.prodId==='ploteo'; });
-    const tieneMinipcItem = cotItemsTemp.some(function(i){ return i.prodId==='minipc_beelink_n95'; });
     const tieneHdmiItem = cotItemsTemp.some(function(i){ return i.prodId==='hdmi_transmisor'; });
     const ploteoChk = document.getElementById('add-ploteo');
-    const minipcChk = document.getElementById('add-minipc');
     const hdmiChk = document.getElementById('add-hdmi');
     if(ploteoChk){ ploteoChk.checked = tienePloteoItem; toggleAdicional('ploteo'); }
-    if(minipcChk){ minipcChk.checked = tieneMinipcItem; toggleAdicional('minipc'); }
     if(hdmiChk){ hdmiChk.disabled = false; hdmiChk.checked = tieneHdmiItem; if(tieneHdmiItem) toggleAdicional('hdmi'); }
     // Transporte
     const transp = document.getElementById('cot-transporte');
@@ -4550,15 +4580,19 @@ function abrirNuevaCotizacion(editId){
     // Restaurar adicionales desde items guardados
     const itemPloteo = (c.items||[]).find(function(i){ return i.prodId==='ploteo'; });
 
-    const itemMinipc = (c.items||[]).find(function(i){ return i.prodId==='minipc_beelink_n95'; });
+    // "Player" puede ser Mini PC Beelink o (nuevo) Box Android P5 Max — buscamos
+    // cualquiera de los dos prodId y dejamos el desplegable en el que corresponda.
+    const itemMinipc = (c.items||[]).find(function(i){ return i.prodId==='minipc_beelink_n95' || i.prodId==='sku_156'; });
     const itemHdmi = (c.items||[]).find(function(i){ return i.prodId==='hdmi_transmisor'; });
 
     const ploteoCheck = document.getElementById('add-ploteo');
 
     const minipcCheck2 = document.getElementById('add-minipc');
+    const minipcModeloSel = document.getElementById('add-minipc-modelo');
     const hdmiCheck2 = document.getElementById('add-hdmi');
     if(ploteoCheck){ ploteoCheck.checked = !!itemPloteo; toggleAdicional('ploteo'); }
 
+    if(minipcModeloSel && itemMinipc) minipcModeloSel.value = itemMinipc.prodId;
     if(minipcCheck2){ minipcCheck2.checked = !!itemMinipc; toggleAdicional('minipc'); }
     if(hdmiCheck2){ hdmiCheck2.checked = !!itemHdmi; toggleAdicional('hdmi'); }
 
@@ -4676,7 +4710,30 @@ function agregarItemLibre(){
 }
 
 function quitarItemCot(idx){
+  const it = cotItemsTemp[idx];
+  // Los ítems de "Adicionales" (Ploteo/Mini PC/HDMI/Otros periféricos/Otros ítems
+  // libres) se reconstruyen automáticamente en cada render a partir de sus
+  // checkboxes/campos en el panel de Adicionales (sincronizarAdicionales()). Si acá
+  // sólo sacáramos el ítem del array, el checkbox seguiría tildado y el próximo
+  // render lo volvería a agregar solo — el clásico "no puedo borrar la Mini PC".
+  // Por eso además hay que destildar/limpiar la fuente original.
+  // Importante: sacamos el ítem del array ANTES de tocar checkboxes — así, si algo
+  // dispara un re-sincronizado intermedio, no hay riesgo de que corra sobre un
+  // índice que ya no corresponde al mismo ítem.
   cotItemsTemp.splice(idx,1);
+  if(it){
+    if(it._srcOtrosIdx != null){
+      cotOtrosItems.splice(it._srcOtrosIdx, 1);
+      renderOtrosItemsAdicional();
+    } else if(it._srcChk){
+      const chk = document.getElementById(it._srcChk);
+      if(chk) chk.checked = false;
+      const cantEl = document.getElementById(it._srcChk+'-cant');
+      const precioEl = document.getElementById(it._srcChk+'-precio');
+      if(cantEl) cantEl.style.display = 'none';
+      if(precioEl) precioEl.style.display = 'none';
+    }
+  }
   renderCotItemsTemp();
 }
 
@@ -4950,7 +5007,7 @@ function calcPagoMontos(){
   if(!c){ el.innerHTML = ''; return; }
   // Calcular subtotal desde cotItemsTemp (base) + adicionales activos
   const itemsBase = cotItemsTemp.filter(function(i){
-    return !['ploteo','seteo_sw','minipc_beelink_n95','hdmi_transmisor','otros_custom'].includes(i.prodId);
+    return !['ploteo','seteo_sw','minipc_beelink_n95','sku_156','hdmi_transmisor','otros_custom'].includes(i.prodId);
   });
   let subtotal = itemsBase.reduce(function(s,i){
     let base = (i.precio||0)*(i.cant||1) + (i.minipc ? (i.minipc.precio||0)*(i.cant||1) : 0);
