@@ -5277,7 +5277,7 @@ function generarPreviewHTML(c){
   // Fila de licencia en tabla (solo si licEnPresupuesto y moneda ARS)
   const _licEsUsd = c.licMoneda === 'usd';
   const licRow = (c.licencia && c.licEnPresupuesto && c.licMonto && !_licEsUsd) ? '<tr style="background:#f5f7fa;">'
-    +'<td style="padding:7px 10px;">'+c.licDesc+'</td>'
+    +'<td style="padding:7px 10px;">'+(c.licDesc||'Licencia de software')+'</td>'
     +'<td style="padding:7px 10px;text-align:center;">1</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(c.licMonto)+'</td>'
     +'<td style="padding:7px 10px;text-align:right;">'+fmt2(Math.round(c.licMonto*0.105))+'</td>'
@@ -5285,11 +5285,17 @@ function generarPreviewHTML(c){
     +'</tr>' : '';
 
   // Bloque informativo de licencia
+  // Antes exigía c.licDesc no vacío para mostrar CUALQUIER cosa — si vos tildabas
+  // "Incluir licencia" y cargabas precio/cantidad/periodicidad pero te olvidabas de
+  // escribir la descripción, no aparecía nada en el presupuesto (ni siquiera el
+  // monto). Ahora alcanza con tener la licencia tildada; si falta la descripción,
+  // usamos un texto genérico en su lugar.
   let licHTML = '';
-  if(c.licencia && c.licDesc){
+  if(c.licencia){
     const fmtLic = function(n){ return _licEsUsd ? 'U$S '+Math.round(n).toLocaleString('es-AR') : fmt2(n); };
     const licCant = c.licCantidad||1;
     const licTotal = (c.licMonto||0) * licCant;
+    const descTexto = c.licDesc || 'Licencia de software';
     let montoTexto = '';
     if(!c.licEnPresupuesto || _licEsUsd){
       if(c.licTipo==='bonificada') montoTexto = 'Bonificada';
@@ -5306,7 +5312,7 @@ function generarPreviewHTML(c){
     }
     licHTML = '<div class="cot-licencia">'
       +'<div class="cot-licencia-label">Licencia de software</div>'
-      +'<div>'+c.licDesc+(montoTexto ? ' &mdash; <strong>'+montoTexto+'</strong>' : '')+'</div>'
+      +'<div>'+descTexto+(montoTexto ? ' &mdash; <strong>'+montoTexto+'</strong>' : '')+'</div>'
       +'<div style="font-size:11px;color:#a06800;margin-top:3px;">Desde la puesta en funcionamiento del equipo en el cliente.</div>'
     +'</div>';
   }
@@ -5442,12 +5448,17 @@ function aprobarCotizacion(){
   if(filtroMesEl) filtroMesEl.value = '';
 
   // Create licencia if applies (evitar duplicados)
-  if(c.licencia && c.licDesc && c.licMonto>0){
+  // Nota: antes exigía c.licDesc no vacío — si se tildaba "Incluir licencia" y se
+  // cargaba precio pero se olvidaba escribir la descripción, la licencia ni
+  // siquiera se creaba acá (el ingreso recurrente quedaba sin trackear). Ahora
+  // alcanza con licencia+monto, y usamos un texto genérico si falta la descripción.
+  if(c.licencia && c.licMonto>0){
     const licId = 'lic-'+c.id;
+    const licDescFinal = c.licDesc || 'Licencia de software';
     const licYaExiste = licencias.find(function(l){ return l.id===licId || l.orden===orden; });
     if(licYaExiste){
       // Actualizar en lugar de duplicar
-      licYaExiste.desc = c.licDesc;
+      licYaExiste.desc = licDescFinal;
       licYaExiste.monto = c.licMonto;
       licYaExiste.totems = c.licCantidad || c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0);
     } else {
@@ -5455,7 +5466,7 @@ function aprobarCotizacion(){
         id: licId,
         orden: orden,
         cliente: c.empresa,
-        desc: c.licDesc,
+        desc: licDescFinal,
         totems: c.licCantidad || c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0),
         monto: c.licMonto,
         estado: 'comprometida',
@@ -5502,7 +5513,7 @@ function cambiarEstadoCot(id, estado){
       }
       proyectos.unshift(proyecto);
 
-      if(c.licencia && c.licDesc && c.licMonto>0){
+      if(c.licencia && c.licMonto>0){
         const licId2 = 'lic-'+c.id;
         const licYaExiste2 = licencias.find(function(l){ return l.id===licId2 || l.orden===orden; });
         if(!licYaExiste2){
@@ -5510,7 +5521,7 @@ function cambiarEstadoCot(id, estado){
             id: licId2,
             orden: orden,
             cliente: c.empresa,
-            desc: c.licDesc,
+            desc: c.licDesc || 'Licencia de software',
             totems: c.licCantidad || c.items.filter(function(i){ return i.cat==='equipo'; }).reduce(function(s,i){ return s+i.cant; },0),
             monto: c.licMonto,
             estado: 'comprometida',
@@ -6041,7 +6052,7 @@ async function abrirModalOP(cotId){
       <div><label style="font-size:10px;color:#888;text-transform:uppercase;">📅 Fecha compromiso cliente</label>
         <input id="op-fecha-comp" type="date" value="${proyAsoc?.fechaCompromiso||''}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;margin-top:2px;" /></div>
       ${c.transporte ? `<div style="grid-column:1/-1;padding:8px 10px;background:#e8f5e9;border-radius:6px;border:1px solid #a5d6a7;font-size:12px;color:#2e7d32;">✅ <strong>Transporte incluido</strong></div>` : ''}
-      ${c.licencia && c.licDesc ? `<div style="grid-column:1/-1;padding:8px 10px;background:#e3f2fd;border-radius:6px;border:1px solid #90caf9;font-size:12px;color:#1565c0;">🔑 <strong>Licencia de software:</strong> ${c.licDesc}</div>` : ''}
+      ${c.licencia ? `<div style="grid-column:1/-1;padding:8px 10px;background:#e3f2fd;border-radius:6px;border:1px solid #90caf9;font-size:12px;color:#1565c0;">🔑 <strong>Licencia de software:</strong> ${c.licDesc||'Licencia de software'}</div>` : ''}
     </div>
 
     <!-- Estructura -->
@@ -6611,9 +6622,9 @@ function enviarWhatsApp(){
   }
   msg += '\n💰 *TOTAL: $' + totalConIvaFinal.toLocaleString('es-AR') + '* (IVA ' + ivaHwLabel + ' incluido)\n\n';
 
-  if(c.licencia && c.licDesc){
+  if(c.licencia){
     msg += '🔑 *Licencia de software:*\n';
-    msg += c.licDesc + '\n';
+    msg += (c.licDesc||'Licencia de software') + '\n';
     if(c.licTipo === 'bonificada'){
       msg += 'Bonificada ✓\n';
     } else if(c.licTipo === 'por_definir'){
