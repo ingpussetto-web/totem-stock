@@ -477,7 +477,7 @@ function renderOPCard(o){
         ${enProd
           ? `<button class="btn green sm" onclick="cambiarEstado(${o.id},'completada')">✓ Marcar completada</button>`
           : ''}
-        <button class="btn red sm" onclick="cancelarOP(${o.id},'${o.op_numero}')">✕</button>
+        <button class="btn red sm" onclick="cancelarOP(${o.id},'${o.op_numero}','${o.v14_orden||''}')">✕</button>
       </div>
     </div>
     ${enProd ? `
@@ -1576,8 +1576,28 @@ async function generarEquiposParaStockVentas(op, itemsAsignados){
   return codigos;
 }
 
-async function cancelarOP(opId, opNumero){
-  if(!confirm(`¿Cancelar la OP ${opNumero}? Esta acción no se puede deshacer.`)) return;
+async function cancelarOP(opId, opNumero, v14Orden){
+  // Antes esto solo tocaba la OP (quedaba "Cancelada" acá y desaparecía de Tablero
+  // y Producción porque esos dos ya filtran estado='cancelada') pero el proyecto en
+  // Detalle de Ventas y la cotización de origen quedaban colgados, desincronizados
+  // — la cotización seguía marcada "aprobada" y el proyecto seguía en Ventas como si
+  // nada. Ahora chequeamos primero si hay un proyecto/cotización asociados por
+  // número de orden, y si los hay, se avisa y se limpian los tres lugares juntos.
+  let proyectoAsoc = null, cotAsoc = null;
+  if(v14Orden){
+    try{
+      const proys = await api(`proyectos_cotizador?orden=eq.${encodeURIComponent(v14Orden)}&select=id,orden,cliente`);
+      proyectoAsoc = (proys && proys[0]) || null;
+      const cots = await api(`cotizaciones_crm?numero=eq.${encodeURIComponent('COT-'+v14Orden)}&select=id,numero,estado,data`);
+      cotAsoc = (cots && cots[0]) || null;
+    }catch(e){ /* si falla la consulta, seguimos solo con el aviso genérico de la OP */ }
+  }
+
+  const lugares = ['el Tablero', 'el Módulo de Producción'];
+  if(proyectoAsoc) lugares.push('Detalle de Ventas (proyecto "'+proyectoAsoc.cliente+'")');
+  if(cotAsoc && cotAsoc.estado === 'aprobada') lugares.push('la cotización de origen, que va a volver a "Borrador"');
+  const aviso = `¿Cancelar la OP ${opNumero}?\n\nSe va a dar de baja de: ${lugares.join(', ')}.\n\nEsta acción no se puede deshacer.`;
+  if(!confirm(aviso)) return;
   try{
     // ─── Revertir insumos ya asignados antes de cancelar ─────────────────────
     // Si no se revierte, el stock queda descontado (o reservado) para siempre
@@ -1629,7 +1649,19 @@ async function cancelarOP(opId, opNumero){
     // ───────────────────────────────────────────────────────────────────────
 
     await api(`ordenes_produccion?id=eq.${opId}`, 'PATCH', {estado:'cancelada', updated_at:new Date().toISOString()});
-    toast(items?.length ? 'OP cancelada — stock revertido ✓' : 'OP cancelada');
+
+    // Cascada a Detalle de Ventas y a la cotización de origen (ver aviso de arriba).
+    if(proyectoAsoc){
+      await api(`proyectos_cotizador?id=eq.${proyectoAsoc.id}`, 'DELETE').catch(()=>{});
+      await api(`licencias_cotizador?orden=eq.${encodeURIComponent(proyectoAsoc.orden)}`, 'DELETE').catch(()=>{});
+    }
+    if(cotAsoc && cotAsoc.estado === 'aprobada'){
+      const dataActualizada = Object.assign({}, cotAsoc.data||{}, {estado:'borrador'});
+      await api(`cotizaciones_crm?id=eq.${encodeURIComponent(cotAsoc.id)}`, 'PATCH', {estado:'borrador', data:dataActualizada, updated_at:new Date().toISOString()}).catch(()=>{});
+    }
+
+    toast((items?.length ? 'OP cancelada — stock revertido ✓' : 'OP cancelada')
+      + (proyectoAsoc ? ' · proyecto y cotización dados de baja' : ''));
     loadOPs();
   }catch(e){toast('Error: '+e.message);}
 }

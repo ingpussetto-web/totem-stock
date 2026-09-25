@@ -5489,7 +5489,7 @@ function aprobarCotizacion(){
   alert('✓ Cotización aprobada.\nProyecto y licencia (si aplica) creados en Detalle de Ventas y Licencias.');
 }
 
-function cambiarEstadoCot(id, estado){
+async function cambiarEstadoCot(id, estado){
   const c = cotizaciones.find(function(c){ return c.id===id; });
   if(!c) return;
 
@@ -5542,19 +5542,44 @@ function cambiarEstadoCot(id, estado){
     }
   }
 
-  // Si vuelve a borrador o rechazada, ofrecer eliminar proyecto asociado
+  // Si vuelve a borrador o rechazada, ofrecer eliminar proyecto/OP asociados.
+  // Antes esto solo preguntaba por el proyecto en Detalle de Ventas — si la
+  // cotización ya tenía una Orden de Producción generada (Tablero + Módulo de
+  // Producción), esa OP quedaba huérfana ahí, sin que nadie se enterara acá.
   if(estado === 'borrador' || estado === 'rechazada'){
     const orden = c.numero ? c.numero.replace('COT-','') : null;
     const proyAsoc = orden ? proyectos.find(function(p){ return p.orden === orden; }) : null;
-    if(proyAsoc){
+    let opAsoc = null;
+    if(orden){
+      try{
+        const ops = await stockAPI('ordenes_produccion?v14_orden=eq.'+encodeURIComponent(orden)+'&estado=neq.cancelada&select=id,op_numero,estado,op_bom_items(estado)');
+        opAsoc = (ops && ops[0]) || null;
+      }catch(e){ /* si falla la consulta, seguimos solo con el aviso del proyecto */ }
+    }
+    const tieneStockAsignado = opAsoc && (opAsoc.op_bom_items||[]).some(function(i){ return i.estado === 'asignado'; });
+
+    if(proyAsoc || opAsoc){
+      const lugares = [];
+      if(proyAsoc) lugares.push('Detalle de Ventas (proyecto "'+proyAsoc.cliente+'")');
+      if(opAsoc && !tieneStockAsignado) lugares.push('el Tablero y el Módulo de Producción (OP '+opAsoc.op_numero+')');
+      const avisoStock = (opAsoc && tieneStockAsignado)
+        ? '\n\n⚠️ La OP '+opAsoc.op_numero+' ya tiene stock asignado — no se cancela sola desde acá. Cancelala manualmente desde Órdenes de Producción para que se revierta el stock correctamente.'
+        : '';
       const eliminar = confirm('La cotización vuelve a "'+( estado==='borrador'?'Borrador':'Rechazada' )+'".'
-        +'\n\n¿Querés eliminar el proyecto "'+proyAsoc.cliente+'" de Detalle de Ventas también?'
-        +'\n(Si lo dejás, quedará desincronizado con el estado de la cotización.)');
+        +(lugares.length ? '\n\nSe va a dar de baja también de: '+lugares.join(', ')+'.' : '')
+        +avisoStock
+        +'\n\n¿Confirmás?');
       if(eliminar){
-        proyectos = proyectos.filter(function(p){ return p.orden !== orden; });
-        licencias = licencias.filter(function(l){ return l.orden !== orden; });
-        sincronizarTodoElHistorial();
-        renderLicencias();
+        if(proyAsoc){
+          proyectos = proyectos.filter(function(p){ return p.orden !== orden; });
+          licencias = licencias.filter(function(l){ return l.orden !== orden; });
+          sincronizarTodoElHistorial();
+          renderLicencias();
+        }
+        if(opAsoc && !tieneStockAsignado){
+          try{ await stockAPI('ordenes_produccion?id=eq.'+opAsoc.id, 'PATCH', {estado:'cancelada', updated_at:new Date().toISOString()}); }
+          catch(e){ alert('No se pudo cancelar la OP asociada: '+e.message); }
+        }
       }
     }
   }
@@ -8809,6 +8834,20 @@ precargarMarzo(); // Preload Marzo 2026 data if no data exists
     // Migrar las que solo están en local
     await cotSupaMigrateLocal();
   } catch(e){ console.warn('[CotSupa] Error en init:', e.message); }
+  // Deep link desde Módulo de Producción: ?abrirOP=COT-2026-07-001 abre
+  // directo el formulario de "Generar OP" de esa cotización.
+  try{
+    const cotParam = new URLSearchParams(window.location.search).get('abrirOP');
+    if(cotParam){
+      const c = cotizaciones.find(function(x){ return x.numero === cotParam; });
+      if(c){
+        showPage('cotizaciones', document.querySelector('.nav-item[onclick*="cotizaciones"]'));
+        abrirModalOP(c.id);
+      } else {
+        alert('No se encontró la cotización ' + cotParam + ' para generar la OP.');
+      }
+    }
+  }catch(e){ console.warn('[DeepLink abrirOP]', e.message); }
 })();
 renderFijos();
 recalcFijos();

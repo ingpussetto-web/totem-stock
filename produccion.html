@@ -362,6 +362,7 @@ async function checkConnection(){
 let todasLasOPs = [];
 
 let docOpCodigos = {}; // { op_id: codigo_op_interno }
+let docOpGuardados = {}; // { cot_numero: true } — cotizaciones que ya tienen Doc. OP guardado
 
 async function loadOPs(){
   try{
@@ -377,6 +378,15 @@ async function loadOPs(){
       docOpCodigos = {};
       (rows||[]).forEach(function(r){
         if(r.codigo_op_interno) docOpCodigos[r.id] = r.codigo_op_interno;
+      });
+    } catch(e){ /* no bloquear si falla */ }
+    // Cargar qué cotizaciones ya tienen el Doc. OP guardado, para marcar
+    // "OP pendiente" en las que todavía faltan generar.
+    try {
+      const docRows = await api('doc_op_config?select=cot_numero');
+      docOpGuardados = {};
+      (docRows||[]).forEach(function(r){
+        if(r.cot_numero) docOpGuardados[r.cot_numero] = true;
       });
     } catch(e){ /* no bloquear si falla */ }
     poblarFiltroMes();
@@ -499,7 +509,10 @@ function renderOPs(lista, vista){
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           ${esTerminada ? '<span style="font-size:11px;color:var(--green);font-weight:600;padding:3px 8px;border:1px solid var(--green);border-radius:4px;white-space:nowrap;">✓ Terminada</span>' : ''}
-          ${o.v14_orden ? `<button onclick="event.stopPropagation();verDocOP('${o.v14_orden}','${o.cliente}')" style="font-size:10px;padding:4px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;">📄 Ver Doc. OP</button>` : ''}
+          ${o.v14_orden ? (docOpGuardados['COT-'+o.v14_orden]
+            ? `<button onclick="event.stopPropagation();verDocOP('${o.v14_orden}','${o.cliente}')" style="font-size:10px;padding:4px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;">📄 Ver OP</button>`
+            : `<button onclick="event.stopPropagation();irAGenerarOP('${o.v14_orden}')" style="font-size:10px;padding:4px 8px;background:rgba(224,85,85,0.12);border:1px solid #e05555;border-radius:4px;color:#e05555;cursor:pointer;white-space:nowrap;font-weight:600;">⚠ OP pendiente</button>`
+          ) : ''}
           <button onclick="event.stopPropagation();abrirNotas(${o.id},'${o.op_numero}','${o.cliente.replace(/'/g,"\'")}')" 
             id="btn-notas-${o.id}"
             style="font-size:10px;padding:4px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;position:relative;">
@@ -1498,6 +1511,11 @@ init();
 </div>
 
 <script>
+function irAGenerarOP(v14Orden){
+  const cotNumero = 'COT-' + v14Orden;
+  window.open('calculador_totem_nube_v16.html?abrirOP=' + encodeURIComponent(cotNumero), '_blank');
+}
+
 async function verDocOP(v14Orden, cliente){
   const cotNumero = 'COT-' + v14Orden;
   try{
