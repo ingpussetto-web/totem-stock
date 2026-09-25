@@ -510,7 +510,7 @@ function cardHTML(op, colKey){
 
   const docOpBtn = op.v14_orden ? (docOpGuardados['COT-'+op.v14_orden]
     ? `<button onclick="event.stopPropagation();verDocOP('${op.v14_orden}','${esc(op.cliente).replace(/'/g,"\\'")}')" style="font-size:9px;padding:2px 7px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap;">📄 Ver OP</button>`
-    : `<button onclick="event.stopPropagation();irAGenerarOP('${op.v14_orden}')" style="font-size:9px;padding:2px 7px;background:rgba(224,85,85,0.12);border:1px solid #e05555;border-radius:4px;color:#e05555;cursor:pointer;white-space:nowrap;font-weight:600;">⚠ OP pendiente</button>`
+    : `<span style="font-size:9px;padding:2px 7px;background:rgba(224,85,85,0.12);border:1px solid #e05555;border-radius:4px;color:#e05555;white-space:nowrap;font-weight:600;">⚠ OP pendiente</span>`
   ) : '';
 
   return `<div class="${clases}" draggable="true" data-opid="${op.id}" onclick="cardClick(event,${op.id})" ondragstart="dragStart(event,${op.id})" ondragend="dragEnd(event)">
@@ -528,11 +528,6 @@ function cardHTML(op, colKey){
   </div>`;
 }
 
-function irAGenerarOP(v14Orden){
-  const cotNumero = 'COT-' + v14Orden;
-  window.open('calculador_totem_nube_v16.html?abrirOP=' + encodeURIComponent(cotNumero), '_blank');
-}
-
 async function verDocOP(v14Orden, cliente){
   const cotNumero = 'COT-' + v14Orden;
   try{
@@ -548,6 +543,11 @@ async function verDocOP(v14Orden, cliente){
       el.disabled = true;
       el.style.opacity = '1';
       el.style.cursor = 'default';
+      // Los navegadores pintan los campos disabled en gris clarito por default
+      // (casi ilegible sobre el fondo #f5f5f5) — forzamos texto negro, incluyendo
+      // el override de Chrome/Safari que ignora "color" en inputs disabled.
+      el.style.color = '#111';
+      el.style.webkitTextFillColor = '#111';
     });
     document.getElementById('modal-doc-op').style.display = 'flex';
   }catch(e){ toast('Error: ' + e.message); console.error(e); }
