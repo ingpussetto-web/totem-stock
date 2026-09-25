@@ -9207,57 +9207,65 @@ async function crearOP(proyId){
   } catch(e){}
   const opNumero = prefijoDia + String(ultimoNum + 1).padStart(3,'0');
 
-  // Construir BOM: para Accesorios iteramos todos los items; para el resto solo el primero
-  const itemNombre = itemsEquipo[0].desc;
-  const prodDef = PRODUCTOS.find(function(pr){ return pr.name === itemNombre; });
-  const itemsParaBOM = esAccesorios ? itemsEquipo : [itemsEquipo[0]];
+  // Construir BOM: para Accesorios iteramos TODOS los items (cada producto tiene
+  // su propia BOM Maestra y su propia cantidad — ej. Mini PC x2 + Player HDMI x1
+  // son dos productos distintos que antes se resolvían solo con el primero,
+  // perdiendo silenciosamente el resto); para el resto (tótems) solo el primero,
+  // que sigue siendo un único producto por proyecto.
+  const prodDefPrincipal = PRODUCTOS.find(function(pr){ return pr.name === itemsEquipo[0].desc; });
+  const itemNombre = esAccesorios
+    ? itemsEquipo.map(function(it){ return it.desc; }).join(' + ')
+    : itemsEquipo[0].desc;
+  const cantTotalAccesorios = itemsEquipo.reduce(function(s,it){ return s + (it.cant||1); }, 0);
 
-  let bomItems = [];
+  // bomPorItem: un grupo por producto distinto, con su propia lista de insumos
+  // y su propia cantidad de unidades — se usa para generar una fila de BOM por
+  // unidad física, en vez de una sola fila combinada.
+  let bomPorItem = [];
   try {
-    // Intentar usar BOM Maestra si existe para este producto
-    const productoId = prodDef ? prodDef.id : null;
-    if(productoId && productoId !== 'custom'){
-      const bomMaestra = await stockAPI('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking)').catch(()=>[]);
-      if(bomMaestra && bomMaestra.length){
-        // BOM Maestra encontrada — usarla como fuente única de verdad
-        bomMaestra.forEach(function(r){
-          bomItems.push({
-            sku_id: r.sku_id,
-            v14_key: r.v14_key || null,
-            nombre: r.skus ? r.skus.nombre : r.nombre,
-            qty: r.qty || 1,
-            incluido: true,
-            notas: null,
-            variante_id: r.variante_id || null
+    const mapeo = await stockAPI('v14_sku_map?select=v14_key,sku_id,qty_factor,skus(codigo,nombre)').catch(()=>[]);
+    const mapeoDict = {};
+    (mapeo || []).forEach(function(m){ mapeoDict[m.v14_key] = m; });
+
+    const itemsAResolver = esAccesorios ? itemsEquipo : [itemsEquipo[0]];
+    for(const it of itemsAResolver){
+      const pDef = PRODUCTOS.find(function(pr){ return pr.name === it.desc; });
+      const productoId = pDef ? pDef.id : null;
+      let itemsBOM = [];
+      // Intentar usar BOM Maestra si existe para este producto
+      if(productoId && productoId !== 'custom'){
+        const bomMaestra = await stockAPI('bom_maestra?producto_v14=eq.'+encodeURIComponent(productoId)+'&activo=eq.true&select=*,skus(id,codigo,nombre,tracking)').catch(()=>[]);
+        if(bomMaestra && bomMaestra.length){
+          // BOM Maestra encontrada — usarla como fuente única de verdad
+          bomMaestra.forEach(function(r){
+            itemsBOM.push({
+              sku_id: r.sku_id,
+              v14_key: r.v14_key || null,
+              nombre: r.skus ? r.skus.nombre : r.nombre,
+              incluido: true,
+              notas: null,
+              variante_id: r.variante_id || null
+            });
           });
-        });
+        }
       }
-      // Si no hay BOM Maestra: bomItems queda vacío — la OP se crea sin insumos
-      // y el usuario los carga desde ops_ventas una vez que la BOM esté definida
-    }
-    // Para Accesorios sin BOM Maestra, usar el mapping estático como fallback
-    if(bomItems.length === 0 && esAccesorios){
-      const mapeo = await stockAPI('v14_sku_map?select=v14_key,sku_id,qty_factor,skus(codigo,nombre)');
-      const mapeoDict = {};
-      (mapeo || []).forEach(function(m){ mapeoDict[m.v14_key] = m; });
-      for(const itEquipo of itemsParaBOM){
-        const pDef2 = PRODUCTOS.find(function(pr){ return pr.name === itEquipo.desc; });
-        if(!pDef2 || !pDef2.insumos) continue;
-        const cantItem = itEquipo.cant || 1;
-        pDef2.insumos.forEach(function(ins){
+      // Sin BOM Maestra: usar el mapping estático (pDef.insumos) como fallback
+      if(itemsBOM.length === 0 && pDef && pDef.insumos){
+        pDef.insumos.forEach(function(ins){
           const m = mapeoDict[ins.key];
-          const qty = (ins.qty || 1) * (m ? (m.qty_factor || 1) : 1) * cantItem;
-          const existing = bomItems.find(function(b){ return b.v14_key === ins.key; });
-          if(existing){ existing.qty += qty; return; }
-          bomItems.push({
+          itemsBOM.push({
             sku_id: m && m.sku_id ? m.sku_id : null,
             v14_key: ins.key,
             nombre: m && m.skus ? m.skus.nombre : ins.key,
-            qty: qty,
             incluido: true,
             notas: null
           });
         });
+      }
+      // Si tampoco hay mapping estático: este producto queda sin insumos — la OP
+      // se crea igual y el usuario los carga a mano desde ops_ventas.
+      if(itemsBOM.length){
+        bomPorItem.push({ itemsBOM: itemsBOM, cant: it.cant || 1 });
       }
     }
   } catch(e){
@@ -9284,9 +9292,9 @@ async function crearOP(proyId){
       codigo_op_interno: codigoOPInterno || null,
       v14_orden: p.orden,
       cliente: p.cliente,
-      producto_v14: prodDef ? prodDef.id : 'custom',
+      producto_v14: prodDefPrincipal ? prodDefPrincipal.id : 'custom',
       producto_nombre: itemNombre,
-      cantidad: itemsEquipo[0].cant || 1,
+      cantidad: esAccesorios ? cantTotalAccesorios : (itemsEquipo[0].cant || 1),
       estado: 'bom_pendiente',
       color_gabinete: color,
       notas: 'Creada desde calculador v15 — ' + new Date().toLocaleDateString('es-AR')
@@ -9294,28 +9302,32 @@ async function crearOP(proyId){
 
     const opId = opRes[0].id;
 
-    // Insertar BOM items
-    if(bomItems.length > 0){
-      // Generar una fila por equipo (cantidad del pedido)
-      const cantEquipos = esAccesorios ? 1 : (itemsEquipo[0].cant || 1);
+    // Insertar BOM items: una fila por unidad física de cada producto (equipo_num
+    // consecutivo a través de todos los productos del proyecto), no una sola fila
+    // combinada — así cada Mini PC / Player / etc. se escanea y trackea por separado.
+    if(bomPorItem.length > 0){
       const bomPayload = [];
-      for(let eq = 1; eq <= cantEquipos; eq++){
-        bomItems.forEach(function(b){
-          bomPayload.push({
-            op_id: opId,
-            sku_id: b.sku_id,
-            v14_key: b.v14_key,
-            nombre: b.nombre,
-            qty: 1,
-            incluido: b.incluido,
-            estado: 'pendiente',
-            notas: b.notas,
-            equipo_num: eq,
-            variante_id: b.variante_id || null
+      let eqCounter = 0;
+      bomPorItem.forEach(function(grupo){
+        for(let u = 1; u <= grupo.cant; u++){
+          eqCounter++;
+          grupo.itemsBOM.forEach(function(b){
+            bomPayload.push({
+              op_id: opId,
+              sku_id: b.sku_id,
+              v14_key: b.v14_key,
+              nombre: b.nombre,
+              qty: 1,
+              incluido: b.incluido,
+              estado: 'pendiente',
+              notas: b.notas,
+              equipo_num: eqCounter,
+              variante_id: b.variante_id || null
+            });
           });
-        });
-      }
-      await stockAPI('op_bom_items', 'POST', bomPayload);
+        }
+      });
+      if(bomPayload.length) await stockAPI('op_bom_items', 'POST', bomPayload);
     }
 
     // Mostrar notificación con link a ops_ventas (sin popup bloqueado)
