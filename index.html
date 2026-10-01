@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redirigiendo…</title>
+<script>
+  // El sistema se mudó a la cuenta de Totem Nube. Todo lo que llegue a la dirección vieja
+  // (incluidos los QR impresos: scan.html?uid=…) se manda a la nueva, conservando ruta y parámetros.
+  var p = location.pathname.replace(/^\/totem-stock/, '');
+  location.replace('https://totemnube.github.io/totem-stock' + p + location.search + location.hash);
+</script>
+</head>
+<body style="font-family:sans-serif;padding:24px">
+  Redirigiendo a la nueva dirección del sistema…
+  <a href="https://totemnube.github.io/totem-stock/">Si no pasa nada, tocá acá</a>.
+</body>
+</html>
